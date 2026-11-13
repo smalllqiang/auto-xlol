@@ -266,6 +266,16 @@ for action in plan.actions:
 执行需要显式授权：`--execute --allow <元素>`。执行前会检查队列、资源和单步预算，
 只做一步，并把结果写进 `state/journal.jsonl`；`state/STOP` 存在时拒绝运行。
 
+无人值守用常驻循环（默认也是 dry-run）：
+
+```bash
+.venv/bin/python scripts/run_forever.py --no-verify-ssl --once   # 跑一轮
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --execute --allow 自律工厂                                     # 常驻
+```
+
+单实例锁、`state/STOP` 急停、失败指数退避都内建；默认每 12 轮写一次快照。
+
 ## 元素 ID
 
 元素 ID 来自 New-Star / 2Moons 的通用编号，实际游戏可能增加或改名。SDK 会优先读取页面上的名称，静态表只用于“名称 → ID”的便捷解析。

@@ -496,3 +496,33 @@ touch state/STOP
 ```
 
 每次运行追加一行到 `state/journal.jsonl`，包含阶段、结果、队列和完整动作快照。
+
+## 14. 常驻循环
+
+`scripts/run_forever.py` 把「计划 → 执行」串成无人值守循环：每轮
+`build_plan` → `execute_plan`（默认 dry-run）→ 写 journal → 睡到下一轮。
+
+```bash
+# 影子模式，默认 5 分钟一轮
+.venv/bin/python scripts/run_forever.py --no-verify-ssl
+
+# 授权执行（allow 可重复）
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --execute --allow 自律工厂 --allow 计算机技术
+
+# 只跑一轮，便于调试
+.venv/bin/python scripts/run_forever.py --no-verify-ssl --once
+```
+
+守护特性：
+
+- **单实例**：`state/daemon.lock` 记录 pid，重复启动会被拒绝；进程被杀后留下的
+  陈旧锁会在下次启动时自动接管。
+- **急停**：`state/STOP` 存在时下一轮退出；SIGINT / SIGTERM 优雅退出并清理锁。
+- **退避**：连续失败按 30s → 60s → 120s … 增长，上限 `--backoff-max`（默认 15 分钟）；
+  连续 `--max-failures`（默认 10）次失败后退出，交给 systemd / cron 拉起。
+- **节流**：默认每 12 轮（`--snapshot-every`）才写一次完整快照与事件，避免每轮都拉
+  全套页面。
+
+退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
+`--allow`）。

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 #: Message categories that usually require attention.
 ALERT_MESSAGE_CATEGORIES = frozenset({0, 3})  # espionage, battle
@@ -59,25 +59,29 @@ def _parse_time(value: Any) -> Optional[datetime]:
         return None
 
 
-def _message_events(
-    previous: Dict[str, Any], current: Dict[str, Any]
+def diff_message_counters(
+    previous: Mapping[int, Mapping[str, Any]],
+    current: Mapping[int, Mapping[str, Any]],
 ) -> List[Event]:
-    events: List[Event] = []
-    before = _messages(previous)
-    after = _messages(current)
+    """Compare two ``{category: counter}`` maps and report new messages.
 
-    for category, item in after.items():
-        old = before.get(category, {"unread": 0})
+    This is the cheap counterpart of a full snapshot diff: one page read per
+    cycle is enough for the daemon to notice espionage/battle reports.
+    """
+
+    events: List[Event] = []
+    for category, item in current.items():
+        old = previous.get(int(category), {})
         delta = int(item.get("unread", 0)) - int(old.get("unread", 0))
         if delta <= 0:
             continue
-        severity = "notice" if category in ALERT_MESSAGE_CATEGORIES else "info"
+        severity = "notice" if int(category) in ALERT_MESSAGE_CATEGORIES else "info"
         events.append(
             Event(
                 "message_new",
                 severity,
                 {
-                    "category": category,
+                    "category": int(category),
                     "name": item.get("name", ""),
                     "new": delta,
                     "unread": int(item.get("unread", 0)),
@@ -86,6 +90,12 @@ def _message_events(
             )
         )
     return events
+
+
+def _message_events(
+    previous: Dict[str, Any], current: Dict[str, Any]
+) -> List[Event]:
+    return diff_message_counters(_messages(previous), _messages(current))
 
 
 def _queue_events(previous: Dict[str, Any], current: Dict[str, Any]) -> List[Event]:

@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+
+<!--[if lt IE 7 ]> <html lang="zh" class="no-js ie6"> <![endif]-->
+<!--[if IE 7 ]>    <html lang="zh" class="no-js ie7"> <![endif]-->
+<!--[if IE 8 ]>    <html lang="zh" class="no-js ie8"> <![endif]-->
+<!--[if IE 9 ]>    <html lang="zh" class="no-js ie9"> <![endif]-->
+<!--[if (gt IE 9)|!(IE)]><!--> <html lang="zh" class="no-js"> <!--<![endif]-->
+<head>
+    <!--title-->
+	<title>查看星图 - CQBX8573 - 战争宇宙：猛犸</title>
+	<meta name="generator" content="New-Star 2.8.1">
+	<meta name="keywords" content="New-Star 2.8.1">
+	<meta name="description" content="New-Star Browsergame powered by https://github.com/Yaro2709/New-Star">
+    <!--favicon-->
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
+    <!--goto refresh-->
+	    <!--content-type-->
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <!--keypress-->
+    <script type="text/javascript" src="./scripts/base/keypress.js"></script>
+    <!--jquery-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery_1.8.18.css">
+    <script type="text/javascript" src="./scripts/base/jquery.js"></script>
+    <script type="text/javascript" src="./scripts/base/jquery.ui.js"></script>
+	<script type="text/javascript" src="./scripts/base/jquery.cookie.js"></script>
+    <!--fancybox-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery.fancybox_3.5.7.css">
+    <script type="text/javascript" src="./scripts/base/jquery.fancybox.js"></script>    
+    <!--style-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/ingame/main.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/navigation.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/general.css">
+    
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/formate.css">
+    <!--game script-->
+    <script type="text/javascript">
+        var ServerTimezoneOffset = 0;
+        var serverTime 	= new Date(2026, 10, 13, 12, 11, 35);
+        var startTime	= serverTime.getTime();
+        var localTime 	= serverTime;
+        var localTS 	= startTime;
+        var Gamename	= document.title;
+        var Ready		= "准备完毕";
+        var Skin		= "./styles/theme/nsc/";
+        var Lang		= "zh";
+        var head_info	= "信息";
+        var auth		= 0;
+        var days 		= ["\u5468\u65e5","\u5468\u4e00","\u5468\u4e8c","\u5468\u4e09","\u5468\u56db","\u5468\u4e94","\u5468\u516d"] 
+        var months 		= ["1","2","3","4","5","6","7","8","9","10","11","12"] ;
+        var tdformat	= "[Y]年[M]月[d]日 [D] [H]:[i]:[s]";
+        var queryString	= "page=galaxy";
+        var isPlayerCardActive	= "true";
+
+        setInterval(function() {
+            serverTime.setSeconds(serverTime.getSeconds()+1);
+        }, 1000);
+	</script>
+    <script type="text/javascript" src="./scripts/base/tooltip.js"></script>
+	<script type="text/javascript" src="./scripts/game/base.js"></script>
+    <script type="text/javascript" src="./scripts/game/game.class.js"></script>
+    <!--script-->
+		<script type="text/javascript" src="./scripts/game/galaxy.js"></script>
+		
+	<script type="text/javascript">
+	$(function() {
+		
+	});
+	</script>
+</head>
+<body id="galaxy" class="full" 
+    style="
+        background: #0B0B0F;
+        background: url(https://example.com/file/PwfnxH7l.png) no-repeat fixed center center #0d0d0d;
+        -webkit-background-size: cover;
+        -moz-background-size: cover;
+        o-background-size: cover;
+        background-size: cover;
+">
+<div id="tooltip" class="tip"></div><script type="text/javascript">
+    	setInterval(function() { AJAX() }, 5000);
+</script>
+<script type="text/javascript" src="./scripts/game/json01.js"></script>
+<div id="left_side">  
+	<div id="side_menu_up">
+        <div class="img"></div>
+    </div>
+    <div id="left_menu">
+        <div id="touchscreenleft_menu">   
+            <div id="indicators">
+                <div id="attack" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="espionage" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="destruction" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="rocket" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+            </div>
+                        <a class="big_btn btn_menu btn_menu_big"> <div class="servertime oservertime"></div> </a>
+                        <a class="big_btn blue btn_menu btn_menu_big">14.11.2026 11:37:51</a>
+                         
+            <!-- ricerche  tecnologie-->
+                        <a class="nuovomenusinistra" href="game.php?page=research" id="munu_research">研究升级</a>
+            <a class="nuovomenudestra" href="game.php?page=research"><img src="./styles/theme/nsc/img/iconav/research.png" class="imgovernuovo"></a>
+                        <!-- costruzioni risorse-->
+                        <a class="nuovomenusinistra" href="game.php?page=buildings" id="munu_build">建筑建造</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=resources" id="munu_resources" data-tooltip-content="生产控制"><img src="./styles/theme/nsc/img/iconav/resources.png" class="oimgaltro"></a>
+                        <!-- flotta hangar -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_shipyard_fleet">船坞生产</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_fleetable"><img src="./styles/theme/nsc/img/iconav/hangar.png" class="imgovernuovo"></a>
+                        <!-- difese -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=defense" id="munu_shipyard_defense">防御建造</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=defense"><img src="./styles/theme/nsc/img/iconav/shield.png" class="imgovernuovo"></a>
+                        <!-- Orbita -->
+            <a class="nuovomenusinistra" href="game.php?page=fleetTable" id="munu_orbita">单位调度</a>
+                        <a class="nuovomenudestra tooltip" href="game.php?page=battleSimulator" id="munu_fleetable" data-tooltip-content="战斗模拟器"><img src="./styles/theme/nsc/img/iconav/target.png" class="oimgaltro"></a>	
+                        
+            <!-- alleanza-->
+            			<a class="nuovomenusinistra" href="game.php?page=alliance" id="munu_alliance">联盟管理</a>
+            <a class="nuovomenudestra" href="game.php?page=alliance"><img src="./styles/theme/nsc/img/iconav/alliance.png" class="imgovernuovo" id="ciaone"></a>	
+                                                <a class="nuovomenusinistra" href="game.php?page=arsenal">军备管理</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=conteiner" id="munu_fleetable" data-tooltip-content="宝箱"><img src="./styles/theme/nsc/img/iconav/arsenal.png" class="oimgaltro"></a>	
+                                    <a class="nuovomenusinistra" href="game.php?page=officier" id="munu_senat">招募军官</a>
+            <a class="nuovomenudestra" href="game.php?page=officier"><img src="./styles/theme/nsc/img/iconav/governatori.png" class="imgovernuovo" id="ciaone"></a>
+                                    <a class="nuovomenusinistra" href="game.php?page=minerals" id="munu_senat">回收矿产</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=details" id="munu_fleetable" data-tooltip-content="加工矿产"><img src="./styles/theme/nsc/img/iconav/blackmarket.png" class="oimgaltro"></a>	
+                        <!-- ufficiali governatori -->
+                        <a class="galassiabott" href="game.php?page=galaxy" id="munu_galaxy">查看星图</a>
+               
+     		            <div class="clear"></div>                
+    </div>
+    </div><!--/left_menu-->
+    <div class="menubassoleft">
+        <div id="top_nav_parte_sotto"> 
+                        <a title="科技树" href="game.php?page=techtree"><span class="techtree"></span></a>
+            <div class="separator_nav"></div>
+             
+			<a title="规则" href="index.php?page=rules" target="_blank"><span class="rules"></span></a>
+            <div class="separator_nav"></div>
+                        <a title="好友管理" href="game.php?page=buddyList"><span class="frend"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="宇宙记录" href="game.php?page=records"><span class="record"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="支持" href="game.php?page=ticket"><span class="soopart"></span></a>				
+			<div class="separator_nav"></div>
+            			<a title="设置" href="game.php?page=settings"><span class="seting"></span></a>  
+			<div class="separator_nav"></div>		
+			<a title="注销" href="game.php?page=logout"> <span class="exit"></span></a>				  
+        </div>
+        <div id="side_menu_bottom">
+            <div class="img"></div>
+        </div>
+    </div> 
+</div>
+<div style="height:0; overflow:hidden;" loop="false;" id="music">
+    <audio id="beepataks" preload="auto">
+        <source src="./sound/sirena.mp3"></source>
+        <source src="./sound/sirena.ogg"></source>
+    </audio>
+    <audio id="msgaudio" preload="auto">
+        <source src="./sound/msg.mp3"></source>
+        <source src="./sound/msg.ogg"></source>
+    </audio>
+    <script type="text/javascript">
+		var ataks = "0";
+		var spio = "0";
+        var unic = "0";
+		var rakets = "0";
+		var msg = 0;
+		document.getElementById('msgaudio').volume=1;
+		document.getElementById('beepataks').volume=0.1;
+	</script>
+</div><div id="header">
+    <div id="top_nav" class="otopnav"> 
+        <a title="行星总览" href="game.php?page=overview">
+            <img src="./styles/theme/nsc/img/general/logo.png" class="game_logo">
+        </a>
+        <div style="display:none;">					
+            <select id="lstPlaneta" name="lstPlaneta" onchange="document.location = $(this).val();">
+                <option value="?page=galaxy&amp;cp=10001" selected="selected">母星 [1:1:8]</option>
+
+            </select>
+        </div>
+        <div class="mini_planet_navigation" style="margin: auto;left: 0;right: 0;width: 235px;background: none;top: 46px;position: absolute;">
+            <span class="link_back" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');"></span>
+            <span class="link_next" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');"></span>
+        </div>
+        <div id="planet_select" style="margin: auto;left: 0;right: 0;top:46px;">
+            <div class="active_panet">
+				<div class="name_palnet" style="padding-left: 1px;width: 96px;"><img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top:3px;margin-right: 5px;">母星</div> 
+                <span class="ico_build"></span>                            
+				<div class="coordinates_palnet">[1:1:8]</div>
+				<div class="clear"></div>
+			</div>
+            <div id="list_palnet">
+                    
+			<div class="separator_h"></div>                   
+            <div class="palnet_row active_palnet_row">
+				<div class="fleet_indicators">
+                    <img id="10001m1" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_attack.png" alt="" class="tooltip" data-tooltip-content="pla_attack_1" />                                    
+                    <img id="10001m12" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_grab.png" alt="" class="tooltip" data-tooltip-content="Планету захватывают" />
+                    <img id="10001m6" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_spio.png" alt="" class="tooltip" data-tooltip-content="pla_attack_2" />
+                    <img id="10001m10" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_rocket.png" alt="" class="tooltip" data-tooltip-content="pla_attack_3" />                 
+                                    
+                    <div class="clear"></div>
+                </div>	   
+                <span class="active_urlpalnet" url="cp=10001">
+					<img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top: 5px;">
+                    <span class="name_palnet"  style="padding-top: 5px;padding-left: 5px;width: 70px;">母星</span>
+					<span class="ico_build">
+                        																	</span>  			
+                    <span class="coordinates_palnet" style="width: 60px;">[1:1:8]</span>
+                </span>
+                                
+            </div> 
+                                   
+            </div>
+        </div><!--/planet_select-->			
+		<img title="" src="https://example.com/file/zcqjkP5e.png" class="settingxterium" onclick="return Dialog.Playercard(1000, 'TestUser');">
+        <span class="usernameow" onclick="return Dialog.Playercard(1000, 'TestUser');">TestUser</span>
+		<span class="usernamepos"></span>        
+        <div id="res_nav">
+             
+                                                            <div id="res_block_metal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore901'>星际合金</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 2.468
+                            <br/>每天产能: 59.224
+                            <br/>每周产能: 414.569 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.460/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_metal" name="10.460" data-real="10460.280546">10,5&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_crystal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore902'>高能水晶</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 1.645
+                            <br/>每天产能: 39.483
+                            <br/>每周产能: 276.379 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.558/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_crystal" name="10.558" data-real="10557.785346">10,6&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_deuterium" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore903'>重氢</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 0
+                            <br/>每天产能: 0
+                            <br/>每周产能: 0 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>9.990/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:20%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_deuterium" name="9.990" data-real="9990.000000">10,0&nbsp;K</span>
+                                    (<span class="pricent">20</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                        <div id="res_block_energy" class="bloc_res tooltip" data-tooltip-content="<span class='colore911'>幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_energy"></div>
+                            <div class="stock_text"><span id="current_energy" name="3.993" data-real="3993">0&nbsp;</span>/4,0&nbsp;K</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_build" class="bloc_res tooltip" data-tooltip-content="<span class='colore912'>建造点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:50%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:50%;"></div>
+                            <div class="separator_build"></div>
+                            <div class="stock_text"><span id="current_build" name="1.000" data-real="1000">500&nbsp;</span>/500&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_tech" class="bloc_res tooltip" data-tooltip-content="<span class='colore913'>研发点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_tech"></div>
+                            <div class="stock_text"><span id="current_tech" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_fleet" class="bloc_res tooltip" data-tooltip-content="<span class='colore914'>船坞点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_fleet"></div>
+                            <div class="stock_text"><span id="current_fleet" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_defense" class="bloc_res tooltip" data-tooltip-content="<span class='colore915'>防御点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_defense"></div>
+                            <div class="stock_text"><span id="current_defense" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_missile" class="bloc_res tooltip" data-tooltip-content="<span class='colore916'>导弹点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_missile"></div>
+                            <div class="stock_text"><span id="current_missile" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                            <div id="res_block_darkmatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore921'>暗物质</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 981">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_darkmatter"></div>
+                                <div class="stock_text"><span class='colore921' id="current_darkmatter" name="981" data-real="981">981&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_antimatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore922'>反幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_antimatter"></div>
+                                <div class="stock_text"><span class='colore922' id="current_antimatter" name="100" data-real="100">100&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_stardust" class="bloc_res tooltip" data-tooltip-content="<span class='colore923'>星尘</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_stardust"></div>
+                                <div class="stock_text"><span class='colore923' id="current_stardust" name="0" data-real="0">0&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_container" class="bloc_res tooltip" data-tooltip-content="<span class='colore924'>宝箱</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 3">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_container"></div>
+                                <div class="stock_text"><span class='colore924' id="current_container" name="3" data-real="3">3&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                       
+        </div>
+        <!--/res_nav-->            
+    </div><!--/top_nav-->
+    <div id="barrasottoover">
+		<div id="top_nav_parte_left">
+            			<a title="全局面板" href="game.php?page=control"><span class="imperia"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="排行榜" href="game.php?page=statistics"><span class="stats"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="成就展厅" href="game.php?page=achievements"><span class="achievv"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="战役" href="game.php?page=battleHall"><span class="topbk"></span></a>
+			<div class="separator_nav"></div>
+                                    			<a title="论坛" href="game.php?page=board" target="_blank"><span class="forum"></span></a>
+			<div class="separator_nav"></div>
+                                    <a title="消息" href="game.php?page=messages" id="a_mesage">
+                <span class="mesages"></span>
+                            </a>                                       
+            <div class="separator_nav"></div> 
+                    </div>    
+                <div class="premiumbarra">
+			<img class="premiumimgbarra" src="./styles/theme/nsc/img/iconav/ico-account-premium.png">
+            <a href="game.php?page=store">  
+                <span class="premiumtopbar">
+                    <span class="premiumscrittabar">商店</span>
+                </span>
+            </a>
+        </div>
+        	</div>
+    <div id="top_menu_bottom">
+        <div class="left"></div>
+        <div class="mid"></div>
+        <div class="right"></div>
+    </div>
+    		<script type="text/javascript">
+		var viewShortlyNumber	= 1;
+		var vacation			= 0;
+        $(function() {
+				            resourceTicker({
+                available: "10460.280546",
+                limit: [0, "50000"],
+                production: 2467.674,
+                valueElem: "current_metal",
+                valuePoursent: "bar_901"
+            }, true);
+						            resourceTicker({
+                available: "10557.785346",
+                limit: [0, "50000"],
+                production: 1645.116,
+                valueElem: "current_crystal",
+                valuePoursent: "bar_902"
+            }, true);
+						            resourceTicker({
+                available: "9990.000000",
+                limit: [0, "50000"],
+                production: 0,
+                valueElem: "current_deuterium",
+                valuePoursent: "bar_903"
+            }, true);
+																																												        });
+		</script>
+        <script src="scripts/game/topnav.js"></script>
+        <script type="text/javascript">
+		$(document).ready(function(){
+			var flag_planet_menu = false;
+			$('#planet_select').click(function(){ 
+				$(this).toggleClass('active');
+				$('#list_palnet').stop(false,false).slideToggle(300);
+				flag_planet_menu = true;
+			});		
+			if(flag_planet_menu)
+			{					
+				document.body.onclick = function (e) {
+					e = e || event;
+					target = e.target || e.srcElement;
+					if (target.id == "planet_select") {
+						return;
+					} else {
+						$('#list_palnet').hide();
+						$('#planet_select').removeClass('active');
+						flag_planet_menu = false;
+					}
+				}
+			}
+			$('.urlpalnet').click( function(){
+				document.location = '?'+queryString+'&'+$(this).attr("url");
+			});		
+			
+			var listener = new window.keypress.Listener();
+			listener.simple_combo("shift left", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');
+				console.log("You pressed shift and left");
+			});
+			listener.simple_combo("shift right", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');
+				console.log("You pressed shift and right");
+			});
+		});
+	</script>
+</div>
+</div><div id="content"> 
+<link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/galactic.css">
+<div id="page">
+    <div id="content">
+        <div id="galactic_block_1">
+            <div style="position:absolute; width:0; height:0;">
+                                <div id="galactic_block_1">
+                    <div id="galactic_header" style="position:relative;">
+                        <form action="?page=galaxy" method="post" id="galaxy_form">
+                            <input id="auto" value="dr" type="hidden">
+                            <div class="gal_nazv" style="margin-left:15px;">银河:</div>
+                            <div id="nav_1">
+                                <input class="prev" name="galaxyeft" onclick="galaxy_submit('galaxyLeft')" type="button">
+                                <input class="gal_p3" name="galaxy" value="1" size="5" maxlength="4" tabindex="2" type="text">
+                                <input class="next" name="galaxyRight" onclick="galaxy_submit('galaxyRight')" type="button">
+                            </div>
+                            <div class="gal_p4">星系:</div>
+                            <div id="nav_2">
+                                <input type="button" class="prev" name="systemLeft" onclick="galaxy_submit('systemLeft')">
+                                <input class="gal_p3" type="text" name="system" value="1" size="5" maxlength="4" tabindex="2">
+                                <input type="button" class="next" name="systemRight" onclick="galaxy_submit('systemRight')">
+                            </div>
+                            <div class="gal_sep"></div>
+                            <input value="查看" id="galactic_show" type="submit">
+                        </form>
+                    </div>
+                    <!--/galactic_header-->
+                    <div id="galactic_status">
+                        <div class="gal_p5">轨道</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p6">星球名称(活动记录)</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p7">月球</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p8">残骸</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p9">玩家名 (状态)</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p10">所属联盟</div>
+                        <div class="status_sep"></div>
+                        <div class="gal_p11">可执行操作</div>
+                    </div>
+                    <!--/galactic_status-->
+                                                            <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=1&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>96</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>260</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FF0000">1</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=1&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=2&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>98</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>194</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FF1010">2</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=2&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=3&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>110</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>130</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FF2222">3</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=3&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=4&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>199</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>103</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FE3333">4</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=4&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=5&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>168</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>93</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FC4242">5</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=5&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=6&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>205</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>81</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FC5353">6</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=6&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <span style="color:#efbf13">7</span>
+                        </div>
+                        <div class="gal_planet_name">被遗弃的殖民地</div>
+                    </div><!--/gal_user-->     
+                                                                                <div class="gal_user second" style="
+                        background-image:url(./styles/theme/nsc/planeten/panel/normaltempplanet04.png);
+                        background-repeat: no-repeat;
+                        background-position: top left;
+                    ">   
+                        <div class="gal_number">
+                            <a href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=8&amp;planettype=1">
+                            <span style="color:#0abd00">8</span></a>
+                        </div>
+                                                <span id="p_10001" class="tooltip gal_img_planet" data-tooltip-content="行星 母星 [1:1:8]">
+                            <div class="gl-actions">
+                                <table class="gl-actions-t">	
+                                    <tbody>	
+                                        <tr>
+                                                                                <td><a class="gl-actions-i ri i-mis3 tooltip" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=8&amp;planettype=1&amp;target_mission=3" data-tooltip-content="运输"></a></td>                                        <td><a class="gl-actions-i ri i-mis4 tooltip" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=8&amp;planettype=1&amp;target_mission=4" data-tooltip-content="派遣"></a></td>                                                                                            
+                                                                                                                                                                                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <img src="./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png" alt="">
+                            		
+                        </span>
+                        <div class="gal_planet_name">母星 (*) </div>
+                        <div class="gal_ico_moon ico_animation">
+                                                </div>
+                        <div class="gal_ico_trash">
+                                                </div>	
+                        <div class="gal_player_name">
+                            <a class="tooltip_sticky" data-tooltip-content="
+                                <table class='tooltip_class_table'>
+                                    <tbody>
+                                        <tr>
+                                            <th>玩家 TestUser 排名第 22</th>
+                                        </tr>
+                                                                                <tr>
+                                            <td>
+                                                <a class='tooltip_class_a_bigbtn' href='?page=statistics&amp;who=1&amp;start=22'>联盟排名</a>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td></td>
+                                        </tr>                                        
+                                    </tbody>
+                                </table>">
+                                <span class="  galaxy-username" >TestUser</span>
+                                                            </a>
+                        </div>
+                        <div class="gal_ally_name">
+                            	
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                        	               
+                        </div> 
+                    </div>
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=9&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>232</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>50</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#FD9898">9</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=9&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=10&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>176</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>22</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#D0E5FF">10</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=10&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=11&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>188</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>4</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#B0D2FC">11</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=11&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=12&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>169</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>8</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#98C6FE">12</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=12&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=13&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>114</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>-50</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#88BDFF">13</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=13&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user second">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=14&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>85</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>-58</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#6DAEFE">14</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=14&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                                                <div class="gal_user ">   
+                        <div class="gal_number">
+                            <a href="game.php?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=15&amp;planettype=1" class="tooltip" data-tooltip-content="
+                                <table class='reducefleet_table'>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/position.png'></td>
+                                        <td class='reducefleet_name_ship'>侦察能力</td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/diametr.png'></td>
+                                        <td class='reducefleet_name_ship'>面积 <span class='reducefleet_count_ship'>69</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class='reducefleet_img_ship'><img src='./styles/theme/nsc/img/iconav/temp.png'></td>
+                                        <td class='reducefleet_name_ship'>温度 <span class='reducefleet_count_ship'>-125</span></td>
+                                    </tr>
+                                </table>
+                            ">
+                            <span style="color:#57A3FF">15</span></a>
+                        </div>
+                        <div class="gal_player_cont" style="float:right">
+                            <a class="ico_coloni ico_animation" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=15&amp;planettype=1&amp;target_mission=7"></a>    
+                        </div>       
+                    </div> 
+                                                            <div id="gal_block_1_footer">
+                        <a id="dali" class="dali btn_galassia" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=16&amp;planettype=1&amp;target_mission=15"><img src="./styles/theme/nsc/img/iconav/g_expedition.png">探索星系</a>
+                        <a id="expedition" class="expedition btn_galassia1" href="?page=fleetTable&amp;galaxy=1&amp;system=1&amp;planet=16&amp;planettype=1&amp;target_mission=18"><img src="./styles/theme/nsc/img/iconav/g_hostile.png">远征星云区</a>
+                    </div>
+                </div>
+                <div id="send_zond">
+                    <table>
+                        <tr style="display: none;" id="fleetstatusrow"></tr>
+                    </table>
+                </div>
+                <div id="galactic_block_2">
+                    <div id="block_status">
+                        <div class="gal_stat_1">
+                            <div class="gal_text_1">2</div>
+                            <div class="gal_text_2">行星存在</div>
+                        </div>
+                        <div class="gal_stat_2">
+                            <div class="gal_text_1"><span id="grecyclers">0</span></div>
+                            <div class="gal_text_2">回收舰</div>
+                        </div>
+                        <div class="gal_stat_3">
+                            <div class="gal_text_1"><span id="slots">0</span>/1</div>
+                            <div class="gal_text_2">舰队航道</div>
+                        </div>
+                        <div class="gal_stat_4">
+                            <div class="gal_text_1"><span id="probes">0</span></div>
+                            <div class="gal_text_2">间谍探针</div>
+                        </div>
+                        <div class="gal_stat_5">
+                            <div class="gal_text_1"><span id="recyclers">0</span> </div>
+                            <div class="gal_text_2">战斗回收舰</div>
+                        </div>
+                        <div class="gal_stat_6">
+                            <div class="gal_text_1">0</div>
+                            <div class="gal_text_2">可用星际导弹</div>
+                        </div>
+                    </div>   
+                                    </div>
+            </div>
+        </div>
+    </div>
+	<script type="text/javascript">
+		status_ok		= '完成';
+		status_fail		= '错误';
+		MaxFleetSetting = 3;
+	</script>
+</div>
+</div>
+<div class="clear"></div>
+<div id="footer">
+		</div>
+</body>
+</html>

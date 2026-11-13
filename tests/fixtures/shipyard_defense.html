@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+
+<!--[if lt IE 7 ]> <html lang="zh" class="no-js ie6"> <![endif]-->
+<!--[if IE 7 ]>    <html lang="zh" class="no-js ie7"> <![endif]-->
+<!--[if IE 8 ]>    <html lang="zh" class="no-js ie8"> <![endif]-->
+<!--[if IE 9 ]>    <html lang="zh" class="no-js ie9"> <![endif]-->
+<!--[if (gt IE 9)|!(IE)]><!--> <html lang="zh" class="no-js"> <!--<![endif]-->
+<head>
+    <!--title-->
+	<title>防御建造 - CQBX8573 - 战争宇宙：猛犸</title>
+	<meta name="generator" content="New-Star 2.8.1">
+	<meta name="keywords" content="New-Star 2.8.1">
+	<meta name="description" content="New-Star Browsergame powered by https://github.com/Yaro2709/New-Star">
+    <!--favicon-->
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
+    <!--goto refresh-->
+	    <!--content-type-->
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <!--keypress-->
+    <script type="text/javascript" src="./scripts/base/keypress.js"></script>
+    <!--jquery-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery_1.8.18.css">
+    <script type="text/javascript" src="./scripts/base/jquery.js"></script>
+    <script type="text/javascript" src="./scripts/base/jquery.ui.js"></script>
+	<script type="text/javascript" src="./scripts/base/jquery.cookie.js"></script>
+    <!--fancybox-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery.fancybox_3.5.7.css">
+    <script type="text/javascript" src="./scripts/base/jquery.fancybox.js"></script>    
+    <!--style-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/ingame/main.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/navigation.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/general.css">
+    
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/formate.css">
+    <!--game script-->
+    <script type="text/javascript">
+        var ServerTimezoneOffset = 0;
+        var serverTime 	= new Date(2026, 10, 13, 12, 11, 34);
+        var startTime	= serverTime.getTime();
+        var localTime 	= serverTime;
+        var localTS 	= startTime;
+        var Gamename	= document.title;
+        var Ready		= "准备完毕";
+        var Skin		= "./styles/theme/nsc/";
+        var Lang		= "zh";
+        var head_info	= "信息";
+        var auth		= 0;
+        var days 		= ["\u5468\u65e5","\u5468\u4e00","\u5468\u4e8c","\u5468\u4e09","\u5468\u56db","\u5468\u4e94","\u5468\u516d"] 
+        var months 		= ["1","2","3","4","5","6","7","8","9","10","11","12"] ;
+        var tdformat	= "[Y]年[M]月[d]日 [D] [H]:[i]:[s]";
+        var queryString	= "page=shipyard&mode=defense";
+        var isPlayerCardActive	= "true";
+
+        setInterval(function() {
+            serverTime.setSeconds(serverTime.getSeconds()+1);
+        }, 1000);
+	</script>
+    <script type="text/javascript" src="./scripts/base/tooltip.js"></script>
+	<script type="text/javascript" src="./scripts/game/base.js"></script>
+    <script type="text/javascript" src="./scripts/game/game.class.js"></script>
+    <!--script-->
+		<script type="text/javascript" src="./scripts/game/shipyard.js"></script>
+		
+	<script type="text/javascript">
+	$(function() {
+		
+	});
+	</script>
+</head>
+<body id="shipyard" class="full" 
+    style="
+        background: #0B0B0F;
+        background: url(https://example.com/file/PwfnxH7l.png) no-repeat fixed center center #0d0d0d;
+        -webkit-background-size: cover;
+        -moz-background-size: cover;
+        o-background-size: cover;
+        background-size: cover;
+">
+<div id="tooltip" class="tip"></div><script type="text/javascript">
+    	setInterval(function() { AJAX() }, 5000);
+</script>
+<script type="text/javascript" src="./scripts/game/json01.js"></script>
+<div id="left_side">  
+	<div id="side_menu_up">
+        <div class="img"></div>
+    </div>
+    <div id="left_menu">
+        <div id="touchscreenleft_menu">   
+            <div id="indicators">
+                <div id="attack" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="espionage" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="destruction" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="rocket" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+            </div>
+                        <a class="big_btn btn_menu btn_menu_big"> <div class="servertime oservertime"></div> </a>
+                        <a class="big_btn blue btn_menu btn_menu_big">14.11.2026 11:37:51</a>
+                         
+            <!-- ricerche  tecnologie-->
+                        <a class="nuovomenusinistra" href="game.php?page=research" id="munu_research">研究升级</a>
+            <a class="nuovomenudestra" href="game.php?page=research"><img src="./styles/theme/nsc/img/iconav/research.png" class="imgovernuovo"></a>
+                        <!-- costruzioni risorse-->
+                        <a class="nuovomenusinistra" href="game.php?page=buildings" id="munu_build">建筑建造</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=resources" id="munu_resources" data-tooltip-content="生产控制"><img src="./styles/theme/nsc/img/iconav/resources.png" class="oimgaltro"></a>
+                        <!-- flotta hangar -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_shipyard_fleet">船坞生产</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_fleetable"><img src="./styles/theme/nsc/img/iconav/hangar.png" class="imgovernuovo"></a>
+                        <!-- difese -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=defense" id="munu_shipyard_defense">防御建造</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=defense"><img src="./styles/theme/nsc/img/iconav/shield.png" class="imgovernuovo"></a>
+                        <!-- Orbita -->
+            <a class="nuovomenusinistra" href="game.php?page=fleetTable" id="munu_orbita">单位调度</a>
+                        <a class="nuovomenudestra tooltip" href="game.php?page=battleSimulator" id="munu_fleetable" data-tooltip-content="战斗模拟器"><img src="./styles/theme/nsc/img/iconav/target.png" class="oimgaltro"></a>	
+                        
+            <!-- alleanza-->
+            			<a class="nuovomenusinistra" href="game.php?page=alliance" id="munu_alliance">联盟管理</a>
+            <a class="nuovomenudestra" href="game.php?page=alliance"><img src="./styles/theme/nsc/img/iconav/alliance.png" class="imgovernuovo" id="ciaone"></a>	
+                                                <a class="nuovomenusinistra" href="game.php?page=arsenal">军备管理</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=conteiner" id="munu_fleetable" data-tooltip-content="宝箱"><img src="./styles/theme/nsc/img/iconav/arsenal.png" class="oimgaltro"></a>	
+                                    <a class="nuovomenusinistra" href="game.php?page=officier" id="munu_senat">招募军官</a>
+            <a class="nuovomenudestra" href="game.php?page=officier"><img src="./styles/theme/nsc/img/iconav/governatori.png" class="imgovernuovo" id="ciaone"></a>
+                                    <a class="nuovomenusinistra" href="game.php?page=minerals" id="munu_senat">回收矿产</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=details" id="munu_fleetable" data-tooltip-content="加工矿产"><img src="./styles/theme/nsc/img/iconav/blackmarket.png" class="oimgaltro"></a>	
+                        <!-- ufficiali governatori -->
+                        <a class="galassiabott" href="game.php?page=galaxy" id="munu_galaxy">查看星图</a>
+               
+     		            <div class="clear"></div>                
+    </div>
+    </div><!--/left_menu-->
+    <div class="menubassoleft">
+        <div id="top_nav_parte_sotto"> 
+                        <a title="科技树" href="game.php?page=techtree"><span class="techtree"></span></a>
+            <div class="separator_nav"></div>
+             
+			<a title="规则" href="index.php?page=rules" target="_blank"><span class="rules"></span></a>
+            <div class="separator_nav"></div>
+                        <a title="好友管理" href="game.php?page=buddyList"><span class="frend"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="宇宙记录" href="game.php?page=records"><span class="record"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="支持" href="game.php?page=ticket"><span class="soopart"></span></a>				
+			<div class="separator_nav"></div>
+            			<a title="设置" href="game.php?page=settings"><span class="seting"></span></a>  
+			<div class="separator_nav"></div>		
+			<a title="注销" href="game.php?page=logout"> <span class="exit"></span></a>				  
+        </div>
+        <div id="side_menu_bottom">
+            <div class="img"></div>
+        </div>
+    </div> 
+</div>
+<div style="height:0; overflow:hidden;" loop="false;" id="music">
+    <audio id="beepataks" preload="auto">
+        <source src="./sound/sirena.mp3"></source>
+        <source src="./sound/sirena.ogg"></source>
+    </audio>
+    <audio id="msgaudio" preload="auto">
+        <source src="./sound/msg.mp3"></source>
+        <source src="./sound/msg.ogg"></source>
+    </audio>
+    <script type="text/javascript">
+		var ataks = "0";
+		var spio = "0";
+        var unic = "0";
+		var rakets = "0";
+		var msg = 0;
+		document.getElementById('msgaudio').volume=1;
+		document.getElementById('beepataks').volume=0.1;
+	</script>
+</div><div id="header">
+    <div id="top_nav" class="otopnav"> 
+        <a title="行星总览" href="game.php?page=overview">
+            <img src="./styles/theme/nsc/img/general/logo.png" class="game_logo">
+        </a>
+        <div style="display:none;">					
+            <select id="lstPlaneta" name="lstPlaneta" onchange="document.location = $(this).val();">
+                <option value="?page=shipyard&amp;mode=defense&amp;cp=10001" selected="selected">母星 [1:1:8]</option>
+
+            </select>
+        </div>
+        <div class="mini_planet_navigation" style="margin: auto;left: 0;right: 0;width: 235px;background: none;top: 46px;position: absolute;">
+            <span class="link_back" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');"></span>
+            <span class="link_next" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');"></span>
+        </div>
+        <div id="planet_select" style="margin: auto;left: 0;right: 0;top:46px;">
+            <div class="active_panet">
+				<div class="name_palnet" style="padding-left: 1px;width: 96px;"><img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top:3px;margin-right: 5px;">母星</div> 
+                <span class="ico_build"></span>                            
+				<div class="coordinates_palnet">[1:1:8]</div>
+				<div class="clear"></div>
+			</div>
+            <div id="list_palnet">
+                    
+			<div class="separator_h"></div>                   
+            <div class="palnet_row active_palnet_row">
+				<div class="fleet_indicators">
+                    <img id="10001m1" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_attack.png" alt="" class="tooltip" data-tooltip-content="pla_attack_1" />                                    
+                    <img id="10001m12" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_grab.png" alt="" class="tooltip" data-tooltip-content="Планету захватывают" />
+                    <img id="10001m6" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_spio.png" alt="" class="tooltip" data-tooltip-content="pla_attack_2" />
+                    <img id="10001m10" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_rocket.png" alt="" class="tooltip" data-tooltip-content="pla_attack_3" />                 
+                                    
+                    <div class="clear"></div>
+                </div>	   
+                <span class="active_urlpalnet" url="cp=10001">
+					<img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top: 5px;">
+                    <span class="name_palnet"  style="padding-top: 5px;padding-left: 5px;width: 70px;">母星</span>
+					<span class="ico_build">
+                        																	</span>  			
+                    <span class="coordinates_palnet" style="width: 60px;">[1:1:8]</span>
+                </span>
+                                
+            </div> 
+                                   
+            </div>
+        </div><!--/planet_select-->			
+		<img title="" src="https://example.com/file/zcqjkP5e.png" class="settingxterium" onclick="return Dialog.Playercard(1000, 'TestUser');">
+        <span class="usernameow" onclick="return Dialog.Playercard(1000, 'TestUser');">TestUser</span>
+		<span class="usernamepos"></span>        
+        <div id="res_nav">
+             
+                                                            <div id="res_block_metal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore901'>星际合金</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 2.468
+                            <br/>每天产能: 59.224
+                            <br/>每周产能: 414.569 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.460/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_metal" name="10.460" data-real="10459.595081">10,5&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_crystal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore902'>高能水晶</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 1.645
+                            <br/>每天产能: 39.483
+                            <br/>每周产能: 276.379 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.557/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_crystal" name="10.557" data-real="10557.328369">10,6&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_deuterium" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore903'>重氢</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 0
+                            <br/>每天产能: 0
+                            <br/>每周产能: 0 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>9.990/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:20%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_deuterium" name="9.990" data-real="9990.000000">10,0&nbsp;K</span>
+                                    (<span class="pricent">20</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                        <div id="res_block_energy" class="bloc_res tooltip" data-tooltip-content="<span class='colore911'>幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_energy"></div>
+                            <div class="stock_text"><span id="current_energy" name="3.993" data-real="3993">0&nbsp;</span>/4,0&nbsp;K</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_build" class="bloc_res tooltip" data-tooltip-content="<span class='colore912'>建造点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:50%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:50%;"></div>
+                            <div class="separator_build"></div>
+                            <div class="stock_text"><span id="current_build" name="1.000" data-real="1000">500&nbsp;</span>/500&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_tech" class="bloc_res tooltip" data-tooltip-content="<span class='colore913'>研发点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_tech"></div>
+                            <div class="stock_text"><span id="current_tech" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_fleet" class="bloc_res tooltip" data-tooltip-content="<span class='colore914'>船坞点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_fleet"></div>
+                            <div class="stock_text"><span id="current_fleet" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_defense" class="bloc_res tooltip" data-tooltip-content="<span class='colore915'>防御点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_defense"></div>
+                            <div class="stock_text"><span id="current_defense" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_missile" class="bloc_res tooltip" data-tooltip-content="<span class='colore916'>导弹点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_missile"></div>
+                            <div class="stock_text"><span id="current_missile" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                            <div id="res_block_darkmatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore921'>暗物质</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 981">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_darkmatter"></div>
+                                <div class="stock_text"><span class='colore921' id="current_darkmatter" name="981" data-real="981">981&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_antimatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore922'>反幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_antimatter"></div>
+                                <div class="stock_text"><span class='colore922' id="current_antimatter" name="100" data-real="100">100&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_stardust" class="bloc_res tooltip" data-tooltip-content="<span class='colore923'>星尘</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_stardust"></div>
+                                <div class="stock_text"><span class='colore923' id="current_stardust" name="0" data-real="0">0&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_container" class="bloc_res tooltip" data-tooltip-content="<span class='colore924'>宝箱</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 3">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_container"></div>
+                                <div class="stock_text"><span class='colore924' id="current_container" name="3" data-real="3">3&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                       
+        </div>
+        <!--/res_nav-->            
+    </div><!--/top_nav-->
+    <div id="barrasottoover">
+		<div id="top_nav_parte_left">
+            			<a title="全局面板" href="game.php?page=control"><span class="imperia"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="排行榜" href="game.php?page=statistics"><span class="stats"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="成就展厅" href="game.php?page=achievements"><span class="achievv"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="战役" href="game.php?page=battleHall"><span class="topbk"></span></a>
+			<div class="separator_nav"></div>
+                                    			<a title="论坛" href="game.php?page=board" target="_blank"><span class="forum"></span></a>
+			<div class="separator_nav"></div>
+                                    <a title="消息" href="game.php?page=messages" id="a_mesage">
+                <span class="mesages"></span>
+                            </a>                                       
+            <div class="separator_nav"></div> 
+                    </div>    
+                <div class="premiumbarra">
+			<img class="premiumimgbarra" src="./styles/theme/nsc/img/iconav/ico-account-premium.png">
+            <a href="game.php?page=store">  
+                <span class="premiumtopbar">
+                    <span class="premiumscrittabar">商店</span>
+                </span>
+            </a>
+        </div>
+        	</div>
+    <div id="top_menu_bottom">
+        <div class="left"></div>
+        <div class="mid"></div>
+        <div class="right"></div>
+    </div>
+    		<script type="text/javascript">
+		var viewShortlyNumber	= 1;
+		var vacation			= 0;
+        $(function() {
+				            resourceTicker({
+                available: "10459.595081",
+                limit: [0, "50000"],
+                production: 2467.674,
+                valueElem: "current_metal",
+                valuePoursent: "bar_901"
+            }, true);
+						            resourceTicker({
+                available: "10557.328369",
+                limit: [0, "50000"],
+                production: 1645.116,
+                valueElem: "current_crystal",
+                valuePoursent: "bar_902"
+            }, true);
+						            resourceTicker({
+                available: "9990.000000",
+                limit: [0, "50000"],
+                production: 0,
+                valueElem: "current_deuterium",
+                valuePoursent: "bar_903"
+            }, true);
+																																												        });
+		</script>
+        <script src="scripts/game/topnav.js"></script>
+        <script type="text/javascript">
+		$(document).ready(function(){
+			var flag_planet_menu = false;
+			$('#planet_select').click(function(){ 
+				$(this).toggleClass('active');
+				$('#list_palnet').stop(false,false).slideToggle(300);
+				flag_planet_menu = true;
+			});		
+			if(flag_planet_menu)
+			{					
+				document.body.onclick = function (e) {
+					e = e || event;
+					target = e.target || e.srcElement;
+					if (target.id == "planet_select") {
+						return;
+					} else {
+						$('#list_palnet').hide();
+						$('#planet_select').removeClass('active');
+						flag_planet_menu = false;
+					}
+				}
+			}
+			$('.urlpalnet').click( function(){
+				document.location = '?'+queryString+'&'+$(this).attr("url");
+			});		
+			
+			var listener = new window.keypress.Listener();
+			listener.simple_combo("shift left", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');
+				console.log("You pressed shift and left");
+			});
+			listener.simple_combo("shift right", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');
+				console.log("You pressed shift and right");
+			});
+		});
+	</script>
+</div>
+</div><div id="content">
+<link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/building.css">
+<div id="page">
+    <div id="content">        
+                <form action="game.php?page=shipyard&amp;mode=defense" method="post">
+            <div id="build_content" class="conteiner ship_build">
+                <div id="fildes_band">
+                                        <div class="gray_stripe" style="height:0px; padding-right: 0; padding: 0;">
+                                                <a href="game.php?page=fleetDealer" class="palanetarium_linck ico_trader tooltip" data-tooltip-content="舰队回收商"></a>
+                                                <div style="float:left">防御建造</div>
+                        <span class="record_btn ico_star record_btn_active" onclick="rank();"></span>
+                        <span class="record_btn ico_rank_0" onclick="rank0();"></span>
+                        <span class="record_btn ico_rank_1" onclick="rank1();"></span>
+                        <span class="record_btn ico_rank_2" onclick="rank2();"></span>
+                        <span class="record_btn ico_rank_3" onclick="rank3();"></span>
+                                                <a href="game.php?page=buyDefense" class="right_flank button" style="margin-left: 10px;">购买防御</a>
+                                            </div>
+                                    </div>
+                <div id="build_elements">
+                                        <div class="build_elements">
+                        <div id="s_402" class="build_box rank1 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(402)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(402)" class="title">轻型激光塔 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_402"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(402)"><img src="./styles/theme/nsc/gebaeude/402.gif" alt="轻型激光塔" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(120)" class="tooltip" data-tooltip-content="<span style='color:red;'>激光技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/120.gif" alt="激光技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_401" class="build_box rank1 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(401)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(401)" class="title">导弹发射器 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_401"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(401)"><img src="./styles/theme/nsc/gebaeude/401.gif" alt="导弹发射器" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_405" class="build_box rank1 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(405)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(405)" class="title">离子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_405"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(405)"><img src="./styles/theme/nsc/gebaeude/405.gif" alt="离子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  4 (0/4)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/4</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  4 (0/4)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/4</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_403" class="build_box rank1 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(403)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(403)" class="title">重型激光塔 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_403"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(403)"><img src="./styles/theme/nsc/gebaeude/403.gif" alt="重型激光塔" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(120)" class="tooltip" data-tooltip-content="<span style='color:red;'>激光技术 等级  6 (0/6)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/120.gif" alt="激光技术" />
+                                            <div class="text" style="color:red;">0/6</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_404" class="build_box rank2 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(404)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(404)" class="title">高斯炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_404"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(404)"><img src="./styles/theme/nsc/gebaeude/404.gif" alt="高斯炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  4 (0/4)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/4</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  6 (0/6)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/6</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  6 (0/6)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/6</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  6 (0/6)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/6</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_406" class="build_box rank2 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(406)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(406)" class="title">等离子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_406"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(406)"><img src="./styles/theme/nsc/gebaeude/406.gif" alt="等离子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  5 (0/5)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/5</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  5 (0/5)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/5</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_416" class="build_box rank2 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(416)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(416)" class="title">反物质炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_416"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(416)"><img src="./styles/theme/nsc/gebaeude/416.gif" alt="反物质炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(120)" class="tooltip" data-tooltip-content="<span style='color:red;'>激光技术 等级  14 (0/14)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/120.gif" alt="激光技术" />
+                                            <div class="text" style="color:red;">0/14</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_417" class="build_box rank2 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(417)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(417)" class="title">快子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_417"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(417)"><img src="./styles/theme/nsc/gebaeude/417.gif" alt="快子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  8 (0/8)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/8</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_407" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(407)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(407)" class="title">小型护盾发生器 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_407"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(407)"><img src="./styles/theme/nsc/gebaeude/407.gif" alt="小型护盾发生器" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  8 (0/8)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/8</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  12 (0/12)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/12</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_418" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(418)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(418)" class="title">光子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_418"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(418)"><img src="./styles/theme/nsc/gebaeude/418.gif" alt="光子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  14 (0/14)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/14</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  14 (0/14)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/14</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  14 (0/14)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/14</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  15 (0/15)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/15</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  5 (0/5)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/5</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_408" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(408)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(408)" class="title">大型护盾发生器 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_408"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(408)"><img src="./styles/theme/nsc/gebaeude/408.gif" alt="大型护盾发生器" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  15 (0/15)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/15</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_409" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(409)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(409)" class="title">行星护盾发生器 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_409"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(409)"><img src="./styles/theme/nsc/gebaeude/409.gif" alt="行星护盾发生器" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  12 (0/12)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/12</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(609)" class="tooltip" data-tooltip-content="<span style='color:red;'>守卫者 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/609.gif" alt="守卫者" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_412" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(412)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(412)" class="title">轻子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_412"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(412)"><img src="./styles/theme/nsc/gebaeude/412.gif" alt="轻子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  10 (0/10)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/10</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(120)" class="tooltip" data-tooltip-content="<span style='color:red;'>激光技术 等级  22 (0/22)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/120.gif" alt="激光技术" />
+                                            <div class="text" style="color:red;">0/22</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  3 (0/3)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/3</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_410" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(410)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(410)" class="title">引力子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_410"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(410)"><img src="./styles/theme/nsc/gebaeude/410.gif" alt="引力子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  11 (0/11)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/11</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  17 (0/17)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/17</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  17 (0/17)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/17</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  17 (0/17)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/17</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_413" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(413)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(413)" class="title">质子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_413"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(413)"><img src="./styles/theme/nsc/gebaeude/413.gif" alt="质子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  12 (0/12)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/12</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  8 (0/8)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/8</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_419" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(419)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(419)" class="title">质量加速器 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_419"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(419)"><img src="./styles/theme/nsc/gebaeude/419.gif" alt="质量加速器" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  13 (0/13)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/13</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  19 (0/19)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/19</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  19 (0/19)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/19</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  19 (0/19)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/19</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  21 (0/21)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/21</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_414" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(414)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(414)" class="title">裂解炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_414"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(414)"><img src="./styles/theme/nsc/gebaeude/414.gif" alt="裂解炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  13 (0/13)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/13</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  20 (0/20)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/20</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  20 (0/20)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/20</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  20 (0/20)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/20</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  22 (0/22)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/22</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  7 (0/7)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/7</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_415" class="build_box rank3 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(415)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(415)" class="title">量子炮 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_415"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(415)"><img src="./styles/theme/nsc/gebaeude/415.gif" alt="量子炮" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  14 (0/14)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/14</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(15)" class="tooltip" data-tooltip-content="<span style='color:red;'>帝国主机 等级  17 (0/17)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/15.gif" alt="帝国主机" />
+                                            <div class="text" style="color:red;">0/17</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  22 (0/22)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/22</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  22 (0/22)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/22</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  22 (0/22)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/22</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  24 (0/24)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/24</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  21 (0/21)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/21</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  12 (0/12)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/12</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_411" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(411)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(411)" class="title">轨道防御平台 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_411"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(411)"><img src="./styles/theme/nsc/gebaeude/411.gif" alt="轨道防御平台" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  18 (0/18)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/18</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(109)" class="tooltip" data-tooltip-content="<span style='color:red;'>武器技术 等级  28 (0/28)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/109.gif" alt="武器技术" />
+                                            <div class="text" style="color:red;">0/28</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(110)" class="tooltip" data-tooltip-content="<span style='color:red;'>护盾技术 等级  28 (0/28)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/110.gif" alt="护盾技术" />
+                                            <div class="text" style="color:red;">0/28</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(111)" class="tooltip" data-tooltip-content="<span style='color:red;'>装甲技术 等级  28 (0/28)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/111.gif" alt="装甲技术" />
+                                            <div class="text" style="color:red;">0/28</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(120)" class="tooltip" data-tooltip-content="<span style='color:red;'>激光技术 等级  34 (0/34)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/120.gif" alt="激光技术" />
+                                            <div class="text" style="color:red;">0/34</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(121)" class="tooltip" data-tooltip-content="<span style='color:red;'>离子技术 等级  30 (0/30)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/121.gif" alt="离子技术" />
+                                            <div class="text" style="color:red;">0/30</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(122)" class="tooltip" data-tooltip-content="<span style='color:red;'>等离子技术 等级  26 (0/26)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/122.gif" alt="等离子技术" />
+                                            <div class="text" style="color:red;">0/26</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(199)" class="tooltip" data-tooltip-content="<span style='color:red;'>引力子技术 等级  20 (0/20)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/199.gif" alt="引力子技术" />
+                                            <div class="text" style="color:red;">0/20</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(615)" class="tooltip" data-tooltip-content="<span style='color:red;'>管理者 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/615.gif" alt="管理者" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_502" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(502)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(502)" class="title">拦截导弹 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_502"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(502)"><img src="./styles/theme/nsc/gebaeude/502.gif" alt="拦截导弹" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(44)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际导弹井 等级  2 (0/2)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/44.gif" alt="星际导弹井" />
+                                            <div class="text" style="color:red;">0/2</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                                        <div class="build_elements">
+                        <div id="s_503" class="build_box rank0 required">
+                            <div class="head">
+                                <a href="#" onclick="return Dialog.info(503)" class="interrogation">?</a>                
+                                <a href="#" onclick="return Dialog.info(503)" class="title">星际导弹 </a> 
+                                <span class="tooltip available" data-tooltip-content="可用: ">
+                                <span id="val_503"></span>    
+                            </div>
+                            <div class="content_box">
+                                <div class="image">
+                                    <a href="#" onclick="return Dialog.info(503)"><img src="./styles/theme/nsc/gebaeude/503.gif" alt="星际导弹" /></a>
+                                </div>
+                                                                <div class="prices">
+                                    <div class="necccos">前置需求:</div>
+                                                                                                                    <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(44)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际导弹井 等级  4 (0/4)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/44.gif" alt="星际导弹井" />
+                                            <div class="text" style="color:red;">0/4</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(21)" class="tooltip" data-tooltip-content="<span style='color:red;'>星际船坞 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/21.gif" alt="星际船坞" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                <div class="required_block required_smal_text">
+                                            <a href="#" onclick="return Dialog.info(117)" class="tooltip" data-tooltip-content="<span style='color:red;'>脉冲推进器 等级  1 (0/1)</span>">
+                                            <img src="./styles/theme/nsc/gebaeude/117.gif" alt="脉冲推进器" />
+                                            <div class="text" style="color:red;">0/1</div></a>
+                                        </div>
+                                                                                                            </div>     
+                                			
+                                <div class="clear"></div>
+                                <div class="time_build">
+                                                                </div>
+                                                            </div>
+                        </div>              
+                    </div>   
+                     			
+                    <div class="clear"></div>				
+                </div>
+            </div>    
+        </form>
+    </div>
+    <script type="text/javascript">
+    data			= [];
+    bd_operating	= '(施工中)';
+    bd_available	= '可用: ';
+
+	DatatList		= {
+		
+	"402":{"id":"402","available":"0","costResources":{"901":1500,"902":500,},"elementTime":1850.7206037371,"buyable":true,"maxBuildable":"6","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"401":{"id":"401","available":"0","costResources":{"901":2000,},"elementTime":1173.5193222515,"buyable":true,"maxBuildable":"5","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"405":{"id":"405","available":"0","costResources":{"901":2000,"902":6000,},"elementTime":2805.1678790665,"buyable":true,"maxBuildable":"1","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"403":{"id":"403","available":"0","costResources":{"901":6000,"902":2000,},"elementTime":2805.1678790665,"buyable":true,"maxBuildable":"1","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"404":{"id":"404","available":"0","costResources":{"901":20000,"902":15000,"903":2000,},"elementTime":5662.8713257466,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"406":{"id":"406","available":"0","costResources":{"901":50000,"902":50000,"903":30000,},"elementTime":8808.9042548837,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"416":{"id":"416","available":"0","costResources":{"901":200000,"902":150000,"903":50000,},"elementTime":12039.716000103,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"417":{"id":"417","available":"0","costResources":{"901":350000,"902":150000,"903":75000,},"elementTime":13292.417718185,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"407":{"id":"407","available":"0","costResources":{"901":1000000,"902":1000000,},"elementTime":15142.976267525,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"418":{"id":"418","available":"0","costResources":{"901":2500000,"902":1250000,"903":350000,},"elementTime":23588.551995211,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"408":{"id":"408","available":"0","costResources":{"901":5000000,"902":5000000,},"elementTime":24541.564381526,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"409":{"id":"409","available":"0","costResources":{"901":10000000,"902":5000000,"903":2500000,},"elementTime":37344.859371905,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"412":{"id":"412","available":"0","costResources":{"901":10000000,"902":5000000,"903":1500000,},"elementTime":35928.724053005,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"410":{"id":"410","available":"0","costResources":{"901":15000000,"902":15000000,},"elementTime":34122.325338684,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"413":{"id":"413","available":"0","costResources":{"901":25000000,"902":18000000,"903":3000000,},"elementTime":48434.379904548,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"419":{"id":"419","available":"0","costResources":{"901":45000000,"902":30000000,"903":8500000,},"elementTime":59114.626079564,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"414":{"id":"414","available":"0","costResources":{"901":80000000,"902":60000000,"903":20000000,},"elementTime":72649.769386543,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"415":{"id":"415","available":"0","costResources":{"901":280000000,"902":150000000,"903":40000000,},"elementTime":97991.048691419,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"411":{"id":"411","available":"0","costResources":{"901":5000000000,"902":2000000000,"903":500000000,},"elementTime":220365.21487358,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"502":{"id":"502","available":"0","costResources":{"901":8000,"903":2000,},"elementTime":2952.2420001082,"buyable":true,"maxBuildable":"1","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+		
+	"503":{"id":"503","available":"0","costResources":{"901":12500,"902":2500,"903":10000,},"elementTime":5190.1864604668,"buyable":true,"maxBuildable":"0","AlreadyBuild":false,"AlreadyBuildOne":false},
+	
+	
+	};
+	
+	MaxCount		= '1000000';
+	bd_operating	= '(busy)';
+   	LNGning			= '剩余时间:';
+   	LNGtech901		= '星际合金';
+   	LNGtech902		= '高能水晶';
+   	LNGtech903		= '重氢';
+   	LNGtech911		= '幽能';
+   	LNGtech921		= '暗物质';
+   	short_day 		= '天';
+   	short_hour 		= '小时';
+   	short_minute 	= '分钟';
+   	short_second 	= '秒';
+    </script>
+    <script src="scripts/game/shipyard.js"></script>
+    </div>
+</div>
+<div class="clear"></div>
+<div id="footer">
+		</div>
+</body>
+</html>

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+
+<!--[if lt IE 7 ]> <html lang="zh" class="no-js ie6"> <![endif]-->
+<!--[if IE 7 ]>    <html lang="zh" class="no-js ie7"> <![endif]-->
+<!--[if IE 8 ]>    <html lang="zh" class="no-js ie8"> <![endif]-->
+<!--[if IE 9 ]>    <html lang="zh" class="no-js ie9"> <![endif]-->
+<!--[if (gt IE 9)|!(IE)]><!--> <html lang="zh" class="no-js"> <!--<![endif]-->
+<head>
+    <!--title-->
+	<title>单位调度 - CQBX8573 - 战争宇宙：猛犸</title>
+	<meta name="generator" content="New-Star 2.8.1">
+	<meta name="keywords" content="New-Star 2.8.1">
+	<meta name="description" content="New-Star Browsergame powered by https://github.com/Yaro2709/New-Star">
+    <!--favicon-->
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
+    <!--goto refresh-->
+	    <!--content-type-->
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <!--keypress-->
+    <script type="text/javascript" src="./scripts/base/keypress.js"></script>
+    <!--jquery-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery_1.8.18.css">
+    <script type="text/javascript" src="./scripts/base/jquery.js"></script>
+    <script type="text/javascript" src="./scripts/base/jquery.ui.js"></script>
+	<script type="text/javascript" src="./scripts/base/jquery.cookie.js"></script>
+    <!--fancybox-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/base/jquery.fancybox_3.5.7.css">
+    <script type="text/javascript" src="./scripts/base/jquery.fancybox.js"></script>    
+    <!--style-->
+    <link rel="stylesheet" type="text/css" href="./styles/resource/css/ingame/main.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/navigation.css">
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/general.css">
+    
+    <link rel="stylesheet" type="text/css" href="./styles/theme/nsc/formate.css">
+    <!--game script-->
+    <script type="text/javascript">
+        var ServerTimezoneOffset = 0;
+        var serverTime 	= new Date(2026, 10, 13, 12, 11, 35);
+        var startTime	= serverTime.getTime();
+        var localTime 	= serverTime;
+        var localTS 	= startTime;
+        var Gamename	= document.title;
+        var Ready		= "准备完毕";
+        var Skin		= "./styles/theme/nsc/";
+        var Lang		= "zh";
+        var head_info	= "信息";
+        var auth		= 0;
+        var days 		= ["\u5468\u65e5","\u5468\u4e00","\u5468\u4e8c","\u5468\u4e09","\u5468\u56db","\u5468\u4e94","\u5468\u516d"] 
+        var months 		= ["1","2","3","4","5","6","7","8","9","10","11","12"] ;
+        var tdformat	= "[Y]年[M]月[d]日 [D] [H]:[i]:[s]";
+        var queryString	= "page=fleetTable";
+        var isPlayerCardActive	= "true";
+
+        setInterval(function() {
+            serverTime.setSeconds(serverTime.getSeconds()+1);
+        }, 1000);
+	</script>
+    <script type="text/javascript" src="./scripts/base/tooltip.js"></script>
+	<script type="text/javascript" src="./scripts/game/base.js"></script>
+    <script type="text/javascript" src="./scripts/game/game.class.js"></script>
+    <!--script-->
+		<script type="text/javascript" src="./scripts/game/galaxy.js"></script>
+		<script type="text/javascript" src="./scripts/game/pointes.js"></script>
+		<script type="text/javascript" src="./scripts/game/flotten.js"></script>
+		<script type="text/javascript" src="./scripts/game/fleetTable.js"></script>
+		<script src="scripts/game/fleetTable.js"></script>
+	<script type="text/javascript">
+	$(function() {
+		
+	});
+	</script>
+</head>
+<body id="fleetTable" class="full" 
+    style="
+        background: #0B0B0F;
+        background: url(https://example.com/file/PwfnxH7l.png) no-repeat fixed center center #0d0d0d;
+        -webkit-background-size: cover;
+        -moz-background-size: cover;
+        o-background-size: cover;
+        background-size: cover;
+">
+<div id="tooltip" class="tip"></div><script type="text/javascript">
+    	setInterval(function() { AJAX() }, 5000);
+</script>
+<script type="text/javascript" src="./scripts/game/json01.js"></script>
+<div id="left_side">  
+	<div id="side_menu_up">
+        <div class="img"></div>
+    </div>
+    <div id="left_menu">
+        <div id="touchscreenleft_menu">   
+            <div id="indicators">
+                <div id="attack" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="espionage" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="destruction" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+                <div id="rocket" class="indicator ">
+                    <div class="icoi"></div>
+                </div>
+            </div>
+                        <a class="big_btn btn_menu btn_menu_big"> <div class="servertime oservertime"></div> </a>
+                        <a class="big_btn blue btn_menu btn_menu_big">14.11.2026 11:37:51</a>
+                         
+            <!-- ricerche  tecnologie-->
+                        <a class="nuovomenusinistra" href="game.php?page=research" id="munu_research">研究升级</a>
+            <a class="nuovomenudestra" href="game.php?page=research"><img src="./styles/theme/nsc/img/iconav/research.png" class="imgovernuovo"></a>
+                        <!-- costruzioni risorse-->
+                        <a class="nuovomenusinistra" href="game.php?page=buildings" id="munu_build">建筑建造</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=resources" id="munu_resources" data-tooltip-content="生产控制"><img src="./styles/theme/nsc/img/iconav/resources.png" class="oimgaltro"></a>
+                        <!-- flotta hangar -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_shipyard_fleet">船坞生产</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=fleet" id="munu_fleetable"><img src="./styles/theme/nsc/img/iconav/hangar.png" class="imgovernuovo"></a>
+                        <!-- difese -->
+                        <a class="nuovomenusinistra" href="game.php?page=shipyard&amp;mode=defense" id="munu_shipyard_defense">防御建造</a>
+            <a class="nuovomenudestra" href="game.php?page=shipyard&amp;mode=defense"><img src="./styles/theme/nsc/img/iconav/shield.png" class="imgovernuovo"></a>
+                        <!-- Orbita -->
+            <a class="nuovomenusinistra" href="game.php?page=fleetTable" id="munu_orbita">单位调度</a>
+                        <a class="nuovomenudestra tooltip" href="game.php?page=battleSimulator" id="munu_fleetable" data-tooltip-content="战斗模拟器"><img src="./styles/theme/nsc/img/iconav/target.png" class="oimgaltro"></a>	
+                        
+            <!-- alleanza-->
+            			<a class="nuovomenusinistra" href="game.php?page=alliance" id="munu_alliance">联盟管理</a>
+            <a class="nuovomenudestra" href="game.php?page=alliance"><img src="./styles/theme/nsc/img/iconav/alliance.png" class="imgovernuovo" id="ciaone"></a>	
+                                                <a class="nuovomenusinistra" href="game.php?page=arsenal">军备管理</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=conteiner" id="munu_fleetable" data-tooltip-content="宝箱"><img src="./styles/theme/nsc/img/iconav/arsenal.png" class="oimgaltro"></a>	
+                                    <a class="nuovomenusinistra" href="game.php?page=officier" id="munu_senat">招募军官</a>
+            <a class="nuovomenudestra" href="game.php?page=officier"><img src="./styles/theme/nsc/img/iconav/governatori.png" class="imgovernuovo" id="ciaone"></a>
+                                    <a class="nuovomenusinistra" href="game.php?page=minerals" id="munu_senat">回收矿产</a>
+                                    <a class="nuovomenudestra tooltip" href="game.php?page=details" id="munu_fleetable" data-tooltip-content="加工矿产"><img src="./styles/theme/nsc/img/iconav/blackmarket.png" class="oimgaltro"></a>	
+                        <!-- ufficiali governatori -->
+                        <a class="galassiabott" href="game.php?page=galaxy" id="munu_galaxy">查看星图</a>
+               
+     		            <div class="clear"></div>                
+    </div>
+    </div><!--/left_menu-->
+    <div class="menubassoleft">
+        <div id="top_nav_parte_sotto"> 
+                        <a title="科技树" href="game.php?page=techtree"><span class="techtree"></span></a>
+            <div class="separator_nav"></div>
+             
+			<a title="规则" href="index.php?page=rules" target="_blank"><span class="rules"></span></a>
+            <div class="separator_nav"></div>
+                        <a title="好友管理" href="game.php?page=buddyList"><span class="frend"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="宇宙记录" href="game.php?page=records"><span class="record"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="支持" href="game.php?page=ticket"><span class="soopart"></span></a>				
+			<div class="separator_nav"></div>
+            			<a title="设置" href="game.php?page=settings"><span class="seting"></span></a>  
+			<div class="separator_nav"></div>		
+			<a title="注销" href="game.php?page=logout"> <span class="exit"></span></a>				  
+        </div>
+        <div id="side_menu_bottom">
+            <div class="img"></div>
+        </div>
+    </div> 
+</div>
+<div style="height:0; overflow:hidden;" loop="false;" id="music">
+    <audio id="beepataks" preload="auto">
+        <source src="./sound/sirena.mp3"></source>
+        <source src="./sound/sirena.ogg"></source>
+    </audio>
+    <audio id="msgaudio" preload="auto">
+        <source src="./sound/msg.mp3"></source>
+        <source src="./sound/msg.ogg"></source>
+    </audio>
+    <script type="text/javascript">
+		var ataks = "0";
+		var spio = "0";
+        var unic = "0";
+		var rakets = "0";
+		var msg = 0;
+		document.getElementById('msgaudio').volume=1;
+		document.getElementById('beepataks').volume=0.1;
+	</script>
+</div><div id="header">
+    <div id="top_nav" class="otopnav"> 
+        <a title="行星总览" href="game.php?page=overview">
+            <img src="./styles/theme/nsc/img/general/logo.png" class="game_logo">
+        </a>
+        <div style="display:none;">					
+            <select id="lstPlaneta" name="lstPlaneta" onchange="document.location = $(this).val();">
+                <option value="?page=fleetTable&amp;cp=10001" selected="selected">母星 [1:1:8]</option>
+
+            </select>
+        </div>
+        <div class="mini_planet_navigation" style="margin: auto;left: 0;right: 0;width: 235px;background: none;top: 46px;position: absolute;">
+            <span class="link_back" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');"></span>
+            <span class="link_next" title="" onclick="eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');"></span>
+        </div>
+        <div id="planet_select" style="margin: auto;left: 0;right: 0;top:46px;">
+            <div class="active_panet">
+				<div class="name_palnet" style="padding-left: 1px;width: 96px;"><img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top:3px;margin-right: 5px;">母星</div> 
+                <span class="ico_build"></span>                            
+				<div class="coordinates_palnet">[1:1:8]</div>
+				<div class="clear"></div>
+			</div>
+            <div id="list_palnet">
+                    
+			<div class="separator_h"></div>                   
+            <div class="palnet_row active_palnet_row">
+				<div class="fleet_indicators">
+                    <img id="10001m1" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_attack.png" alt="" class="tooltip" data-tooltip-content="pla_attack_1" />                                    
+                    <img id="10001m12" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_grab.png" alt="" class="tooltip" data-tooltip-content="Планету захватывают" />
+                    <img id="10001m6" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_spio.png" alt="" class="tooltip" data-tooltip-content="pla_attack_2" />
+                    <img id="10001m10" style="display:none;" src="./styles/theme/nsc/img/iconav/p_select_rocket.png" alt="" class="tooltip" data-tooltip-content="pla_attack_3" />                 
+                                    
+                    <div class="clear"></div>
+                </div>	   
+                <span class="active_urlpalnet" url="cp=10001">
+					<img src='./styles/theme/nsc/planeten/planet2d/normaltempplanet04.png' style="float:left;height: 22px;padding-top: 5px;">
+                    <span class="name_palnet"  style="padding-top: 5px;padding-left: 5px;width: 70px;">母星</span>
+					<span class="ico_build">
+                        																	</span>  			
+                    <span class="coordinates_palnet" style="width: 60px;">[1:1:8]</span>
+                </span>
+                                
+            </div> 
+                                   
+            </div>
+        </div><!--/planet_select-->			
+		<img title="" src="https://example.com/file/zcqjkP5e.png" class="settingxterium" onclick="return Dialog.Playercard(1000, 'TestUser');">
+        <span class="usernameow" onclick="return Dialog.Playercard(1000, 'TestUser');">TestUser</span>
+		<span class="usernamepos"></span>        
+        <div id="res_nav">
+             
+                                                            <div id="res_block_metal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore901'>星际合金</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 2.468
+                            <br/>每天产能: 59.224
+                            <br/>每周产能: 414.569 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.460/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_metal" name="10.460" data-real="10460.280546">10,5&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_crystal" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore902'>高能水晶</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 1.645
+                            <br/>每天产能: 39.483
+                            <br/>每周产能: 276.379 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>10.558/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:21%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_crystal" name="10.558" data-real="10557.785345667">10,6&nbsp;K</span>
+                                    (<span class="pricent">21</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                            <div id="res_block_deuterium" class="bloc_res tooltip" 
+                            data-tooltip-content="
+                            <span class='colore903'>重氢</span>
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div>
+                            每小时产能: 0
+                            <br/>每天产能: 0
+                            <br/>每周产能: 0 
+                            <div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'>
+                            </div> <span style='color:#999'>9.990/50.000</span>">
+                                                        <a href="game.php?page=trader"><div class="ico_res"></div></a>
+                                                                                    <div class="stock_res">
+                                <div class="stock_percentage" style="width:20%;"></div>
+                                <div class="stock_text">
+                                    <span id="current_deuterium" name="9.990" data-real="9990">10,0&nbsp;K</span>
+                                    (<span class="pricent">20</span>%)
+                                </div>
+                            </div>	
+                        </div>
+                                                 
+                                                        <div id="res_block_energy" class="bloc_res tooltip" data-tooltip-content="<span class='colore911'>幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_energy"></div>
+                            <div class="stock_text"><span id="current_energy" name="3.993" data-real="3993">0&nbsp;</span>/4,0&nbsp;K</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_build" class="bloc_res tooltip" data-tooltip-content="<span class='colore912'>建造点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:50%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:50%;"></div>
+                            <div class="separator_build"></div>
+                            <div class="stock_text"><span id="current_build" name="1.000" data-real="1000">500&nbsp;</span>/500&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_tech" class="bloc_res tooltip" data-tooltip-content="<span class='colore913'>研发点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_tech"></div>
+                            <div class="stock_text"><span id="current_tech" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_fleet" class="bloc_res tooltip" data-tooltip-content="<span class='colore914'>船坞点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_fleet"></div>
+                            <div class="stock_text"><span id="current_fleet" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_defense" class="bloc_res tooltip" data-tooltip-content="<span class='colore915'>防御点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_defense"></div>
+                            <div class="stock_text"><span id="current_defense" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                        <div id="res_block_missile" class="bloc_res tooltip" data-tooltip-content="<span class='colore916'>导弹点</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0%">
+                        <div class="ico_res"></div>
+                        <div class="stock_res">
+                            <div class="stock_percentage stock_percentage_left" style="width:0%;display:none;"></div>
+                            <div class="stock_percentage stock_percentage_right" style="width:0%;display:none;"></div>
+                            <div class="separator_missile"></div>
+                            <div class="stock_text"><span id="current_missile" name="0" data-real="0">0&nbsp;</span>/0&nbsp;</div>
+                        </div>
+                    </div>
+                             
+                                                            <div id="res_block_darkmatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore921'>暗物质</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 981">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_darkmatter"></div>
+                                <div class="stock_text"><span class='colore921' id="current_darkmatter" name="981" data-real="981">981&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_antimatter" class="bloc_res tooltip" data-tooltip-content="<span class='colore922'>反幽能</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 100">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_antimatter"></div>
+                                <div class="stock_text"><span class='colore922' id="current_antimatter" name="100" data-real="100">100&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_stardust" class="bloc_res tooltip" data-tooltip-content="<span class='colore923'>星尘</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 0">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_stardust"></div>
+                                <div class="stock_text"><span class='colore923' id="current_stardust" name="0" data-real="0">0&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                 
+                                                            <div id="res_block_container" class="bloc_res tooltip" data-tooltip-content="<span class='colore924'>宝箱</span><div style='border-bottom:1px dashed #666; margin:7px 0 4px 0;'></div> 3">
+                                                        <div class="ico_res"></div>
+                                                        <div class="stock_res2">
+                                <div class="stock_percentage" style="width:100%;"></div>
+                                <div class="separator_container"></div>
+                                <div class="stock_text"><span class='colore924' id="current_container" name="3" data-real="3">3&nbsp;</span></div>
+                            </div>
+                        </div>
+                                                       
+        </div>
+        <!--/res_nav-->            
+    </div><!--/top_nav-->
+    <div id="barrasottoover">
+		<div id="top_nav_parte_left">
+            			<a title="全局面板" href="game.php?page=control"><span class="imperia"></span></a>
+            <div class="separator_nav"></div>
+                        			<a title="排行榜" href="game.php?page=statistics"><span class="stats"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="成就展厅" href="game.php?page=achievements"><span class="achievv"></span></a>
+			<div class="separator_nav"></div>
+                        			<a title="战役" href="game.php?page=battleHall"><span class="topbk"></span></a>
+			<div class="separator_nav"></div>
+                                    			<a title="论坛" href="game.php?page=board" target="_blank"><span class="forum"></span></a>
+			<div class="separator_nav"></div>
+                                    <a title="消息" href="game.php?page=messages" id="a_mesage">
+                <span class="mesages"></span>
+                            </a>                                       
+            <div class="separator_nav"></div> 
+                    </div>    
+                <div class="premiumbarra">
+			<img class="premiumimgbarra" src="./styles/theme/nsc/img/iconav/ico-account-premium.png">
+            <a href="game.php?page=store">  
+                <span class="premiumtopbar">
+                    <span class="premiumscrittabar">商店</span>
+                </span>
+            </a>
+        </div>
+        	</div>
+    <div id="top_menu_bottom">
+        <div class="left"></div>
+        <div class="mid"></div>
+        <div class="right"></div>
+    </div>
+    		<script type="text/javascript">
+		var viewShortlyNumber	= 1;
+		var vacation			= 0;
+        $(function() {
+				            resourceTicker({
+                available: 10460.280546,
+                limit: [0, "50000"],
+                production: 2467.674,
+                valueElem: "current_metal",
+                valuePoursent: "bar_901"
+            }, true);
+						            resourceTicker({
+                available: 10557.785345667,
+                limit: [0, "50000"],
+                production: 1645.116,
+                valueElem: "current_crystal",
+                valuePoursent: "bar_902"
+            }, true);
+						            resourceTicker({
+                available: 9990,
+                limit: [0, "50000"],
+                production: 0,
+                valueElem: "current_deuterium",
+                valuePoursent: "bar_903"
+            }, true);
+																																												        });
+		</script>
+        <script src="scripts/game/topnav.js"></script>
+        <script type="text/javascript">
+		$(document).ready(function(){
+			var flag_planet_menu = false;
+			$('#planet_select').click(function(){ 
+				$(this).toggleClass('active');
+				$('#list_palnet').stop(false,false).slideToggle(300);
+				flag_planet_menu = true;
+			});		
+			if(flag_planet_menu)
+			{					
+				document.body.onclick = function (e) {
+					e = e || event;
+					target = e.target || e.srcElement;
+					if (target.id == "planet_select") {
+						return;
+					} else {
+						$('#list_palnet').hide();
+						$('#planet_select').removeClass('active');
+						flag_planet_menu = false;
+					}
+				}
+			}
+			$('.urlpalnet').click( function(){
+				document.location = '?'+queryString+'&'+$(this).attr("url");
+			});		
+			
+			var listener = new window.keypress.Listener();
+			listener.simple_combo("shift left", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex-1].value+'\'');
+				console.log("You pressed shift and left");
+			});
+			listener.simple_combo("shift right", function() {
+				eval('location=\''+document.getElementById('lstPlaneta').options[document.getElementById('lstPlaneta').selectedIndex+1].value+'\'');
+				console.log("You pressed shift and right");
+			});
+		});
+	</script>
+</div>
+</div><div id="content">
+<link rel="stylesheet" type="text/css" href="./styles/theme/nsc/css/fleetTable.css">
+<div id="page">
+    <div id="content">
+        <div id="ally_content" class="conteinership" style="margin-bottom: 15px;">
+                    <div class="fleettab7"> 
+                                <a href="game.php?page=reduceResources" class="fleet_reduce ico_reduceresources tooltip" data-tooltip-content="汇聚资源到当前行星"></a>
+                                                <a href="game.php?page=reduceFleet" class="fleet_reduce ico_reducefleet tooltip" data-tooltip-content="汇聚舰队到当前行星"></a>
+                                                <a href="game.php?page=delivery" class="fleet_reduce ico_deliveryres tooltip" data-tooltip-content="从当前行星分发资源"></a>
+                                                <a href="game.php?page=fleetDealer" class="fleet_reduce ico_trader tooltip" data-tooltip-content="舰队回收商"></a>
+                                                <a href="game.php?page=findDebris" class="fleet_reduce ico_finddebris tooltip" data-tooltip-content="寻找残骸"></a>
+                            </div>
+            <div class="fleettab8" style="margin-bottom:0"></div>
+            <span class="puntiflotta1">已选择的舰队积分</span>
+            <span class="totalFleetPoints puntiflotta2">0</span>
+                        <form action="?page=fleetStep1" method="post" name="glav" class="getRead">
+                <input type="hidden" name="galaxy" value="1">
+                <input type="hidden" name="system" value="1">
+                <input type="hidden" name="planet" value="8">
+                <input type="hidden" name="type" value="1">
+                <input type="hidden" name="target_mission" value="0">
+                <div id="build_elements" style=" margin:0">
+                    <div class="gray_ship1">
+                                                
+                                                
+                                                
+                                            </div>
+                </div>  
+                <div class="alleanza57"></div>
+                <div class="fleettab1" style="    height: 65px;">
+                    <div style="display:none;" class="fleettab12" id="save">
+                        <span style="text-align:right; color:#888;font-size: 11px;">设定槽位名称</span>
+                        <input name="save_groop" size="15" maxlength="13" style="width:170px;height: 11px;" autofocus="">
+                    </div> 
+                    <table class="tablesorter ally_ranks">
+                        <tbody>
+                            <tr>     
+                                <th class="menubassoshi" style="text-align:left" colspan="2"><a href="javascript:noShips();" class="menubassoshil">清除选择的舰只</a></th>
+                                <th class="menubassoshi" style="text-align:center" colspan="2"><a href="javascript:onSave();" class="menubassoshil">添加一个舰队模板槽位</a></th>
+                                <th class="menubassoshi" colspan="2"><a href="javascript:maxShips();" class="menubassoshil">选择所有舰只</a></th>
+                            </tr>
+                                                        <tr>
+                                <td colspan="6" style="padding:0;    border: 0;">
+                                    <input class="fl_bigbtn_go" type="submit" value="继续">
+                                </td>
+                            </tr>
+                             
+                        </tbody>
+                    </table>	
+                </div>    
+            </form>
+        </div>
+        
+    <div id="ally_content" class="conteinership">
+ <div class="fleettab10"></div>   
+<div class="gray_flettab">
+        <div class="transparent">
+        	舰队航道 0 / 1
+            <div class="transparent" style="text-align:right; float:right;color: #b1b1b1;font-size: 13px;">
+                <span style="color: #8b99b0;font-weight: bold;">0 / 0 探险队</span>
+            </div> 
+        </div>
+    </div> 
+          <table class="tablesorter ally_ranks">
+         <tr>
+            <td>ID</td>
+            <td>舰队任务</td>
+            <td>舰队数量</td>
+            <td>出发坐标</td>
+            <td>抵达时间(目标)</td>
+            <td>目的地坐标</td>
+            <td>返航时间</td>
+            <td>抵达时间(返航)</td>
+            <td>指令</td>
+         </tr>
+                  <tr>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+         </tr>
+                        </table>		
+</div>    
+<script type="text/javascript">
+    fleetGroopShip  = [];
+    var pointsPrice = [];
+</script>
+</div>
+</div>
+<div class="clear"></div>
+<div id="footer">
+		</div>
+</body>
+</html>

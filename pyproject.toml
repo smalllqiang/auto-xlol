@@ -35,7 +35,7 @@ dev = [
 newstar = "newstar_sdk.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["newstar_sdk"]
+packages = ["newstar_sdk", "autoplay"]
 
 [tool.hatch.version]
 path = "newstar_sdk/__init__.py"

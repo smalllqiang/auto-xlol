@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -130,3 +131,90 @@ def test_plan_marks_unaffordable(fixture_html):
     buildings, research, production, _ = _state(fixture_html)
     plan = compute_plan(buildings, research, production, {901: 0, 902: 0, 903: 0})
     assert all(action.affordable is False for action in plan.actions)
+
+
+def _item(element_id, name, level=0, requirements=None, requirements_met=True):
+    return SimpleNamespace(
+        id=element_id,
+        name=name,
+        level=level,
+        requirements=list(requirements or []),
+        requirements_met=requirements_met,
+        cost={901: 100},
+        factor=2.0,
+        max_level=255,
+    )
+
+
+def _production():
+    return SimpleNamespace(resources={})
+
+
+def test_plan_includes_goal_after_requirements_met():
+    goal = _item(81, "资源处理单元", requirements=["自律工厂 等级 5 (5/5)"])
+    robot = _item(14, "自律工厂", level=5)
+
+    plan = compute_plan([goal, robot], [], _production(), {901: 100_000})
+
+    blockers = [action for action in plan.actions if action.category == "blocker"]
+    assert [action.name for action in blockers] == ["资源处理单元"]
+    action = blockers[0]
+    assert action.kind == "building"
+    assert (action.current_level, action.target_level, action.required_level) == (0, 1, 1)
+    assert action.steps == 1
+    assert action.affordable is True
+    assert "阶段目标" in action.reason
+
+
+def test_plan_skips_goal_while_requirements_unmet():
+    goal = _item(
+        81,
+        "资源处理单元",
+        requirements=["自律工厂 等级 5 (0/5)"],
+        requirements_met=False,
+    )
+    robot = _item(14, "自律工厂", level=0)
+
+    plan = compute_plan([goal, robot], [], _production(), {901: 100_000})
+
+    blockers = [action for action in plan.actions if action.category == "blocker"]
+    assert [action.name for action in blockers] == ["自律工厂"]
+    assert blockers[0].required_level == 5
+    assert blockers[0].steps == 5
+    assert all(action.name != "资源处理单元" for action in blockers)
+
+
+def test_plan_covers_expedition_prep_goal():
+    processor = _item(81, "资源处理单元", level=1)
+    tech = _item(
+        124,
+        "探险技术",
+        level=4,
+        requirements=["科研实验室 等级 12 (12/12)"],
+    )
+
+    plan = compute_plan([processor], [tech], _production(), {901: 1_000_000})
+
+    assert plan.phase == "expedition_prep"
+    assert "4/9" in plan.goal_status
+    blockers = [action for action in plan.actions if action.category == "blocker"]
+    assert [action.name for action in blockers] == ["探险技术"]
+    action = blockers[0]
+    assert action.kind == "research"
+    assert (action.current_level, action.target_level, action.required_level) == (4, 5, 9)
+    assert action.steps == 5
+    assert "阶段目标" in action.reason
+
+
+def test_plan_skips_goal_when_page_requirements_unparsed():
+    goal = _item(
+        81,
+        "资源处理单元",
+        requirements=["无法识别的神秘前置"],
+        requirements_met=False,
+    )
+
+    plan = compute_plan([goal], [], _production(), {901: 100_000})
+
+    assert not [action for action in plan.actions if action.category == "blocker"]
+    assert any("无法解析出具体项" in note for note in plan.notes)

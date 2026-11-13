@@ -2,8 +2,10 @@
 
 Two kinds of candidates are produced:
 
-* **blockers** -- the dependency chain of the current phase's goal.  These are
-  what the game itself says must be built/researched before the milestone.
+* **blockers** -- the current phase's goal and its dependency chain.  These are
+  what the game itself says must be built/researched before the milestone.  The
+  goal itself is emitted once its prerequisites are satisfied, so it is the
+  terminal blocker instead of being silently skipped.
 * **roi** -- production buildings ranked by payback time (cost in metal
   equivalents divided by the estimated hourly gain of one more level).
 
@@ -20,7 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 
 from .economy import equivalent_cost, payback_hours, production_delta, scale_cost
-from .phases import PRE_GRAVITY, Phase, detect_phase
+from .phases import Phase, detect_phase
 
 REQUIREMENT_RE = re.compile(
     r"^(?P<name>.+?)\s*等级\s*(?P<required>\d+)\s*\((?P<current>\d+)/(?P<need>\d+)\)$"
@@ -157,6 +159,8 @@ def _goal_status(phase: Phase, buildings: Dict[int, Any], research: Dict[int, An
 
 def _blocker_actions(
     goal: Any,
+    goal_kind: str,
+    goal_level: int,
     buildings: Dict[int, Any],
     research: Dict[int, Any],
     resources: Dict[int, float],
@@ -173,6 +177,37 @@ def _blocker_actions(
         if kind == "research":
             return research.get(int(element_id))
         return None
+
+    def make_action(
+        *,
+        kind: str,
+        target: Any,
+        level: int,
+        required_level: int,
+        steps: int,
+        reason: str,
+        depth: int,
+    ) -> Action:
+        cost = _cost_of(target)
+        total_cost = scale_cost(cost, getattr(target, "factor", None), steps)
+        return Action(
+            category="blocker",
+            kind=kind,
+            element_id=int(target.id),
+            name=str(getattr(target, "name", "")),
+            current_level=level,
+            target_level=level + 1,
+            cost=cost,
+            cost_equivalent=equivalent_cost(cost),
+            affordable=_affordable(cost, resources),
+            reason=reason,
+            depth=depth,
+            required_level=required_level,
+            steps=steps,
+            total_cost=total_cost,
+            total_cost_equivalent=equivalent_cost(total_cost),
+            affordable_total=_affordable(total_cost, resources),
+        )
 
     def walk(item: Any, depth: int) -> None:
         for requirement in parse_requirements(getattr(item, "requirements", [])):
@@ -197,34 +232,48 @@ def _blocker_actions(
                 continue
 
             level = int(getattr(target, "level", 0) or 0)
-            cost = _cost_of(target)
-            steps = max(1, requirement.required - level)
-            total_cost = scale_cost(cost, getattr(target, "factor", None), steps)
             actions.append(
-                Action(
-                    category="blocker",
+                make_action(
                     kind=requirement.kind,
-                    element_id=int(target.id),
-                    name=str(getattr(target, "name", requirement.name)),
-                    current_level=level,
-                    target_level=level + 1,
-                    cost=cost,
-                    cost_equivalent=equivalent_cost(cost),
-                    affordable=_affordable(cost, resources),
+                    target=target,
+                    level=level,
+                    required_level=requirement.required,
+                    steps=max(1, requirement.required - level),
                     reason=(
                         f"为「{getattr(item, 'name', '')}」解锁：需要 "
                         f"{requirement.required} 级（当前 {level}）"
                     ),
                     depth=depth,
-                    required_level=requirement.required,
-                    steps=steps,
-                    total_cost=total_cost,
-                    total_cost_equivalent=equivalent_cost(total_cost),
-                    affordable_total=_affordable(total_cost, resources),
                 )
             )
 
-    walk(goal, 0)
+    goal_requirements = parse_requirements(getattr(goal, "requirements", []))
+    unmet_requirements = [requirement for requirement in goal_requirements if not requirement.met]
+    if unmet_requirements:
+        walk(goal, 0)
+    else:
+        level = int(getattr(goal, "level", 0) or 0)
+        if level >= goal_level:
+            return actions
+        if not getattr(goal, "requirements_met", True):
+            notes.append(
+                f"「{getattr(goal, 'name', '阶段目标')}」的前置条件未满足，"
+                "但页面文本无法解析出具体项"
+            )
+            return actions
+
+        actions.append(
+            make_action(
+                kind=goal_kind,
+                target=goal,
+                level=level,
+                required_level=goal_level,
+                steps=max(1, goal_level - level),
+                reason=f"阶段目标：{getattr(goal, 'name', '')} 升到 {goal_level} 级（当前 {level}）",
+                depth=0,
+            )
+        )
+
     return actions
 
 
@@ -303,13 +352,29 @@ def compute_plan(
     notes: List[str] = []
     actions: List[Action] = []
 
-    if phase is PRE_GRAVITY:
+    if phase.goal_kind == "building":
         goal = building_map.get(phase.goal_element)
+    elif phase.goal_kind == "research":
+        goal = research_map.get(phase.goal_element)
+    else:
+        goal = None
+
+    if phase.goal_kind in {"building", "research"}:
         if goal is None:
-            notes.append("页面没有返回资源处理单元，无法生成依赖链")
+            notes.append(
+                f"页面没有返回阶段目标元素 {phase.goal_element}，无法生成依赖链"
+            )
         else:
             actions.extend(
-                _blocker_actions(goal, building_map, research_map, resources, notes)
+                _blocker_actions(
+                    goal,
+                    phase.goal_kind,
+                    phase.goal_level,
+                    building_map,
+                    research_map,
+                    resources,
+                    notes,
+                )
             )
     else:
         notes.append(f"阶段「{phase.name}」的规划尚未实现，仅输出产能候选")

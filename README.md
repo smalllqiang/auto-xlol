@@ -245,7 +245,7 @@ response = client.request("POST", "game.php?page=...", data={"key": "value"})
 
 ## 策略层（规划器）
 
-`autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开目标依赖链、按回本时间
+`autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开阶段目标及其依赖链、按回本时间
 排序产出建筑。
 
 ```python

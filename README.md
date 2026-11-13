@@ -275,6 +275,8 @@ for action in plan.actions:
 ```
 
 单实例锁、`state/STOP` 急停、失败指数退避都内建；默认每 12 轮写一次快照。
+每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；
+日志与快照超过 `--rotate-mb` 自动切成 `.1`。
 
 ## 元素 ID
 

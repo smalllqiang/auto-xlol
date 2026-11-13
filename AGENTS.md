@@ -96,6 +96,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
+- **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
+  在 `research_queue` 非空时跳过该动作。
 
 ## 扩展一个新页面
 

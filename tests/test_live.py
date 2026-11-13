@@ -114,3 +114,12 @@ def test_live_snapshot(live_client):
     assert snapshot["errors"] == []
     assert snapshot["resources"]["amounts"]["901"] >= 0
     assert snapshot["planet"]["coordinates"]
+
+
+def test_live_plan(live_client):
+    from autoplay import build_plan
+
+    plan = build_plan(live_client)
+    assert plan.phase in {"pre_gravity", "expedition_prep", "expedition"}
+    assert plan.actions
+    assert any(action.category == "blocker" for action in plan.actions) or plan.notes

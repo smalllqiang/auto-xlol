@@ -454,3 +454,45 @@ v1 的限制，用之前需要知道：
 - 回本时间是估算，暂不含电量约束、仓容和建造时间；
 - 只实现种田/探险两个阶段；其他阶段只输出产能候选；
 - 不执行任何操作。
+
+## 13. 执行器与安全闸
+
+`autoplay.execute_plan()` 把计划落成**最多一个**动作，默认只做 dry run：
+
+```python
+from autoplay import build_plan, execute_plan
+
+plan = build_plan(client)
+result = execute_plan(
+    client,
+    plan,
+    dry_run=False,
+    allowed_elements=[14],       # 执行时必须显式允许
+    max_cost_equivalent=5000,    # 可选：单步预算（等价）
+)
+print(result.status, result.reason)
+```
+
+安全设计：
+
+- 默认 dry run，只有显式传 `dry_run=False` 才会改游戏；
+- 一次调用只执行一个动作，便于逐步核对；
+- 执行模式必须提供 allow-list，否则直接跳过；
+- 建造队列非空时不排建筑，研究队列非空时不排研究，会自动落到下一条可用动作；
+- 资源不足、超过单步预算的动作直接跳过；
+- 游戏拒绝（`ActionRejected`）只记录错误，不自动重试。
+
+命令行：
+
+```bash
+# 影子模式：只打印计划
+.venv/bin/python scripts/run_once.py --no-verify-ssl
+
+# 真正执行；--allow 可重复，接受 id 或中文名
+.venv/bin/python scripts/run_once.py --no-verify-ssl --execute --allow 自律工厂
+
+# 紧急停止：文件存在即拒绝执行
+touch state/STOP
+```
+
+每次运行追加一行到 `state/journal.jsonl`，包含阶段、结果、队列和完整动作快照。

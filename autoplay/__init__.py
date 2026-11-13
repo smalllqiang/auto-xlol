@@ -8,11 +8,13 @@ strategy here is opinionated and expected to change often.
 from __future__ import annotations
 
 from .economy import equivalent_cost, payback_hours, production_delta
+from .executor import ExecutionResult, execute_plan
 from .phases import PHASES, Phase, detect_phase
 from .planner import Action, Plan, build_plan, compute_plan
 
 __all__ = [
     "Action",
+    "ExecutionResult",
     "PHASES",
     "Phase",
     "Plan",
@@ -20,6 +22,7 @@ __all__ = [
     "compute_plan",
     "detect_phase",
     "equivalent_cost",
+    "execute_plan",
     "payback_hours",
     "production_delta",
 ]

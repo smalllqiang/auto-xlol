@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "newstar-sdk"
+dynamic = ["version"]
+description = "Python SDK for New-Star / 2Moons browser games"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "auto-xlol contributors" }]
+keywords = ["newstar", "2moons", "ogame", "browser-game", "sdk"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Games/Entertainment :: Simulation",
+    "Typing :: Typed",
+]
+dependencies = [
+    "requests>=2.28",
+    "beautifulsoup4>=4.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+newstar = "newstar_sdk.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["newstar_sdk"]
+
+[tool.hatch.version]
+path = "newstar_sdk/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: integration tests against a real game instance (require NEWSTAR_* env vars)",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]

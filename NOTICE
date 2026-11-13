@@ -1,0 +1,10 @@
+This SDK is an independent client implementation for games based on New-Star.
+
+New-Star
+Copyright (c) 2020 Tsvira Yaroslav
+https://github.com/Yaro2709/New-Star
+Licensed under the MIT License.
+
+The SDK does not include or redistribute the New-Star server source code.
+Element ids and protocol behaviour were derived from the public project and a
+live game instance.

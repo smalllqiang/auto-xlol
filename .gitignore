@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenv / uv
+.venv/
+.uv-cache/
+uv.lock
+
+# Local credentials and session files
+.env
+*.session.json
+passwd.txt
+
+# Local game state (snapshots, journals)
+state/
+
+# Local game source / downloaded fixtures (not part of the SDK)
+newstar/
+live_pages/
+live_*.html
+live_headers.txt
+
+# 來自QQ群的攻略
+guide/新版本ol一本通攻略(1.0.0.2).docx

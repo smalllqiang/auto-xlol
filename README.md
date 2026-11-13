@@ -8,7 +8,8 @@
 
 - 登录、会话保存/恢复、会话过期后自动重登（需提供密码）
 - 读取账号、资源、产能、星球、活动状态
-- 读取消息（分类/分页/未读计数）与加成总表（乘数）
+- 读取消息（分类/分页/未读计数）、加成总表、生产控制明细
+- 全量状态快照、快照 diff 事件、趋势统计
 - 建筑升级、拆除、建造队列取消
 - 科技研究、研究队列取消
 - 船坞造舰/造防御、船坞队列取消
@@ -259,7 +260,11 @@ for action in plan.actions:
 ```bash
 .venv/bin/python scripts/plan.py --no-verify-ssl   # 文字计划
 .venv/bin/python scripts/plan.py --json            # 机器可读
+.venv/bin/python scripts/run_once.py --no-verify-ssl  # 影子模式，只说不做
 ```
+
+执行需要显式授权：`--execute --allow <元素>`。执行前会检查队列、资源和单步预算，
+只做一步，并把结果写进 `state/journal.jsonl`；`state/STOP` 存在时拒绝运行。
 
 ## 元素 ID
 
@@ -376,38 +381,49 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 ## 目录
 
 ```
-autoplay/         # 策略层：阶段识别、依赖展开、ROI 排序
-  phases.py
-  economy.py
-  planner.py
-newstar_sdk/
+autoplay/         # 策略层（易变）
+  phases.py       # 阶段识别
+  economy.py      # 等价换算 / 增产估算 / 回本
+  planner.py      # 依赖展开 + ROI 排序
+  executor.py     # 队列感知 + 安全闸
+newstar_sdk/      # 客户端（稳定契约）
   client.py       # HTTP 会话 + 高层操作
-  parsers.py      # 页面解析
+  parsers.py      # 页面解析（纯函数）
   models.py       # 返回的数据结构
+  snapshot.py     # 全量状态快照
+  events.py       # 快照 diff 事件
+  report.py       # 趋势统计
   constants.py    # 元素/任务/资源 ID 与名称
   exceptions.py   # 异常类型
   utils.py        # 数值、JS 对象、坐标等工具
   cli.py          # newstar 命令行
 docs/
-  usage.md        # 面向使用者的深入说明
-  architecture.md # 结构、数据来源、设计取舍与排错
-  p0-page-census.md # 实例页面普查结果与 P0 观测性计划
-tests/            # 离线样本测试 + 可选真实实例测试
-scripts/          # 手工冒烟脚本、页面普查、状态采集
+  usage.md        # API 与脚本用法
+  architecture.md # 结构、数据来源、取舍与排错
+  decisions.md    # 设计决策记录（ADR）
+  roadmap.md      # 任务与验收标准
+  p0-page-census.md # 实例页面普查
+tests/            # 离线样本测试 + 可选 live 测试
+scripts/          # 普查、采集、报表、计划、执行
 examples/         # 可运行示例
+AGENTS.md         # 协作与代理规则
 ```
 
 ## 当前范围
 
-当前版本覆盖登录/会话、账号与资源读取、建筑、研究、船坞、星图、舰队发送/召回、队列和原始请求。
+当前版本覆盖登录/会话、账号与资源读取、建筑、研究、船坞、星图、舰队发送/召回、队列、
+消息、加成、生产控制、状态快照/事件与原始请求。
 
-当前不提供：战斗报告详情、市场/交易、联盟、生产比例读写、殖民/月球管理、聊天、军官/商店等页面级封装。这些页面仍可通过 `get_page()` / `request()` 访问。
+当前不提供：战斗报告详情、市场/交易、联盟、生产比例写入、殖民/月球管理、聊天、军官/商店等页面级封装。这些页面仍可通过 `get_page()` / `request()` 访问。
 
 ## 文档
 
 - [使用说明](docs/usage.md)
 - [架构与设计](docs/architecture.md)
-- [页面普查与 P0 观测性](docs/p0-page-census.md)
+- [设计决策（ADR）](docs/decisions.md)
+- [路线图与验收](docs/roadmap.md)
+- [页面普查](docs/p0-page-census.md)
+- [协作与代理规则](AGENTS.md)
 
 ## 许可
 

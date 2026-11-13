@@ -13,6 +13,9 @@
 
 ## 2. 分层
 
+`newstar_sdk` 只负责与游戏通信和执行单步操作；策略层（`autoplay/`）在它之上做
+阶段识别、规划与执行编排，见 `docs/usage.md` 第 12–13 节和 ADR-001。
+
 ```
 上层程序 / CLI
       │
@@ -43,7 +46,7 @@ NewStarClient (client.py)
 - 队列：`#buildlist .element_row`，包含元素 ID（背景图 URL）、剩余秒数、结束时间、目标等级/数量。
 - 星图：`div.gal_user` 行，含位置、星球名、玩家名、月球/残骸图标、任务链接。
 - 舰队：9 列的飞行舰队表；返航舰队没有召回表单，因此不能靠表单定位行。
-- 错误页：`.ally_contents` 或 `.card-text`。
+- 错误页：带「信息」标题的容器（`#ally_content > .gray_stripe + .ally_contents`），或标题为「信息/Information」的 `.card-text` 页面。
 
 ### 3.2 DatatList
 
@@ -127,13 +130,16 @@ SDK 不把 HTTP 200 当作成功。每个写操作都做“页面证据”验证
 - 网络/超时/5xx：`TransportError`。GET 按 `max_retries` 重试；POST 默认不自动重试，避免重复执行写操作或使舰队 token 失效。
 - 登录被拒：`AuthenticationError`。
 - 会话失效：`SessionExpired`。
-- 游戏错误页：`GameError`（`.ally_contents` / `.card-text`）。
+- 游戏错误页：`GameError`（带标题的错误容器，见 §3.1）。
 - 动作未生效：`ActionRejected`（继承 `GameError`）。
 - 页面结构无法解析：`ParseError`，或返回空列表/`None` 由调用方判断。
 
 错误页文本可能是未翻译的键（如 `NFCoosen`），SDK 不做翻译，避免把猜测写进错误信息。
 
 ## 8. 设计取舍
+
+SDK 内部的取舍见下表；项目层面的决策（分层、数据存储、执行安全等）见
+[`decisions.md`](decisions.md)。
 
 | 取舍 | 选择 | 原因 |
 | --- | --- | --- |
@@ -152,7 +158,7 @@ SDK 不把 HTTP 200 当作成功。每个写操作都做“页面证据”验证
 - 队列结束时间是本地化字符串，SDK 保留原文，同时尽量提供 `data-time` 剩余秒数。
 - 返航舰队没有召回表单；如果私服把返航舰队也渲染成带表单，`can_recall` 可能为真，但游戏仍会拒绝。
 - 舰队任务可用性由第二步页面给出；如果私服不渲染任务 radio，SDK 跳过本地可用性检查，交给第三步服务器判断。
-- 页面错误检测依赖 `.ally_contents`，以及标题为“信息/Information”的 `.card-text` 页面；如果私服把正常内容也放进这些容器，仍可能误报 `GameError`。
+- 错误页判定要求容器带「信息」标题（`.ally_contents` 在设置等正常页面也会出现）；如果私服把正常内容也放进同样结构，仍可能误报 `GameError`。
 - 同一账号并发写操作没有分布式锁；SDK 只保证单个客户端实例内的请求串行。
 
 ## 10. 测试与扩展

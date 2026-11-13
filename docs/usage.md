@@ -416,3 +416,41 @@ window  2026-11-13T08:00 -> 2026-11-13T09:00  (9 snapshots, median interval 300s
 统计逻辑在 `newstar_sdk/report.py` 的 `summarize_snapshots()`，是纯函数，方便在
 别的程序里复用。断档阈值默认取 `max(3 × 最短采集间隔, 15 分钟)`，也可以用
 `--gap-seconds` 指定。
+
+## 12. 规划器（autoplay）
+
+`newstar_sdk` 只回答"现在是什么"；同仓库的 `autoplay` 包回答"下一步做什么"。
+两者分开，是为了让 SDK 保持稳定，而策略可以频繁改。
+
+```python
+from autoplay import build_plan
+
+plan = build_plan(client)          # 只读：若干次 GET，不执行任何操作
+print(plan.phase, plan.goal_status)
+for action in plan.actions:
+    print(action.category, action.name, action.current_level, "->", action.target_level)
+```
+
+`plan.actions` 分两类：
+
+- **blocker**：当前阶段目标的依赖链。递归解析页面上的前置条件（如
+  "自律工厂 等级 5 (0/5)"），直到找到现在就能做的项；按依赖深度、再按投入排序。
+  每个 blocker 带 `steps`（还差几级）和 `total_cost_equivalent`（用页面给出的
+  `factor` 推算整条升级链的总投入）；`affordable` 只表示下一级买得起，
+  `affordable_total` 才是整条链买得起。
+- **roi**：产出建筑按回本时间排序。回本 = 等价投入 ÷ 每级预计增产量。
+
+每级增产量用 `observed * (1.1 * (L+1) / L - 1)` 自校准：只依赖页面显示的实际
+产量，不写死 universe speed 或加成，因此换实例也不会整体算错。
+
+```bash
+.venv/bin/python scripts/plan.py --no-verify-ssl
+.venv/bin/python scripts/plan.py --json
+```
+
+v1 的限制，用之前需要知道：
+
+- 只给"下一步"，不生成多级序列；
+- 回本时间是估算，暂不含电量约束、仓容和建造时间；
+- 只实现种田/探险两个阶段；其他阶段只输出产能候选；
+- 不执行任何操作。

@@ -242,6 +242,25 @@ response = client.request("GET", "game.php?page=overview")
 response = client.request("POST", "game.php?page=...", data={"key": "value"})
 ```
 
+## 策略层（规划器）
+
+`autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开目标依赖链、按回本时间
+排序产出建筑。
+
+```python
+from autoplay import build_plan
+
+plan = build_plan(client)
+print(plan.phase_name, plan.goal_status)
+for action in plan.actions:
+    print(action.category, action.name, action.current_level, "→", action.target_level)
+```
+
+```bash
+.venv/bin/python scripts/plan.py --no-verify-ssl   # 文字计划
+.venv/bin/python scripts/plan.py --json            # 机器可读
+```
+
 ## 元素 ID
 
 元素 ID 来自 New-Star / 2Moons 的通用编号，实际游戏可能增加或改名。SDK 会优先读取页面上的名称，静态表只用于“名称 → ID”的便捷解析。
@@ -357,6 +376,10 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 ## 目录
 
 ```
+autoplay/         # 策略层：阶段识别、依赖展开、ROI 排序
+  phases.py
+  economy.py
+  planner.py
 newstar_sdk/
   client.py       # HTTP 会话 + 高层操作
   parsers.py      # 页面解析

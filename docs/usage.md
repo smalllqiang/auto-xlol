@@ -537,3 +537,19 @@ touch state/STOP
 
 **轮转**：`journal` / `snapshots` / `events` 任意文件超过 `--rotate-mb`
 （默认 10MB）时切成 `<name>.1`，只保留一个备份；`0` 关闭。
+
+## 15. TUI 看板
+
+`scripts/tui.py` 只读展示 `state/` 里已有的数据，不连游戏、不触发任何动作。
+
+```bash
+.venv/bin/python scripts/tui.py            # 交互式，默认每 3 秒刷新
+.venv/bin/python scripts/tui.py --once     # 渲染一帧到 stdout（无 curses）
+```
+
+面板内容：账号与星球、资源/容量/产能、阶段与目标、上一轮执行结果、告警、事件、
+journal 尾部。按键 `q` 退出、`r` 立即刷新；数据陈旧时显示「数据 X 分前」，
+守护未运行或锁存在也会标注。
+
+实现只用标准库 `curses`，没有引入 TUI 框架；渲染逻辑在
+`autoplay/dashboard.py`，是纯函数，`--once` 与测试都复用它。

@@ -44,6 +44,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/state_report.py --hours 24        # 趋势报表
 .venv/bin/python scripts/plan.py                          # 只读计划
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
+.venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
 
 本实例证书过期，脚本通常要加 `--no-verify-ssl`。

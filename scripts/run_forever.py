@@ -16,7 +16,6 @@ it also writes a state snapshot and the diffed events (0 disables).
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import signal
 import sys
@@ -29,6 +28,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from local_config import load_config
 
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
+from autoplay.journal import append_jsonl
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
@@ -79,6 +79,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--snapshots", default="state/snapshots.jsonl")
     parser.add_argument("--events", default="state/events.jsonl")
     parser.add_argument(
+        "--pause-on-alert",
+        action="store_true",
+        help="skip execution for a cycle when an alert event is seen",
+    )
+    parser.add_argument(
+        "--rotate-mb",
+        type=float,
+        default=10.0,
+        help="rotate journal/snapshot/event files above this size (0 disables)",
+    )
+    parser.add_argument(
         "--snapshot-every",
         type=int,
         default=12,
@@ -88,12 +99,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--lock-file", default="state/daemon.lock")
     parser.add_argument("--once", action="store_true", help="run exactly one cycle")
     return parser.parse_args(argv)
-
-
-def _append(path: Path, payload: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def _alive(pid: int) -> bool:
@@ -150,7 +155,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         backoff_base=args.backoff_base,
         backoff_max=args.backoff_max,
         max_failures=args.max_failures,
+        pause_on_alert=args.pause_on_alert,
     )
+    rotate_bytes = int(max(0.0, args.rotate_mb) * 1024 * 1024)
 
     stop = {"requested": False}
 
@@ -173,6 +180,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     snapshots_path = Path(args.snapshots)
     events_path = Path(args.events)
     previous_snapshot: Optional[Dict[str, Any]] = None
+    previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     failures = 0
     cycles = 0
     max_cycles = 1 if args.once else args.max_cycles
@@ -189,7 +197,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             try:
                 if failures == 0:
                     client.ensure_login()
-                result = run_cycle(client, daemon_config)
+                result = run_cycle(
+                    client, daemon_config, previous_counters=previous_counters
+                )
+                if result.counters:
+                    previous_counters = result.counters
                 failures = 0
                 cycles += 1
                 entry = {
@@ -198,25 +210,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "mode": "execute" if args.execute else "dry_run",
                     **result.as_dict(),
                 }
-                _append(journal_path, entry)
+                append_jsonl(journal_path, entry, max_bytes=rotate_bytes)
                 action = result.action["name"] if result.action else "-"
                 print(
                     f"[{now}] {result.phase} | {result.status}: {action} | "
                     f"queues={result.queues}",
                     flush=True,
                 )
+                for alert in result.alerts:
+                    print(f"    ALERT {alert['message']}", flush=True)
 
                 if args.snapshot_every and cycles % args.snapshot_every == 0:
                     snapshot = build_snapshot(client)
                     events = diff_snapshots(previous_snapshot, snapshot)
-                    _append(snapshots_path, snapshot)
+                    append_jsonl(snapshots_path, snapshot, max_bytes=rotate_bytes)
                     for event in events:
-                        _append(events_path, {"at": snapshot["captured_at"], **event.as_dict()})
+                        append_jsonl(
+                            events_path,
+                            {"at": snapshot["captured_at"], **event.as_dict()},
+                            max_bytes=rotate_bytes,
+                        )
                     previous_snapshot = snapshot
                     print(f"    snapshot written ({len(events)} events)", flush=True)
             except NewStarError as exc:
                 failures += 1
-                _append(
+                append_jsonl(
                     journal_path,
                     {
                         "at": now,
@@ -224,6 +242,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         "failures": failures,
                         "error": f"{type(exc).__name__}: {exc}",
                     },
+                    max_bytes=rotate_bytes,
                 )
                 print(f"[{now}] error ({failures}): {exc}", file=sys.stderr, flush=True)
                 if failures >= daemon_config.max_failures:

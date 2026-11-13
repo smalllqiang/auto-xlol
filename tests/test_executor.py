@@ -141,3 +141,19 @@ def test_error_is_reported_not_retried(fixture_html):
     assert result.status == "error"
     assert "ActionRejected" in result.reason
     assert len(client.calls) == 1
+
+
+def test_lab_upgrade_skipped_while_researching(fixture_html):
+    from autoplay.executor import RESEARCH_LAB_ID
+
+    client = FakeClient(research_queue=[object()])
+    result = execute_plan(
+        client,
+        _plan(fixture_html),
+        dry_run=False,
+        allowed_elements=[RESEARCH_LAB_ID],
+    )
+
+    assert result.status == "skipped"
+    assert "实验室暂不可升级" in result.reason
+    assert client.calls == []

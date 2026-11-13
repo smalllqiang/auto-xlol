@@ -21,6 +21,10 @@ from newstar_sdk.exceptions import NewStarError
 
 from .planner import Action, Plan
 
+#: 科研实验室 / Research Lab.  The game rejects upgrading it while a research
+#: is running (verified on the live instance), so the executor skips it.
+RESEARCH_LAB_ID = 31
+
 
 @dataclass
 class ExecutionResult:
@@ -74,6 +78,13 @@ def _select(
             continue
         if action.kind == "building" and list(building_queue):
             reasons.append(f"{action.name}: 建造队列占用中")
+            continue
+        if (
+            action.kind == "building"
+            and action.element_id == RESEARCH_LAB_ID
+            and list(research_queue)
+        ):
+            reasons.append(f"{action.name}: 研究进行中，实验室暂不可升级")
             continue
         if action.kind == "research" and list(research_queue):
             reasons.append(f"{action.name}: 研究队列占用中")

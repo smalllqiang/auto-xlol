@@ -106,6 +106,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   命名空间里 `os.kill(pid, 0)` 可能看不到守护，别只凭 `daemon.lock` 的 pid 判断。
 - **看板读 journal 新字段**：cycle 条目含 `plan_top` / `queue_items` / `messages` /
   `evidence`；新增字段保持向后兼容，旧条目缺字段时 TUI 要退回最小布局。
+- **排行榜两套列**：`page=statistics` 玩家榜 `classstat8`=联盟、`classstat10`=积分；
+  联盟榜 `classstat7`=成员数、`classstat8`=总积分、`classstat10`=成员均分。
+  解析器按 `who` 分支，TUI 只读 `state/statistics.json`。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。

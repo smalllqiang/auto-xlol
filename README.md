@@ -284,9 +284,12 @@ for action in plan.actions:
 心跳，看板据此显示存活、数据年龄和下一轮时间：
 
 ```bash
-.venv/bin/python scripts/tui.py          # 交互式；j/k 滚动、d 看详情、q 退出
+.venv/bin/python scripts/tui.py          # 交互式；Tab 切看板/排行榜，j/k 滚动，d 看详情
 .venv/bin/python scripts/tui.py --once   # 打印一帧
+.venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
 ```
+排行榜由守护每 `--statistics-every` 轮写入 `state/statistics.json`，看板只读；
+第二个 tab 可切换玩家/联盟积分榜。
 每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；
 日志与快照超过 `--rotate-mb` 自动切成 `.1`。
 

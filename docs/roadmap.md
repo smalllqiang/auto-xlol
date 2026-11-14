@@ -27,6 +27,7 @@
 | P1-7 | journal / 事件轮转 | ✅ | 按大小切分（默认 10MB，保留 `.1`，见 ADR-010）；历史用 jq / state_report 查 |
 | P1-8 | TUI 看板 | ✅ | `scripts/tui.py` 只读展示资源、阶段、告警、事件、日志；`--once` 可回归 |
 | P1-9 | 看板值班化 | ✅ | 心跳健康栏、队列明细/ETA、候选与缺口、探险/舰队/消息、滚动与 JSON 详情、轮转与旧 schema 兼容；真实实例 dry-run 下 `--once` 帧回归 |
+| P1-10 | 排行榜看板 | ✅ | SDK 解析 `page=statistics`；守护采集玩家/联盟积分榜；TUI 第二 tab 切换/滚动；真实实例 55 名玩家 + 2 个联盟 |
 
 **P1-9 看板值班化记录（2026-11-14）**：真实实例上以 `run_forever --interval 30
 --snapshot-every 1`（dry-run）运行，`scripts/tui.py --once` 能看到心跳/数据年龄/下轮、
@@ -34,6 +35,12 @@
 在 pty 里验证了 `G`/`d`/`d`/`q`（详情打开/关闭/退出，退出码 0）。`run_forever` 新增
 `--status-file state/daemon.json` 心跳，journal cycle 增加 `plan_top` / `queue_items` /
 `messages` / `evidence`；看板读取 `.1` 轮转文件并容忍缺 `kind` 的旧条目。
+
+**P1-10 排行榜记录（2026-11-14）**：真实实例上 `get_statistics(who=1/2, sort=1)`
+分别解析出 55 名玩家和 2 个联盟；联盟榜第 1 名总积分 605.35B、成员 7。
+守护首轮采集写入 `state/statistics.json`（0 错误），TUI `--once --tab leaderboard
+--stats-who 2` 可离线回归；交互模式在 pty 里验证 `2`→`w`→`1`→`q`，退出码 0。
+SDK 解析对玩家榜（联盟列）和联盟榜（成员/成员积分列）分开处理。
 
 **P1 完成的定义**：能无人值守连续跑 24 小时；dry-run 与 execute 可随时切换；
 中途崩溃重启不重复下单；每条动作都能在 journal 里回放。

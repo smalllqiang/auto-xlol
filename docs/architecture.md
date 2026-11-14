@@ -85,6 +85,7 @@ HTML 片段。`parse_messages()` 解析该片段，`parse_message_counters()` �
 | `journal.jsonl` | 每轮一条 | cycle（动作、队列明细、候选、消息摘要、告警、备注）、`kind=error`、`kind=expedition` |
 | `snapshots.jsonl` | 每 `--snapshot-every` 轮 | 完整账号快照（资源、队列、舰队、消息、研究、加成） |
 | `events.jsonl` | 快照同拍 | 快照 diff 出的事件 |
+| `statistics.json` | 每 `--statistics-every` 轮（首轮先采） | 排行榜：玩家/联盟积分榜、采集时间、逐榜错误 |
 | `daemon.lock` | 启动时创建、退出删除 | pid，单写者锁 |
 | `STOP` | 操作者创建 | 急停开关，循环在下一拍退出 |
 

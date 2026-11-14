@@ -124,6 +124,27 @@ if page.has_next_page:
 `get_message_counters()` 只发一次请求，适合做"有没有新消息"的事件触发，不必
 每次都拉列表。
 
+### 排行榜
+
+`page=statistics` 是筛选表单（who/type/range）加排名表。SDK 用表单同样的 POST
+读取，不发写操作：
+
+```python
+board = client.get_statistics(who=1, sort=1, range=1)
+board.who, board.sort, board.rows
+for row in board.rows[:10]:
+    print(row.rank, row.name, row.score, row.alliance, row.status)
+
+alliances = client.get_statistics(who=2)
+```
+
+- `who`：1 玩家、2 联盟；`sort`：1 积分、2 舰队、3 研究、4 建筑、5 防御。
+- 玩家榜：`name` 是玩家，`alliance` 是联盟，`score` 是积分。
+- 联盟榜：`name` 是联盟，`members` 是成员数，`score` 是总积分，`member_score`
+  是成员均分。
+- 分数里的千分位点会被去掉，返回 `int`；`tags` 是名字旁图标的 tooltip，
+  `status` 是页面上的强/弱标签（页面提供时才有）。
+
 ### 加成（乘数）
 
 `page=infobonus` 给出全部加成项。标签就是页面上的文案（本实例是中文），SDK 不做
@@ -560,6 +581,9 @@ touch state/STOP
   连续 `--max-failures`（默认 10）次失败后退出，交给 systemd / cron 拉起。
 - **节流**：默认每 12 轮（`--snapshot-every`）才写一次完整快照与事件，避免每轮都拉
   全套页面。
+- **排行榜采集**：`--statistics-every N`（默认 120，0 关闭）每 N 轮抓一次玩家/联盟
+  积分榜，写 `state/statistics.json`；首轮会先采一次。单榜失败写入 `errors`，
+  不增加连续失败计数；路径可用 `--statistics-file` 覆盖。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
 `--allow`）。
@@ -599,12 +623,14 @@ touch state/STOP
     --interval 30 --snapshot-every 1
 
 # 终端 B：看板
-.venv/bin/python scripts/tui.py            # 交互式，默认每 3 秒重载
-.venv/bin/python scripts/tui.py --once     # 渲染一帧到 stdout（无 curses）
+.venv/bin/python scripts/tui.py                    # 交互式，默认每 3 秒重载
+.venv/bin/python scripts/tui.py --once             # 渲染一帧到 stdout（无 curses）
+.venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
 ```
 
-按键：`q` 退出、`r` 立即刷新、`j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、
-`d` 把选中的 journal 条目展开成 JSON（再按 `d` 或 `Esc` 返回）。
+按键：`q` 退出、`r` 立即刷新、`Tab`/`1`/`2` 切换「看板 / 排行榜」、`j`/`k` 移动、
+`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的 journal 条目展开成 JSON
+（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换。
 
 面板内容：
 
@@ -618,6 +644,9 @@ touch state/STOP
 - **探险 / 舰队 / 消息**：航道与在途舰队、上次探险调度结果、未读分类和收件箱。
 - **告警 / 事件 / 日志**：告警不会被折叠；连续相同的 cycle 会合并成 `×N`
   并标出时间范围，避免稳定计划刷屏。日志行可按 `d` 查看完整 JSON。
+- **排行榜 tab**：读 `state/statistics.json`，显示玩家/联盟积分榜（排名、名称、
+  联盟/成员、积分），自己的行用 `▸` 标出；`w` 切换玩家/联盟。守护默认每 120 轮
+  采集一次（`--statistics-every`），首轮会先采一次。
 
 数据契约：
 
@@ -628,6 +657,9 @@ touch state/STOP
 - `state/journal.jsonl` 的 cycle 条目额外带 `plan_top`（候选）、`queue_items`
   （队列明细）、`messages`（未读摘要）和 `evidence`；旧条目缺这些字段时看板退回
   只显示已选动作。
+- `state/statistics.json`：`run_forever.py` 采集的排行榜快照，含 `captured_at`、
+  `boards`（`1:1`=玩家积分、`2:1`=联盟积分）与逐榜 `errors`；单个榜失败不会
+  中断守护，TUI 在对应 tab 显示错误。
 - 看板会读取轮转后的 `journal.jsonl.1` / `events.jsonl.1`，容忍缺 `kind` 的旧
   cycle 记录、坏 JSON 行和乱序时间；`--once` 与交互模式共用同一份渲染结果。
 

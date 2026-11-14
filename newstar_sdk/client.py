@@ -38,6 +38,7 @@ from .exceptions import (
     TransportError,
 )
 from .models import (
+    BattleHall,
     Bonuses,
     BuildingInfo,
     Coordinates,
@@ -61,6 +62,7 @@ from .models import (
     StatisticsBoard,
 )
 from .parsers import (
+    parse_battle_hall,
     parse_bonuses,
     parse_building_queue,
     parse_buildings,
@@ -1406,6 +1408,26 @@ class NewStarClient:
             data={"who": int(who), "type": int(sort), "range": int(range)},
         )
         return parse_statistics(response.text)
+
+    def get_battle_hall(self, order: str = "units", sort: str = "desc") -> BattleHall:
+        """Read the top-100 battle hall from ``page=battleHall``.
+
+        ``order``: ``"units"`` (unit score) or ``"date"`` (battle time);
+        ``sort``: ``"asc"`` or ``"desc"``.  This is a read-only GET; report
+        bodies are not fetched.
+        """
+
+        if order not in {"units", "date"}:
+            raise ValueError("order must be 'units' or 'date'")
+        if sort not in {"asc", "desc"}:
+            raise ValueError("sort must be 'asc' or 'desc'")
+
+        self.ensure_login()
+        response = self._game_page(
+            "battleHall",
+            params={"order": order, "sort": sort.upper()},
+        )
+        return parse_battle_hall(response.text, order=order, sort=sort)
 
     def get_page(self, page: str, **params: Any) -> str:
         """Return the HTML of an arbitrary ingame page (e.g. ``"messages"``)."""

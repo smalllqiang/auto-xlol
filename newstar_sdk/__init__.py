@@ -36,6 +36,8 @@ from .exceptions import (
     TransportError,
 )
 from .models import (
+    BattleHall,
+    BattleRow,
     Bonus,
     Bonuses,
     BuildingInfo,
@@ -71,6 +73,8 @@ __all__ = [
     "ActionRejected",
     "AuthenticationError",
     "BUILDINGS",
+    "BattleHall",
+    "BattleRow",
     "Bonus",
     "Bonuses",
     "BuildingInfo",

@@ -589,3 +589,72 @@ class StatisticsBoard:
             "range": self.range,
             "rows": [row.as_dict() for row in self.rows],
         }
+
+
+@dataclass
+class BattleRow:
+    """One entry of the battle hall (``page=battleHall``).
+
+    ``result`` mirrors the page template: ``"a"`` means the attacker won,
+    ``"r"`` the defender won, and ``""`` is an unknown/drawn result (the page
+    does not color a winner).  ``date`` is the raw localized text and ``time``
+    its naive ISO form (the game renders the viewer's wall clock).
+    """
+
+    rank: int = 0
+    attacker: str = ""
+    defender: str = ""
+    result: str = ""
+    date: str = ""
+    time: str = ""
+    units: int = 0
+    report_id: str = ""
+
+    @property
+    def winner(self) -> Optional[str]:
+        if self.result == "a":
+            return self.attacker
+        if self.result == "r":
+            return self.defender
+        return None
+
+    @property
+    def loser(self) -> Optional[str]:
+        if self.result == "a":
+            return self.defender
+        if self.result == "r":
+            return self.attacker
+        return None
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "rank": self.rank,
+            "attacker": self.attacker,
+            "defender": self.defender,
+            "result": self.result,
+            "winner": self.winner or "",
+            "loser": self.loser or "",
+            "date": self.date,
+            "time": self.time,
+            "units": self.units,
+            "report_id": self.report_id,
+        }
+
+
+@dataclass
+class BattleHall:
+    """The top-100 battle list from ``page=battleHall``.
+
+    ``order`` is ``units`` or ``date``; ``sort`` is ``asc`` or ``desc``.
+    """
+
+    order: str = "units"
+    sort: str = "desc"
+    rows: List[BattleRow] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "order": self.order,
+            "sort": self.sort,
+            "rows": [row.as_dict() for row in self.rows],
+        }

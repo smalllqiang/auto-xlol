@@ -30,6 +30,8 @@ from .constants import (
     resolve_element,
 )
 from .models import (
+    BattleHall,
+    BattleRow,
     Bonus,
     Bonuses,
     BuildingInfo,
@@ -1432,3 +1434,189 @@ def parse_statistics(html: str) -> StatisticsBoard:
             )
 
     return StatisticsBoard(who=who, sort=sort, range=range_value, rows=rows)
+
+
+# ---------------------------------------------------------------------------
+# Battle hall (page=battleHall)
+# ---------------------------------------------------------------------------
+
+_BATTLE_REPORT_RE = re.compile(r"[?&]raport=([0-9A-Za-z]+)")
+_BATTLE_CN_DATE_RE = re.compile(
+    r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*[,，]?\s*"
+    r"(\d{1,2}):(\d{2})(?::(\d{2}))?"
+)
+_BATTLE_DOTTED_DATE_RE = re.compile(
+    r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?"
+)
+_BATTLE_WIN_COLORS = frozenset({"#00ff00", "#0f0", "lime", "green"})
+_BATTLE_LOSS_COLORS = frozenset({"#ff0000", "#f00", "red"})
+
+
+def _battle_time(text: str) -> str:
+    """Convert a localized battle date to naive ISO, or ``""``.
+
+    The game renders the viewer's wall clock (``_date(..., user.timezone)``),
+    so the value is kept naive and must not be treated as UTC.
+    """
+
+    match = _BATTLE_CN_DATE_RE.search(text)
+    if match:
+        year, month, day, hour, minute, second = match.groups()
+    else:
+        match = _BATTLE_DOTTED_DATE_RE.search(text)
+        if match is None:
+            return ""
+        day, month, year, hour, minute, second = match.groups()
+    try:
+        value = datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            int(second or 0),
+        )
+    except ValueError:
+        return ""
+    return value.isoformat(timespec="seconds")
+
+
+def _battle_color(node: Tag) -> str:
+    style = str(node.get("style") or "")
+    match = re.search(r"color\s*:\s*([^;]+)", style, re.I)
+    return match.group(1).strip().casefold() if match else ""
+
+
+def _parse_battle_participants(cell: Tag) -> Tuple[str, str, str]:
+    """Return ``(attacker, defender, result)`` for one hall row.
+
+    The template wraps the two names in ``span``s colored green (winner) and
+    red (loser), in attacker-then-defender order; an uncolored result means a
+    draw or an unknown outcome.  Names come from the link text so nested
+    tooltip spans cannot shift the pair.
+    """
+
+    link = cell.find("a")
+    node = link if link is not None else cell
+    text = clean_text(node.get_text(" "))
+    parts = re.split(r"\s+VS\s+", text, maxsplit=1, flags=re.I)
+    if len(parts) == 2:
+        attacker, defender = parts[0].strip(), parts[1].strip()
+    else:
+        spans = [
+            span for span in node.find_all("span") if clean_text(span.get_text(" "))
+        ]
+        attacker = clean_text(spans[0].get_text(" ")) if spans else text
+        defender = clean_text(spans[1].get_text(" ")) if len(spans) > 1 else ""
+
+    colors = {}
+    for span in node.find_all("span"):
+        color = _battle_color(span)
+        if color:
+            colors.setdefault(clean_text(span.get_text(" ")), color)
+
+    first = colors.get(attacker, "")
+    second = colors.get(defender, "")
+    result = ""
+    if first in _BATTLE_WIN_COLORS and second in _BATTLE_LOSS_COLORS:
+        result = "a"
+    elif first in _BATTLE_LOSS_COLORS and second in _BATTLE_WIN_COLORS:
+        result = "r"
+    return attacker, defender, result
+
+
+def _battle_order_sort(soup: BeautifulSoup) -> Tuple[str, str]:
+    """Infer the active order/sort from the bold header link.
+
+    Each header links to the *opposite* direction of the current one, so a
+    bold ``sort=ASC`` link means the page is currently sorted descending.
+    """
+
+    for anchor in soup.select("table.tabstatistica th a"):
+        href = str(anchor.get("href") or "")
+        if "order=" not in href:
+            continue
+        if "font-weight" not in str(anchor.get("style") or "").lower():
+            continue
+        order_match = re.search(r"order=([A-Za-z]+)", href)
+        sort_match = re.search(r"sort=(ASC|DESC)", href, re.I)
+        order = order_match.group(1).lower() if order_match else ""
+        sort = ""
+        if sort_match:
+            # The header links to the opposite direction of the active sort.
+            sort = "desc" if sort_match.group(1).upper() == "ASC" else "asc"
+        return order, sort
+    return "", ""
+
+
+def parse_battle_hall(
+    html: str, *, order: str = "units", sort: str = "desc"
+) -> BattleHall:
+    """Parse ``game.php?page=battleHall`` (the top-100 battle hall).
+
+    The table is ``table.tabstatistica`` with one ``tr.classificabarra`` per
+    battle: rank, participants (a ``raport`` link), date and unit score.
+    ``order``/``sort`` are only fallbacks when the active header cannot be
+    recognized.
+    """
+
+    soup = _soup(html)
+    detected_order, detected_sort = _battle_order_sort(soup)
+    if detected_order in {"units", "date"}:
+        order = detected_order
+    if detected_sort in {"asc", "desc"}:
+        sort = detected_sort
+
+    table = soup.select_one("table.tabstatistica")
+    if table is None:
+        candidates = [
+            item
+            for item in soup.select("table.tablesorter.ally_ranks")
+            if item.select("tr.classificabarra")
+        ]
+        table = candidates[-1] if candidates else None
+
+    rows: List[BattleRow] = []
+    if table is not None:
+        for index, tr in enumerate(table.select("tr.classificabarra"), start=1):
+            cells = tr.find_all("td")
+            if not cells:
+                continue
+            rank_cell = tr.select_one("td.classstat1") or cells[0]
+            rank_match = re.search(r"\d+", clean_text(rank_cell.get_text(" ")))
+            rank = int(rank_match.group(0)) if rank_match else index
+
+            participants_cell = (
+                tr.select_one("td.classstat3") or (cells[1] if len(cells) > 1 else cells[0])
+            )
+            attacker, defender, result = _parse_battle_participants(participants_cell)
+            if not attacker and not defender:
+                continue
+
+            date_cell = tr.select_one("td.classstat8")
+            date_text = clean_text(date_cell.get_text(" ")) if date_cell else ""
+            units_cell = tr.select_one("td.classstat10") or cells[-1]
+            units_text = re.sub(r"\D", "", units_cell.get_text(" "))
+            units = int(units_text) if units_text else 0
+
+            report_id = ""
+            link = participants_cell.find("a")
+            if link is not None:
+                match = _BATTLE_REPORT_RE.search(str(link.get("href") or ""))
+                if match:
+                    report_id = match.group(1)
+
+            rows.append(
+                BattleRow(
+                    rank=rank,
+                    attacker=attacker,
+                    defender=defender,
+                    result=result,
+                    date=date_text,
+                    time=_battle_time(date_text),
+                    units=units,
+                    report_id=report_id,
+                )
+            )
+
+    return BattleHall(order=order, sort=sort, rows=rows)

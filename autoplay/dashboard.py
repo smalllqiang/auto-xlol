@@ -13,6 +13,7 @@ Data comes from the files the daemon already writes:
 * ``state/statistics.json`` -- leaderboard snapshot for the second tab
 * ``state/messages.json``   -- inbox cache for the third tab
 * ``state/battles.json``    -- battle hall snapshot for the fourth tab
+* ``state/records.json``    -- universe records snapshot for the fifth tab
 * ``state/daemon.lock``     -- pid of a running loop (fallback for old runs)
 * ``state/STOP``            -- kill switch requested by the operator
 
@@ -84,6 +85,7 @@ class DashboardState:
     statistics: Dict[str, Any] = field(default_factory=dict)
     message_log: Dict[str, Any] = field(default_factory=dict)
     battle_log: Dict[str, Any] = field(default_factory=dict)
+    record_log: Dict[str, Any] = field(default_factory=dict)
     daemon: Dict[str, Any] = field(default_factory=dict)
     daemon_pid: Optional[int] = None
     daemon_lock_age: Optional[float] = None
@@ -341,6 +343,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
     statistics = _read_json(state_dir / "statistics.json")
     message_log = _read_json(state_dir / "messages.json")
     battle_log = _read_json(state_dir / "battles.json")
+    record_log = _read_json(state_dir / "records.json")
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
@@ -368,6 +371,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         statistics=statistics,
         message_log=message_log,
         battle_log=battle_log,
+        record_log=record_log,
         daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
@@ -1384,6 +1388,203 @@ def render_battle_text(
     return [truncate(header, width)] + render_battle_detail(
         row, base_url=str(payload.get("base_url") or ""), width=width
     )
+
+
+def _record_percent(entry: Dict[str, Any]) -> int:
+    try:
+        percent = int(entry.get("percent"))
+    except (TypeError, ValueError):
+        percent = 0
+    return max(0, min(100, percent))
+
+
+def _record_holders_text(entry: Dict[str, Any], *, limit: int = 3) -> str:
+    holders = [str(name) for name in (entry.get("holders") or []) if str(name).strip()]
+    if not holders:
+        return "（无）"
+    if len(holders) > limit:
+        return "、".join(holders[:limit]) + f" 等 {len(holders)} 人"
+    return "、".join(holders)
+
+
+def record_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Flatten the section tree into the entries the TUI can select."""
+
+    rows: List[Dict[str, Any]] = []
+    for section in payload.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        for entry in section.get("entries") or []:
+            if isinstance(entry, dict):
+                rows.append(entry)
+    return rows
+
+
+def render_records_lines(
+    state: DashboardState,
+    *,
+    width: int = 110,
+    selected: int = 0,
+) -> List[FrameLine]:
+    """Render the universe-records tab from the daemon's snapshot."""
+
+    width = max(40, width)
+    lines: List[FrameLine] = []
+
+    def add(
+        text: str,
+        style: str = "normal",
+        entry: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        lines.append(FrameLine(truncate(text, width), style, entry))
+
+    payload = state.record_log or {}
+    sections = [
+        section
+        for section in (payload.get("sections") or [])
+        if isinstance(section, dict)
+    ]
+    labels = [str(section.get("label") or "") for section in sections]
+    labels = [label for label in labels if label]
+    add("宇宙记录 · " + (" / ".join(labels) if labels else "宇宙最高与我的最高"), "title")
+    if not payload:
+        add("尚无宇宙记录数据：守护首轮会采集（--records-every，默认 120 轮）", "warn")
+        add("命令示例：run_forever --no-verify-ssl --records-every 120", "muted")
+        return lines
+
+    captured = _parse_time(payload.get("captured_at"))
+    age = (
+        fmt_age(max(0.0, (state.now - captured).total_seconds()))
+        if captured is not None
+        else "-"
+    )
+    source = payload.get("source") or "game.php?page=records"
+    line = f"来源 {source} · 快照 {age}"
+    updated_at = str(payload.get("updated_at") or "")
+    if updated_at:
+        line += f" · 页面更新 {fmt_battle_time({'time': updated_at}, now=state.now)}"
+    add(line, "muted")
+    add(_rule(width), "muted")
+
+    errors = payload.get("errors") or []
+    if errors:
+        add("采集错误", "section")
+        for error in errors[:3]:
+            add(f"  {error.get('section') or 'all'}: {error.get('error')}", "warn")
+
+    rows = record_rows(payload)
+    if not rows:
+        add("（记录页暂无数据）", "muted")
+        return lines
+
+    account = (state.snapshot or {}).get("account") or {}
+    me = str(account.get("username") or "")
+    mine = sum(
+        1
+        for row in rows
+        if me and me in [str(name) for name in (row.get("holders") or [])]
+    )
+    summary = f"{len(rows)} 项 · {len(labels)} 类"
+    if me:
+        summary += f" · ★ 我保持 {mine} 项"
+    add(summary, "muted")
+
+    add(
+        f"  {pad('名称', 24)}{pad('宇宙最高', 12)}"
+        f"{pad('我的', 10)}{pad('达成', 6)}保持者",
+        "section",
+    )
+
+    selected = max(0, min(int(selected), len(rows) - 1))
+    position = 0
+    for section in sections:
+        entries = [
+            entry for entry in (section.get("entries") or []) if isinstance(entry, dict)
+        ]
+        if not entries:
+            continue
+        add(f"{section.get('label') or '?'} · {len(entries)} 项", "section")
+        for entry in entries:
+            holders = [str(name) for name in (entry.get("holders") or [])]
+            is_mine = bool(me) and me in holders
+            marker = "▸ " if position == selected else ("★ " if is_mine else "  ")
+            text = (
+                f"{marker}{pad(str(entry.get('name') or '?'), 22)}"
+                f"{pad(fmt_number(entry.get('server')), 12)}"
+                f"{pad(fmt_number(entry.get('own')), 10)}"
+                f"{pad(f'{_record_percent(entry)}%', 6)}"
+                f"{_record_holders_text(entry)}"
+            )
+            if position == selected:
+                style = "selected"
+            elif is_mine:
+                style = "ok"
+            else:
+                style = "normal"
+            add(text, style, entry)
+            position += 1
+    return lines
+
+
+def render_record_detail(
+    entry: Dict[str, Any], *, width: int = 110
+) -> List[str]:
+    """Render one universe-record row with every holder."""
+
+    width = max(40, width)
+    name = str(entry.get("name") or "?")
+    section = str(entry.get("section") or "")
+    lines = [truncate(f"宇宙记录 · {name}" + (f" · {section}" if section else ""), width)]
+    lines.append(_rule(width))
+
+    server = _as_float(entry.get("server"))
+    own = _as_float(entry.get("own"))
+    percent = _record_percent(entry)
+    missing = max(0, int(server) - int(own))
+    lines.append(truncate(f"{pad('宇宙最高记录', 14)}{fmt_number(server)}", width))
+    lines.append(truncate(f"{pad('我的最高记录', 14)}{fmt_number(own)}", width))
+    detail = f"{percent}%"
+    if missing:
+        detail += f"（还差 {fmt_number(missing)}）"
+    lines.append(truncate(f"{pad('达成度', 14)}{detail}", width))
+    lines.append(pad("保持者", 14))
+    holders = [str(item) for item in (entry.get("holders") or []) if str(item).strip()]
+    if holders:
+        for holder in holders:
+            lines.append(truncate("  • " + holder, width))
+    else:
+        lines.append(truncate("  （页面未标注）", width))
+    item_id = entry.get("item_id")
+    if item_id:
+        lines.append(truncate(f"{pad('元素 id', 14)}{item_id}", width))
+    return lines
+
+
+def render_records_text(
+    state: DashboardState,
+    *,
+    width: int = 110,
+    selected: int = 0,
+) -> List[str]:
+    return [
+        line.text.rstrip()
+        for line in render_records_lines(state, width=width, selected=selected)
+    ]
+
+
+def render_record_text(
+    state: DashboardState,
+    *,
+    index: int = 0,
+    width: int = 110,
+) -> List[str]:
+    """Plain-text frame for one record; falls back to the list without data."""
+
+    rows = record_rows(state.record_log or {})
+    if not rows:
+        return render_records_text(state, width=width)
+    index = max(0, min(int(index), len(rows) - 1))
+    return render_record_detail(rows[index], width=width)
 
 
 def render_text(

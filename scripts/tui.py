@@ -2,14 +2,15 @@
 """Read-only TUI dashboard for the auto-play loop.
 
 It only displays what the daemon already wrote to ``state/`` -- it never talks
-to the game and never triggers actions.  There are four tabs: the live
+to the game and never triggers actions.  There are five tabs: the live
 dashboard, the leaderboard collected into ``state/statistics.json``, the inbox
-reader from ``state/messages.json`` and the battle hall from ``state/battles.json``.
+reader from ``state/messages.json``, the battle hall from ``state/battles.json``
+and the universe records from ``state/records.json``.
 
-Keys: ``q`` quit, ``r`` refresh, ``Tab``/``1``-``4`` switch tabs,
+Keys: ``q`` quit, ``r`` refresh, ``Tab``/``1``-``5`` switch tabs,
 ``j``/``k`` move, ``PgUp``/``PgDn`` page, ``g``/``G`` top/bottom, ``d`` open
 the selected journal entry as JSON, ``w`` switch players/alliances on the
-leaderboard tab, Enter/``d`` read a message or battle, ``o`` switch the battle
+leaderboard tab, Enter/``d`` read a message, battle or record, ``o`` switch the battle
 ordering between unit score and date.
 
 ``--once`` renders a single frame to stdout (no curses), which is handy for
@@ -30,6 +31,7 @@ from autoplay.dashboard import (
     battle_rows,
     fmt_message_time,
     load_state,
+    record_rows,
     render_battle_detail,
     render_battle_text,
     render_battles_lines,
@@ -39,6 +41,10 @@ from autoplay.dashboard import (
     render_message_text,
     render_messages_lines,
     render_messages_text,
+    render_record_detail,
+    render_record_text,
+    render_records_lines,
+    render_records_text,
     render_statistics_lines,
     render_statistics_text,
     render_text,
@@ -50,8 +56,15 @@ DASHBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 移动 · PgUp/PgD
 LEADERBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · w 玩家/联盟 · j/k 移动 · PgUp/PgDn 翻页 · g/G"
 MESSAGES_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 选择 · Enter/d 阅读 · PgUp/PgDn 翻页 · g/G"
 BATTLES_FOOTER = "q 退出 · r 刷新 · Tab 切页 · o 单位/日期 · j/k 选择 · Enter/d 详情 · PgUp/PgDn 翻页 · g/G"
-FOOTERS = (DASHBOARD_FOOTER, LEADERBOARD_FOOTER, MESSAGES_FOOTER, BATTLES_FOOTER)
-TAB_LABELS = (" 1 看板 ", " 2 排行榜 ", " 3 消息 ", " 4 战役 ")
+RECORDS_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 选择 · Enter/d 详情 · PgUp/PgDn 翻页 · g/G"
+FOOTERS = (
+    DASHBOARD_FOOTER,
+    LEADERBOARD_FOOTER,
+    MESSAGES_FOOTER,
+    BATTLES_FOOTER,
+    RECORDS_FOOTER,
+)
+TAB_LABELS = (" 1 看板 ", " 2 排行榜 ", " 3 消息 ", " 4 战役 ", " 5 记录 ")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -66,7 +79,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="print one frame and exit")
     parser.add_argument(
         "--tab",
-        choices=("dashboard", "leaderboard", "messages", "battles"),
+        choices=("dashboard", "leaderboard", "messages", "battles", "records"),
         default="dashboard",
         help="initial tab for --once and the interactive TUI",
     )
@@ -95,6 +108,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=None,
         help="with --once --tab battles, print this battle detail instead of the list",
     )
+    parser.add_argument(
+        "--record-index",
+        type=int,
+        default=None,
+        help="with --once --tab records, print this record detail instead of the list",
+    )
     return parser.parse_args(argv)
 
 
@@ -109,6 +128,7 @@ def _frame(
     battles_order: str = "units",
     message_index: Optional[int] = None,
     battle_index: Optional[int] = None,
+    record_index: Optional[int] = None,
 ) -> List[str]:
     state = load_state(state_dir)
     if tab == "leaderboard":
@@ -123,6 +143,10 @@ def _frame(
                 state, order=battles_order, index=battle_index, width=width
             )
         return render_battles_text(state, order=battles_order, width=width)
+    if tab == "records":
+        if record_index is not None:
+            return render_record_text(state, index=record_index, width=width)
+        return render_records_text(state, width=width)
     return render_text(
         state, width=width, log_lines=log_lines, event_lines=event_lines
     )
@@ -279,9 +303,13 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
     colors = _init_colors()
 
     state_dir = Path(args.state_dir)
-    tab = {"dashboard": 0, "leaderboard": 1, "messages": 2, "battles": 3}[
-        args.tab
-    ]
+    tab = {
+        "dashboard": 0,
+        "leaderboard": 1,
+        "messages": 2,
+        "battles": 3,
+        "records": 4,
+    }[args.tab]
     stats_who = args.stats_who
     battle_order = args.battles_order
     last_reload = 0.0
@@ -291,6 +319,7 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
     cursor = 0
     msg_cursor = 0
     battle_cursor = 0
+    record_cursor = 0
     detail_lines: Optional[List[str]] = None
     detail_title = ""
     detail_scroll = 0
@@ -321,7 +350,7 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                     width=max(40, width - 1),
                     selected=msg_cursor,
                 )
-            else:
+            elif tab == 3:
                 rows = battle_rows(state.battle_log or {}, battle_order, "desc")
                 battle_cursor = max(0, min(battle_cursor, max(0, len(rows) - 1)))
                 frame = render_battles_lines(
@@ -329,6 +358,14 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                     order=battle_order,
                     width=max(40, width - 1),
                     selected=battle_cursor,
+                )
+            else:
+                records = record_rows(state.record_log or {})
+                record_cursor = max(0, min(record_cursor, max(0, len(records) - 1)))
+                frame = render_records_lines(
+                    state,
+                    width=max(40, width - 1),
+                    selected=record_cursor,
                 )
             last_reload = now
             cursor = max(0, min(cursor, len(frame) - 1))
@@ -338,6 +375,22 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
         if tab == 3:
             rows = battle_rows(state.battle_log or {}, battle_order, "desc")
             cursor = max(0, len(frame) - len(rows) + battle_cursor) if rows else 0
+        elif tab == 4:
+            records = record_rows(state.record_log or {})
+            if records:
+                selected_row = records[
+                    max(0, min(record_cursor, len(records) - 1))
+                ]
+                cursor = next(
+                    (
+                        index
+                        for index, line in enumerate(frame)
+                        if line.entry is selected_row
+                    ),
+                    0,
+                )
+            else:
+                cursor = 0
 
         if detail_lines is not None:
             _draw_detail(stdscr, detail_title, detail_lines, detail_scroll, colors)
@@ -372,7 +425,7 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
             detail_lines = None
             last_reload = 0.0
             continue
-        if key in (ord("1"), ord("2"), ord("3"), ord("4")):
+        if key in (ord("1"), ord("2"), ord("3"), ord("4"), ord("5")):
             tab = key - ord("1")
             cursor = 0
             scroll = 0
@@ -477,6 +530,39 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                 )
             continue
 
+        if tab == 4:
+            rows = record_rows(state.record_log or {})
+            if rows:
+                if key in (ord("j"), curses.KEY_DOWN):
+                    record_cursor = min(len(rows) - 1, record_cursor + 1)
+                elif key in (ord("k"), curses.KEY_UP):
+                    record_cursor = max(0, record_cursor - 1)
+                elif key == curses.KEY_NPAGE:
+                    record_cursor = min(len(rows) - 1, record_cursor + viewport)
+                elif key == curses.KEY_PPAGE:
+                    record_cursor = max(0, record_cursor - viewport)
+                elif key == ord("g"):
+                    record_cursor = 0
+                elif key == ord("G"):
+                    record_cursor = max(0, len(rows) - 1)
+                elif key in (10, 13, curses.KEY_ENTER, ord("d"), ord("D")):
+                    entry = rows[record_cursor]
+                    detail_title = (
+                        f"记录 · {entry.get('name') or '?'}"
+                        f" · {entry.get('section') or '-'}"
+                    )
+                    detail_lines = render_record_detail(
+                        entry, width=max(40, width - 1)
+                    )
+                    detail_scroll = 0
+            if detail_lines is None:
+                frame = render_records_lines(
+                    state,
+                    width=max(40, width - 1),
+                    selected=record_cursor,
+                )
+            continue
+
         if tab == 1 and key in (ord("w"), ord("W")):
             stats_who = 2 if stats_who == 1 else 1
             cursor = 0
@@ -527,6 +613,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     battles_order=args.battles_order,
                     message_index=args.message_index,
                     battle_index=args.battle_index,
+                    record_index=args.record_index,
                 )
             )
         )

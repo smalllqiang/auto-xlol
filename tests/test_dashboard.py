@@ -14,6 +14,8 @@ from autoplay.dashboard import (
     render_lines,
     render_message_body,
     render_messages_text,
+    render_record_text,
+    render_records_text,
     render_statistics_text,
     render_text,
     text_width,
@@ -168,6 +170,7 @@ def _state_dir(
     statistics=None,
     messages_log=None,
     battles=None,
+    records=None,
     stop=False,
 ):
     if snapshot:
@@ -202,6 +205,10 @@ def _state_dir(
     if battles is not None:
         (tmp_path / "battles.json").write_text(
             json.dumps(battles, ensure_ascii=False), encoding="utf-8"
+        )
+    if records is not None:
+        (tmp_path / "records.json").write_text(
+            json.dumps(records, ensure_ascii=False), encoding="utf-8"
         )
     if stop:
         (tmp_path / "STOP").write_text("", encoding="utf-8")
@@ -707,3 +714,107 @@ def test_battle_time_keeps_server_wall_clock():
     assert fmt_battle_time({"date": "2026年11月14日, 16:40:29"}, now=now) == (
         "2026年11月14日, 16:40:29"
     )
+
+
+def _record_log():
+    return {
+        "schema": 1,
+        "captured_at": "2026-11-13T09:00:30+00:00",
+        "source": "game.php?page=records",
+        "base_url": "https://example.test/",
+        "updated_at": "2026-11-14T16:01:37",
+        "updated_text": "2026年11月14日, 16:01:37",
+        "sections": [
+            {
+                "label": "建筑",
+                "entries": [
+                    {
+                        "section": "建筑",
+                        "item_id": 1,
+                        "name": "合金冶炼厂",
+                        "server": 48,
+                        "own": 21,
+                        "holders": ["danyi"],
+                        "percent": 44,
+                    },
+                    {
+                        "section": "建筑",
+                        "item_id": 2,
+                        "name": "水晶催化厂",
+                        "server": 48,
+                        "own": 19,
+                        "holders": ["TestUser", "玩家二"],
+                        "percent": 40,
+                    },
+                ],
+            },
+            {
+                "label": "舰只",
+                "entries": [
+                    {
+                        "section": "舰只",
+                        "item_id": 210,
+                        "name": "间谍探针",
+                        "server": 1_170_243_908,
+                        "own": 0,
+                        "holders": ["TestUser"],
+                        "percent": 0,
+                    }
+                ],
+            },
+        ],
+        "errors": [],
+    }
+
+
+def test_record_tab_lists_sections(tmp_path):
+    state = load_state(_state_dir(tmp_path, records=_record_log()), now=NOW)
+    text = "\n".join(render_records_text(state, width=100))
+
+    assert "宇宙记录 · 建筑 / 舰只" in text
+    assert "3 项 · 2 类 · ★ 我保持 2 项" in text
+    assert "建筑 · 2 项" in text
+    assert "舰只 · 1 项" in text
+    assert "合金冶炼厂" in text
+    assert "1.17B" in text
+    assert "44%" in text
+    assert "danyi" in text
+    assert "▸ 合金冶炼厂" in text  # default selection
+    assert "★ " in text  # own record
+
+
+def test_record_tab_selection_and_updated_time(tmp_path):
+    state = load_state(_state_dir(tmp_path, records=_record_log()), now=NOW)
+    text = "\n".join(render_records_text(state, width=100, selected=1))
+
+    assert "▸ 水晶催化厂" in text
+    assert "页面更新 11-14 16:01" in text
+
+
+def test_record_tab_missing_data(tmp_path):
+    state = load_state(_state_dir(tmp_path), now=NOW)
+    text = "\n".join(render_records_text(state, width=100))
+    assert "尚无宇宙记录数据" in text
+
+
+def test_record_tab_shows_collection_errors(tmp_path):
+    payload = _record_log()
+    payload["errors"] = [{"section": "all", "error": "TransportError: timed out"}]
+    state = load_state(_state_dir(tmp_path, records=payload), now=NOW)
+    text = "\n".join(render_records_text(state, width=100))
+    assert "采集错误" in text
+    assert "timed out" in text
+
+
+def test_record_detail_shows_holders_and_gap(tmp_path):
+    state = load_state(_state_dir(tmp_path, records=_record_log()), now=NOW)
+    text = "\n".join(render_record_text(state, index=0, width=100))
+    assert "宇宙记录 · 合金冶炼厂 · 建筑" in text
+    assert "宇宙最高记录" in text and "48" in text
+    assert "我的最高记录" in text and "21" in text
+    assert "44%（还差 27）" in text
+    assert "danyi" in text
+    assert "元素 id" in text
+
+    multi = "\n".join(render_record_text(state, index=1, width=100))
+    assert "TestUser" in multi and "玩家二" in multi

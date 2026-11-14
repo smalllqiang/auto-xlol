@@ -34,6 +34,7 @@ from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
 from autoplay.messages import collect_messages, write_messages
+from autoplay.records import collect_records, write_records
 from autoplay.statistics import collect_statistics, write_statistics
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
@@ -149,6 +150,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--battles-file",
         default="state/battles.json",
         help="battle hall snapshot for the TUI (default: state/battles.json)",
+    )
+    parser.add_argument(
+        "--records-every",
+        type=int,
+        default=120,
+        help="collect the universe records every N cycles (0 disables, default: 120)",
+    )
+    parser.add_argument(
+        "--records-file",
+        default="state/records.json",
+        help="universe records snapshot for the TUI (default: state/records.json)",
     )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
@@ -339,6 +351,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     statistics_path = Path(args.statistics_file)
     messages_path = Path(args.messages_file)
     battles_path = Path(args.battles_file)
+    records_path = Path(args.records_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     failures = 0
@@ -551,6 +564,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     except OSError as exc:
                         print(
                             f"    battles write failed: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+
+                if args.records_every and (
+                    cycles == 1 or cycles % args.records_every == 0
+                ):
+                    try:
+                        records_payload = collect_records(client)
+                    except NewStarError as exc:
+                        records_payload = {
+                            "schema": 1,
+                            "captured_at": now,
+                            "source": "game.php?page=records",
+                            "sections": [],
+                            "errors": [
+                                {
+                                    "section": "all",
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                }
+                            ],
+                        }
+                    try:
+                        write_records(records_path, records_payload)
+                        print(
+                            "    records written "
+                            f"({len(records_payload.get('sections') or {})} sections, "
+                            f"{len(records_payload.get('errors') or [])} errors)",
+                            flush=True,
+                        )
+                    except OSError as exc:
+                        print(
+                            f"    records write failed: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )

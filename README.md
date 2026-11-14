@@ -406,6 +406,7 @@ autoplay/         # 策略层（易变）
   planner.py      # 依赖展开 + ROI 排序
   expedition.py   # 探险航道 / 积分 / 建船建议（只读）
   expedition_executor.py  # 单队探险预览 / 发送
+  ship_build.py   # 推荐舰船建造（默认 dry-run）
   executor.py     # 队列感知 + 安全闸
 newstar_sdk/      # 客户端（稳定契约）
   client.py       # HTTP 会话 + 高层操作

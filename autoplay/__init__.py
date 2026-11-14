@@ -19,6 +19,7 @@ from .expedition import (
 from .expedition_executor import ExpeditionDispatchResult, dispatch_expedition
 from .phases import PHASES, Phase, detect_phase
 from .planner import Action, Plan, build_plan, compute_plan, expand_requirement_actions
+from .ship_build import ShipBuildResult, build_recommended_ships
 
 __all__ = [
     "Action",
@@ -29,8 +30,10 @@ __all__ = [
     "PHASES",
     "Phase",
     "Plan",
+    "ShipBuildResult",
     "ShipRecommendation",
     "build_expedition_report",
+    "build_recommended_ships",
     "build_plan",
     "compute_expedition_report",
     "compute_plan",

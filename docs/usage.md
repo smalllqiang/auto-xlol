@@ -678,3 +678,31 @@ allow-list、dry-run 和燃料校验。
 - 探险停留时间用 `--stay-time`，取值来自预览里的 `停留选项`；当前实例为 `1`。
 
 输出会显示编队舰船、燃料、可用任务、停留选项和确认页的任务/到达时间。真实发送后舰队出现在 `get_fleets()` 里，可用 SDK 召回。
+
+## 18. 探险造船执行
+
+`scripts/build_expedition_ships.py` 把探险报告里的推荐舰船落成建造计划。默认只预览：
+
+```bash
+# 预览：按报告推荐（当前会自动选战列舰，前置未满足时会拒绝建造）
+.venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl
+
+# 强制选轻型运输舰，预览建造 1 艘
+.venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl \
+  --ship 202 --count 1
+
+# 真实建造，必须显式 allow-list
+.venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl \
+  --ship 202 --count 1 --execute --allow 202
+```
+
+规则：
+
+- 默认 `dry_run`，不调用 `build_ships`；
+- 真实建造必须同时给 `--execute` 和 `--allow`，否则退出码 2；
+- 单次最多 `--max-count`（默认 100）艘；
+- 推荐舰船前置未满足或仍有 blocker 时拒绝建造；
+- `state/STOP` 存在时拒绝建造；
+- 不自动等待队列、不自动连续建造；一次调用一次 `build_ships`。
+
+输出包含推荐舰船、单舰积分、目标缺口、建议数量、前置条件和执行结果。当前实例用 `--ship 202` 强制小船是为了验证执行链路，不是对舰船选择的最终策略。

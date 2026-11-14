@@ -75,6 +75,24 @@ DatatList = {
 HTML 片段。`parse_messages()` 解析该片段，`parse_message_counters()` 解析外层
 页面的计数。两者都不涉及写操作。
 
+### 3.5 运行状态文件（只读看板的数据源）
+
+常驻循环把可回放的状态写到 `state/`，看板只读这些文件：
+
+| 文件 | 写入方 | 内容 |
+| --- | --- | --- |
+| `daemon.json` | `run_forever.py`，每轮原子写 | 心跳、pid、模式、间隔、轮次、失败数、上轮/下轮时间、阶段与目标 |
+| `journal.jsonl` | 每轮一条 | cycle（动作、队列明细、候选、消息摘要、告警、备注）、`kind=error`、`kind=expedition` |
+| `snapshots.jsonl` | 每 `--snapshot-every` 轮 | 完整账号快照（资源、队列、舰队、消息、研究、加成） |
+| `events.jsonl` | 快照同拍 | 快照 diff 出的事件 |
+| `daemon.lock` | 启动时创建、退出删除 | pid，单写者锁 |
+| `STOP` | 操作者创建 | 急停开关，循环在下一拍退出 |
+
+看板以 `daemon.json.updated_at` 判断守护是否存活，因为容器/PID 命名空间会让
+`os.kill(pid, 0)` 看不到其他命名空间里的进程。journal 的 cycle 条目是看板的
+主要信息源；新增字段必须保持向后兼容，旧条目缺少 `plan_top` / `queue_items` /
+`messages` 时看板退回最小布局。轮转后的 `.1` 文件也会被读取。
+
 ### 3.3 为什么不用 JSON 接口
 
 `json.php` 只返回攻击/侦察/消息计数，不能操作游戏。高层操作仍然必须走 `game.php` 的页面和表单。SDK 只是把这些页面请求封装起来，并在必要时解析返回页确认结果。

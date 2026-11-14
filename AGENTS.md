@@ -102,6 +102,10 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   不要把 capacity 当硬约束，语义待核实。
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。
+- **看板存活看心跳**：`state/daemon.json` 的 `updated_at` 是权威依据；容器/PID
+  命名空间里 `os.kill(pid, 0)` 可能看不到守护，别只凭 `daemon.lock` 的 pid 判断。
+- **看板读 journal 新字段**：cycle 条目含 `plan_top` / `queue_items` / `messages` /
+  `evidence`；新增字段保持向后兼容，旧条目缺字段时 TUI 要退回最小布局。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。

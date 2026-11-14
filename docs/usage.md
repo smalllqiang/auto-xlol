@@ -590,19 +590,50 @@ touch state/STOP
 
 ## 15. TUI 看板
 
-`scripts/tui.py` 只读展示 `state/` 里已有的数据，不连游戏、不触发任何动作。
+`scripts/tui.py` 只读展示 `state/` 里已有的数据，不连游戏、不触发任何动作。它和
+守护循环解耦：先让 `run_forever.py` 在真实实例上跑起来，再看板就会持续刷新。
 
 ```bash
-.venv/bin/python scripts/tui.py            # 交互式，默认每 3 秒刷新
+# 终端 A：守护循环（默认 dry-run，不会写游戏）
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --interval 30 --snapshot-every 1
+
+# 终端 B：看板
+.venv/bin/python scripts/tui.py            # 交互式，默认每 3 秒重载
 .venv/bin/python scripts/tui.py --once     # 渲染一帧到 stdout（无 curses）
 ```
 
-面板内容：账号与星球、资源/容量/产能、阶段与目标、上一轮执行结果、告警、事件、
-journal 尾部。按键 `q` 退出、`r` 立即刷新；数据陈旧时显示「数据 X 分前」，
-守护未运行或锁存在也会标注。
+按键：`q` 退出、`r` 立即刷新、`j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、
+`d` 把选中的 journal 条目展开成 JSON（再按 `d` 或 `Esc` 返回）。
+
+面板内容：
+
+- **健康栏**：守护心跳、数据年龄、本轮是否进行中、下一轮倒计时、连续失败数；
+  `state/STOP` 存在时直接标黄。存活判断以 `state/daemon.json` 的心跳为准，而不是
+  只看 pid（容器/PID 命名空间里 `os.kill(pid, 0)` 可能看不到活着的守护）。
+- **资源**：数量、页面产能、容量；容量带 `*`，因为本实例的仓容语义仍待核实。
+- **队列**：建造/研究/船坞的当前项、目标等级和剩余时间；没有明细时退回显示计数。
+- **阶段与候选**：阶段、目标、当前计划的前 5 条候选；`▸` 是选中项，`✔/✖` 是
+  可负担性，缺资源会显示「缺幽能 289.46K」这类缺口。
+- **探险 / 舰队 / 消息**：航道与在途舰队、上次探险调度结果、未读分类和收件箱。
+- **告警 / 事件 / 日志**：告警不会被折叠；连续相同的 cycle 会合并成 `×N`
+  并标出时间范围，避免稳定计划刷屏。日志行可按 `d` 查看完整 JSON。
+
+数据契约：
+
+- `state/daemon.json`：`run_forever.py` 每轮原子写入的心跳，含 `pid`、`mode`、
+  `interval`、`cycles`、`failures`、`last_cycle_at`、`next_cycle_at`、
+  `cycle_started_at`、`last_status`、`last_reason`、`phase`、`goal`、`updated_at`；
+  退出时写 `state=stopped`。
+- `state/journal.jsonl` 的 cycle 条目额外带 `plan_top`（候选）、`queue_items`
+  （队列明细）、`messages`（未读摘要）和 `evidence`；旧条目缺这些字段时看板退回
+  只显示已选动作。
+- 看板会读取轮转后的 `journal.jsonl.1` / `events.jsonl.1`，容忍缺 `kind` 的旧
+  cycle 记录、坏 JSON 行和乱序时间；`--once` 与交互模式共用同一份渲染结果。
 
 实现只用标准库 `curses`，没有引入 TUI 框架；渲染逻辑在
-`autoplay/dashboard.py`，是纯函数，`--once` 与测试都复用它。
+`autoplay/dashboard.py`，是纯函数，`--once` 与测试都复用它。看板仍然不执行任何
+游戏动作；如果将来要加控制按钮，必须先改 ADR-011 的只读边界。
 
 ## 16. 探险准备报告
 

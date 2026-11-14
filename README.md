@@ -280,10 +280,11 @@ for action in plan.actions:
 单实例锁、`state/STOP` 急停、失败指数退避都内建；默认每 12 轮写一次快照。
 加 `--expedition` 可每 N 轮调度探险，探险使用独立的舰船 allow-list。
 
-看板只读展示 `state/` 的现状与日志，不连游戏：
+看板只读展示 `state/` 的现状与日志，不连游戏。守护每轮写 `state/daemon.json`
+心跳，看板据此显示存活、数据年龄和下一轮时间：
 
 ```bash
-.venv/bin/python scripts/tui.py          # 交互式
+.venv/bin/python scripts/tui.py          # 交互式；j/k 滚动、d 看详情、q 退出
 .venv/bin/python scripts/tui.py --once   # 打印一帧
 ```
 每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；

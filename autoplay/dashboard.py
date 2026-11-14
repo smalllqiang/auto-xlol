@@ -6,24 +6,32 @@ to plain text with ``--once``) without a terminal.
 
 Data comes from the files the daemon already writes:
 
+* ``state/daemon.json``     -- heartbeat: pid, mode, interval, next cycle
 * ``state/snapshots.jsonl`` -- full account state (every N cycles)
 * ``state/journal.jsonl``   -- one line per cycle (action, queues, alerts)
 * ``state/events.jsonl``    -- diffed events (on snapshot cadence)
-* ``state/daemon.lock``     -- pid of a running loop, if any
+* ``state/daemon.lock``     -- pid of a running loop (fallback for old runs)
+* ``state/STOP``            -- kill switch requested by the operator
+
+Nothing here talks to the game, and nothing here writes to ``state/``.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 TAIL_BYTES = 512 * 1024
+DEFAULT_INTERVAL = 60.0
 
 QUEUE_NAMES = {"building": "建造", "research": "研究", "shipyard": "船坞"}
+
+RESOURCE_NAMES = {"901": "金属", "902": "水晶", "903": "重氢", "911": "幽能"}
 
 PHASE_NAMES = {
     "pre_gravity": "种田初起",
@@ -31,17 +39,177 @@ PHASE_NAMES = {
     "expedition": "探险纪元",
 }
 
+STATUS_NAMES = {
+    "executed": "已执行",
+    "dry_run": "预览",
+    "skipped": "跳过",
+    "paused": "暂停",
+    "error": "失败",
+    "dispatched": "已派出",
+    "partial": "部分派出",
+}
+
+EVENT_NAMES = {
+    "research_completed": "研究完成",
+    "queue_item_finished": "队列完成",
+    "queue_item_added": "队列新增",
+    "message_new": "新消息",
+    "message_check_failed": "消息读取失败",
+}
+
+
+@dataclass
+class FrameLine:
+    """One rendered line plus the style the curses layer should apply."""
+
+    text: str
+    style: str = "normal"  # normal | title | section | muted | ok | warn | error | alert
+    entry: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class DashboardState:
+    snapshot: Optional[Dict[str, Any]] = None
+    journal: List[Dict[str, Any]] = field(default_factory=list)
+    events: List[Dict[str, Any]] = field(default_factory=list)
+    daemon: Dict[str, Any] = field(default_factory=dict)
+    daemon_pid: Optional[int] = None
+    daemon_lock_age: Optional[float] = None
+    daemon_alive: Optional[bool] = None
+    stop_requested: bool = False
+    now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def cycle_entries(self) -> List[Dict[str, Any]]:
+        return [entry for entry in self.journal if _is_cycle(entry)]
+
+    @property
+    def last_cycle(self) -> Optional[Dict[str, Any]]:
+        entries = self.cycle_entries
+        return entries[-1] if entries else None
+
+    @property
+    def last_expedition(self) -> Optional[Dict[str, Any]]:
+        for entry in reversed(self.journal):
+            if entry.get("kind") in {"expedition", "expedition_error"}:
+                return entry
+        return None
+
+    @property
+    def last_error(self) -> Optional[Dict[str, Any]]:
+        for entry in reversed(self.journal):
+            if entry.get("kind") == "error":
+                return entry
+        return None
+
+    @property
+    def consecutive_failures(self) -> int:
+        count = 0
+        for entry in reversed(self.journal):
+            kind = entry.get("kind")
+            if kind == "error":
+                count += 1
+            elif kind in {"expedition", "expedition_error"}:
+                continue
+            else:
+                break
+        return count
+
+    @property
+    def alerts(self) -> List[Dict[str, Any]]:
+        alerts: List[Dict[str, Any]] = []
+        seen = set()
+        for entry in self.journal:
+            for alert in entry.get("alerts") or []:
+                key = (entry.get("at"), alert.get("message"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                alerts.append({"at": entry.get("at"), **alert})
+        return alerts
+
+    @property
+    def updated_at(self) -> Optional[datetime]:
+        candidates = []
+        if self.snapshot:
+            candidates.append(_parse_time(self.snapshot.get("captured_at")))
+        if self.last_cycle:
+            candidates.append(_parse_time(self.last_cycle.get("at")))
+        return max((item for item in candidates if item), default=None)
+
+    @property
+    def data_age(self) -> Optional[float]:
+        updated = self.updated_at
+        if updated is None:
+            return None
+        return max(0.0, (self.now - updated).total_seconds())
+
+    @property
+    def interval(self) -> float:
+        try:
+            return float(self.daemon.get("interval") or DEFAULT_INTERVAL)
+        except (TypeError, ValueError):
+            return DEFAULT_INTERVAL
+
+    @property
+    def messages(self) -> Dict[str, Any]:
+        cycle = self.last_cycle or {}
+        messages = cycle.get("messages")
+        if isinstance(messages, dict) and messages:
+            return messages
+        if self.snapshot:
+            value = self.snapshot.get("messages")
+            if isinstance(value, dict):
+                return value
+        return {}
+
+    @property
+    def queue_items(self) -> Dict[str, List[Dict[str, Any]]]:
+        items: Dict[str, List[Dict[str, Any]]] = {}
+        if self.snapshot:
+            queues = self.snapshot.get("queues") or {}
+            for key, value in queues.items():
+                if isinstance(value, list):
+                    items[key] = list(value)
+        cycle = self.last_cycle or {}
+        cycle_items = cycle.get("queue_items") or {}
+        for key, value in cycle_items.items():
+            if value:
+                items[key] = list(value)
+        return items
+
+    @property
+    def plan_top(self) -> List[Dict[str, Any]]:
+        cycle = self.last_cycle or {}
+        plan = cycle.get("plan_top")
+        if isinstance(plan, list) and plan:
+            return plan
+        action = cycle.get("action")
+        if isinstance(action, dict):
+            item = dict(action)
+            item.setdefault("selected", True)
+            return [item]
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Loading
+# ---------------------------------------------------------------------------
+
 
 def _read_tail(path: Path, limit: int) -> List[Dict[str, Any]]:
     """Read up to ``limit`` complete JSON objects from the end of a JSONL file."""
 
-    if not path.exists():
+    if limit <= 0 or not path.exists():
         return []
-    with path.open("rb") as handle:
-        handle.seek(0, 2)
-        size = handle.tell()
-        handle.seek(max(0, size - TAIL_BYTES))
-        data = handle.read()
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, 2)
+            size = handle.tell()
+            handle.seek(max(0, size - TAIL_BYTES))
+            data = handle.read()
+    except OSError:
+        return []
     lines = data.splitlines()
     if size > TAIL_BYTES and lines:
         lines = lines[1:]  # drop the possibly partial first line
@@ -58,6 +226,44 @@ def _read_tail(path: Path, limit: int) -> List[Dict[str, Any]]:
     return items[-limit:]
 
 
+def _read_json(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _sort_entries(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Sort JSONL records by time; untimed records stay first, in file order."""
+
+    decorated: List[Tuple[int, datetime, int, Dict[str, Any]]] = []
+    for index, item in enumerate(items):
+        when = _parse_time(item.get("at") or item.get("captured_at"))
+        decorated.append(
+            (
+                1 if when is not None else 0,
+                when or datetime.min.replace(tzinfo=timezone.utc),
+                index,
+                item,
+            )
+        )
+    decorated.sort(key=lambda row: (row[0], row[1], row[2]))
+    return [row[3] for row in decorated]
+
+
+def _read_recent(path: Path, limit: int) -> List[Dict[str, Any]]:
+    """Read the newest ``limit`` records, falling back to the rotated ``.1``."""
+
+    current = _read_tail(path, limit)
+    if len(current) < limit:
+        backup = _read_tail(path.with_name(path.name + ".1"), limit - len(current))
+        current = backup + current
+    return _sort_entries(current)[-limit:]
+
+
 def _parse_time(value: Any) -> Optional[datetime]:
     if not value:
         return None
@@ -70,54 +276,52 @@ def _parse_time(value: Any) -> Optional[datetime]:
     return parsed
 
 
-@dataclass
-class DashboardState:
-    snapshot: Optional[Dict[str, Any]] = None
-    journal: List[Dict[str, Any]] = field(default_factory=list)
-    events: List[Dict[str, Any]] = field(default_factory=list)
-    daemon_pid: Optional[int] = None
-    daemon_lock_age: Optional[float] = None
-    now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    @property
-    def last_cycle(self) -> Optional[Dict[str, Any]]:
-        for entry in reversed(self.journal):
-            if entry.get("kind") == "cycle":
-                return entry
+def _pid_alive(pid: Optional[int]) -> Optional[bool]:
+    if not pid:
         return None
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (OSError, ValueError):
+        return False
+    return True
 
-    @property
-    def alerts(self) -> List[Dict[str, Any]]:
-        alerts: List[Dict[str, Any]] = []
-        for entry in self.journal:
-            for alert in entry.get("alerts") or []:
-                alerts.append({"at": entry.get("at"), **alert})
-        return alerts
 
-    @property
-    def updated_at(self) -> Optional[datetime]:
-        candidates = []
-        if self.snapshot:
-            candidates.append(_parse_time(self.snapshot.get("captured_at")))
-        if self.last_cycle:
-            candidates.append(_parse_time(self.last_cycle.get("at")))
-        return max((item for item in candidates if item), default=None)
+def _is_cycle(entry: Dict[str, Any]) -> bool:
+    kind = entry.get("kind")
+    if kind == "cycle":
+        return True
+    if kind:
+        # error / expedition / expedition_error / start / stop are other kinds
+        return False
+    # Older journals wrote cycle records without a kind; keep reading them.
+    return "phase" in entry and "status" in entry
 
 
 def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardState:
     now = now or datetime.now(timezone.utc)
+    daemon = _read_json(state_dir / "daemon.json")
     snapshots = _read_tail(state_dir / "snapshots.jsonl", 1)
-    journal = _read_tail(state_dir / "journal.jsonl", 40)
-    events = _read_tail(state_dir / "events.jsonl", 40)
+    journal = _read_recent(state_dir / "journal.jsonl", 120)
+    events = _read_recent(state_dir / "events.jsonl", 80)
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
     lock_path = state_dir / "daemon.lock"
-    if lock_path.exists():
+    if daemon.get("pid") is not None:
         try:
-            pid = int(lock_path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
+            pid = int(daemon["pid"])
+        except (TypeError, ValueError):
             pid = None
+    if lock_path.exists():
+        if pid is None:
+            try:
+                pid = int(lock_path.read_text(encoding="utf-8").strip())
+            except (OSError, ValueError):
+                pid = None
         try:
             lock_age = max(0.0, now.timestamp() - lock_path.stat().st_mtime)
         except OSError:
@@ -127,8 +331,11 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         snapshot=snapshots[-1] if snapshots else None,
         journal=journal,
         events=events,
+        daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
+        daemon_alive=_pid_alive(pid),
+        stop_requested=(state_dir / "STOP").exists(),
         now=now,
     )
 
@@ -179,17 +386,23 @@ def fmt_number(value: Any) -> str:
     return f"{number:,.1f}"
 
 
-def fmt_time(value: Any) -> str:
+def fmt_time(value: Any, *, now: Optional[datetime] = None) -> str:
     parsed = _parse_time(value)
     if parsed is None:
         return "-"
-    return parsed.astimezone().strftime("%H:%M:%S")
+    local = parsed.astimezone()
+    reference = (now or datetime.now(timezone.utc)).astimezone()
+    if local.date() == reference.date():
+        return local.strftime("%H:%M:%S")
+    return local.strftime("%m-%d %H:%M")
 
 
 def fmt_age(seconds: Optional[float]) -> str:
     if seconds is None:
         return "-"
     seconds = int(seconds)
+    if seconds < 0:
+        seconds = 0
     if seconds < 60:
         return f"{seconds} 秒前"
     if seconds < 3600:
@@ -199,6 +412,19 @@ def fmt_age(seconds: Optional[float]) -> str:
     return f"{seconds // 86400} 天前"
 
 
+def fmt_seconds(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "-"
+    value = max(0, int(seconds))
+    if value < 60:
+        return f"{value}s"
+    if value < 3600:
+        return f"{value // 60}m{value % 60:02d}s"
+    if value < 86400:
+        return f"{value // 3600}h{(value % 3600) // 60:02d}m"
+    return f"{value // 86400}d{(value % 86400) // 3600:02d}h"
+
+
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
@@ -206,23 +432,6 @@ def fmt_age(seconds: Optional[float]) -> str:
 
 def _rule(width: int) -> str:
     return "─" * width
-
-
-def _resource_rows(snapshot: Dict[str, Any], width: int) -> List[str]:
-    resources = snapshot.get("resources") or {}
-    amounts = resources.get("amounts") or {}
-    capacities = resources.get("capacities") or {}
-    production = resources.get("production") or {}
-
-    rows = [f"{pad('资源', 8)}{pad('数量', 14)}{pad('容量', 12)}{pad('每小时', 12)}"]
-    for key, label in (("901", "金属"), ("902", "水晶"), ("903", "重氢"), ("911", "幽能")):
-        rows.append(
-            f"{pad(label, 8)}"
-            f"{pad(fmt_number(amounts.get(key, 0)), 14)}"
-            f"{pad(fmt_number(capacities[key]) if key in capacities else '-', 12)}"
-            f"{pad(fmt_number(production.get(key, 0)) if key in production else '-', 12)}"
-        )
-    return [truncate(row, width) for row in rows]
 
 
 def _account_line(snapshot: Dict[str, Any], width: int) -> str:
@@ -238,94 +447,403 @@ def _account_line(snapshot: Dict[str, Any], width: int) -> str:
     return left + " " * gap + right
 
 
-def render_text(
-    state: DashboardState, *, width: int = 110, log_lines: int = 10, event_lines: int = 6
-) -> List[str]:
-    width = max(40, width)
-    lines: List[str] = []
+def _health(state: DashboardState) -> Tuple[str, str]:
+    status = state.daemon or {}
+    pid = state.daemon_pid
+    interval = state.interval
+    mode = status.get("mode") or (state.last_cycle or {}).get("mode") or "-"
+    failures = int(status.get("failures") or state.consecutive_failures or 0)
+    max_failures = int(status.get("max_failures") or 10)
+    data_age = state.data_age
+    heartbeat = _parse_time(status.get("updated_at"))
+    heartbeat_age = (
+        max(0.0, (state.now - heartbeat).total_seconds())
+        if heartbeat is not None
+        else None
+    )
+    stale_after = max(2.0 * interval, 90.0)
+    dead_after = max(5.0 * interval, 300.0)
 
-    if state.snapshot:
-        lines.append(_account_line(state.snapshot, width))
+    if state.stop_requested:
+        return "warn", "● 停止请求已存在（state/STOP），守护将在下一轮退出"
+    if status.get("state") == "stopped":
+        return "muted", f"● 守护已停止 · 数据 {fmt_age(data_age)}"
+
+    # The heartbeat is authoritative: pid namespaces (containers, sandboxes)
+    # can make a live daemon invisible to ``os.kill(pid, 0)``.  Fall back to
+    # the lock file only for old runs that predate daemon.json.
+    if heartbeat is not None and heartbeat_age is not None:
+        if heartbeat_age > dead_after:
+            level, label = "error", "心跳停更"
+        elif heartbeat_age > stale_after:
+            level, label = "warn", "心跳偏旧"
+        elif status.get("state") == "starting":
+            level, label = "warn", "启动中"
+        else:
+            level, label = "ok", "运行中"
+    elif pid and state.daemon_lock_age is not None:
+        if state.daemon_alive is False:
+            return "error", f"● 守护已退出（pid {pid} 不存在，锁残留）"
+        if state.daemon_lock_age > dead_after:
+            level, label = "error", "锁已过期"
+        else:
+            level, label = "ok", "运行中（旧版无心跳）"
     else:
-        lines.append("New-Star 看板")
+        if data_age is None:
+            return "warn", "● 守护未运行 · 状态目录为空"
+        level = "error" if data_age > dead_after else "warn"
+        return level, f"● 守护未运行 · 数据 {fmt_age(data_age)}"
 
-    age = None
-    if state.updated_at:
-        age = (state.now - state.updated_at).total_seconds()
-    daemon = (
-        f"守护 pid {state.daemon_pid}（{fmt_age(state.daemon_lock_age)}）"
-        if state.daemon_pid
-        else "守护未运行"
-    )
+    if data_age is None:
+        level = "warn" if level == "ok" else level
+        label += " / 等待数据"
+    elif data_age > dead_after:
+        level = "error"
+        label += " / 数据停更"
+    elif data_age > stale_after:
+        if level == "ok":
+            level = "warn"
+        label += " / 数据偏旧"
+
+    if failures and level == "ok":
+        level = "warn"
+
+    parts = [f"● {label}", f"pid {pid}" if pid else "pid -", mode, f"{fmt_seconds(interval)}/轮"]
+    if heartbeat_age is not None:
+        parts.append(f"心跳 {fmt_age(heartbeat_age)}")
+    parts.append(f"数据 {fmt_age(data_age)}")
+
+    cycle_started = _parse_time(status.get("cycle_started_at"))
+    last_cycle_at = _parse_time(status.get("last_cycle_at"))
+    if cycle_started is not None and (
+        last_cycle_at is None or cycle_started > last_cycle_at
+    ):
+        elapsed = (state.now - cycle_started).total_seconds()
+        parts.append(f"本轮进行中 {fmt_seconds(elapsed)}")
+    else:
+        next_at = _parse_time(status.get("next_cycle_at"))
+        if next_at is not None:
+            remaining = (next_at - state.now).total_seconds()
+            parts.append("即将开始" if remaining <= 0 else f"下轮 {fmt_seconds(remaining)}")
+
+    if failures:
+        parts.append(f"连续失败 {failures}/{max_failures}")
+    return level, " · ".join(parts)
+
+
+def _resource_rows(snapshot: Dict[str, Any], width: int) -> List[str]:
+    resources = snapshot.get("resources") or {}
+    amounts = resources.get("amounts") or {}
+    capacities = resources.get("capacities") or {}
+    production = resources.get("production") or {}
+    energy = snapshot.get("energy") or {}
+
+    rows = [f"{pad('资源', 8)}{pad('数量', 14)}{pad('产能/h', 12)}{pad('容量*', 12)}"]
+    for key, label in (("901", "金属"), ("902", "水晶"), ("903", "重氢"), ("911", "幽能")):
+        amount = amounts.get(key)
+        capacity = capacities.get(key)
+        per_hour = production.get(key)
+        if per_hour is None and key == "911":
+            per_hour = energy.get("production")
+        rows.append(
+            f"{pad(label, 8)}"
+            f"{pad(fmt_number(amount), 14)}"
+            f"{pad(fmt_number(per_hour), 12)}"
+            f"{pad(fmt_number(capacity), 12)}"
+        )
+    return [truncate(row, width) for row in rows]
+
+
+def _queue_line(kind: str, items: List[Dict[str, Any]], width: int) -> str:
+    label = QUEUE_NAMES.get(kind, kind)
+    if not items:
+        return truncate(f"  {label}  空闲", width)
+    parts: List[str] = []
+    for item in items[:2]:
+        name = item.get("name") or f"#{item.get('element_id') or '?'}"
+        target = item.get("target_level")
+        remaining = item.get("remaining_seconds")
+        text = name
+        if target is not None:
+            text += f" →{target}"
+        if remaining is not None:
+            text += f"  剩余 {fmt_seconds(remaining)}"
+        parts.append(text)
+    if len(items) > 2:
+        parts.append(f"等 {len(items)} 项")
+    return truncate(f"  {label}  " + "；".join(parts), width)
+
+
+def _cost_text(action: Dict[str, Any]) -> str:
+    missing = action.get("missing_resources") or {}
+    cost = action.get("cost") or {}
+    parts: List[str] = []
+    for key, label in RESOURCE_NAMES.items():
+        missed = _as_float(missing.get(key))
+        if missed > 0:
+            parts.append(f"缺{label} {fmt_number(missed)}")
+        elif _as_float(cost.get(key)) > 0:
+            parts.append(f"{label} {fmt_number(cost.get(key))}")
+    return " ".join(parts)
+
+
+def _as_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _action_line(action: Dict[str, Any], width: int) -> str:
+    marker = "▸" if action.get("selected") else "·"
+    name = action.get("name") or f"#{action.get('element_id') or '?'}"
+    current = action.get("current_level")
+    target = action.get("target_level")
+    levels = f"{current}→{target}" if current is not None or target is not None else ""
+    text = f"  {marker} {name} {levels}".rstrip()
+    costs = _cost_text(action)
+    if costs:
+        text += f"  {costs}"
+    payback = action.get("payback_hours")
+    if payback is not None:
+        text += f"  回本 {payback}h"
+    affordable = action.get("affordable")
+    text += "  ✔" if affordable else "  ✖"
+    reason = action.get("reason")
+    if reason and not costs:
+        text += f"  {reason}"
+    return truncate(text, width)
+
+
+def _event_text(event: Dict[str, Any]) -> str:
+    kind = event.get("kind") or "?"
+    label = EVENT_NAMES.get(kind, kind)
+    if kind == "research_completed":
+        return f"{label} #{event.get('element_id')} {event.get('from')}→{event.get('to')}"
+    if kind in {"queue_item_finished", "queue_item_added"}:
+        queue = QUEUE_NAMES.get(event.get("queue"), event.get("queue") or "")
+        detail = f"{queue} #{event.get('element_id')}"
+        if event.get("target_level") is not None:
+            detail += f" →{event.get('target_level')}"
+        return f"{label} {detail}"
+    if kind == "message_new":
+        return f"{label} {event.get('name') or event.get('category') or ''}".rstrip()
+    if kind == "message_check_failed":
+        return f"{label} {event.get('error') or ''}".rstrip()
+    return label
+
+
+def _log_style(entry: Dict[str, Any]) -> str:
+    kind = entry.get("kind")
+    status = entry.get("status")
+    if kind in {"error", "expedition_error"}:
+        return "error"
+    if status == "error":
+        return "error"
+    if status == "paused":
+        return "warn"
+    if status == "skipped":
+        return "muted"
+    if status in {"executed", "dry_run"}:
+        return "ok"
+    return "normal"
+
+
+def _log_text(entry: Dict[str, Any]) -> str:
+    kind = entry.get("kind")
+    if kind == "error":
+        return f"error  {entry.get('error') or ''}"
+    if kind == "expedition_error":
+        return f"探险 error  {entry.get('error') or ''}"
+    if kind == "expedition":
+        status = STATUS_NAMES.get(str(entry.get("status")), entry.get("status") or "?")
+        return f"探险 {status}  {entry.get('reason') or ''}"
+    status = STATUS_NAMES.get(str(entry.get("status")), entry.get("status") or "?")
+    action = (entry.get("action") or {}).get("name") or "-"
+    return f"{status}  {action}  {entry.get('reason') or ''}"
+
+
+def _log_groups(
+    entries: List[Dict[str, Any]],
+) -> List[Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
+    """Group consecutive identical cycles so a stable plan does not flood the log."""
+
+    groups: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
+    for entry in entries:
+        action = (entry.get("action") or {}).get("name")
+        signature = (
+            entry.get("kind"),
+            entry.get("status"),
+            action,
+            entry.get("reason"),
+            entry.get("error"),
+        )
+        if groups and groups[-1][0] == signature:
+            groups[-1][1].append(entry)
+        else:
+            groups.append((signature, [entry]))
+    return [(items[-1], items) for _, items in groups]
+
+
+def render_lines(
+    state: DashboardState, *, width: int = 110, log_lines: int = 8, event_lines: int = 4
+) -> List[FrameLine]:
+    """Render the dashboard as styled lines (``--once`` prints their text)."""
+
+    width = max(40, width)
+    lines: List[FrameLine] = []
+
+    def add(text: str, style: str = "normal", entry: Optional[Dict[str, Any]] = None) -> None:
+        lines.append(FrameLine(truncate(text, width), style, entry))
+
     cycle = state.last_cycle or {}
-    mode = cycle.get("mode") or "-"
-    lines.append(
-        truncate(f"数据 {fmt_age(age)} · {daemon} · 模式 {mode}", width)
-    )
-    lines.append(_rule(width))
+    snapshot = state.snapshot
 
-    if not state.snapshot:
-        lines.append("尚无快照：先运行 scripts/collect_state.py 或 scripts/run_forever.py")
-        return [truncate(line, width).rstrip() for line in lines]
+    if snapshot:
+        add(_account_line(snapshot, width), "title")
+    else:
+        add("New-Star 看板", "title")
 
-    lines.extend(_resource_rows(state.snapshot, width))
-    lines.append(_rule(width))
+    level, health = _health(state)
+    add(health, level)
+    add(_rule(width), "muted")
+
+    if snapshot:
+        for row in _resource_rows(snapshot, width):
+            add(row)
+        add("* 仓容字段与资源量不一致，仅供参考；产能为页面值", "muted")
+    else:
+        add("尚无快照：先运行 scripts/collect_state.py 或 scripts/run_forever.py", "warn")
+    add(_rule(width), "muted")
+
+    add("队列", "section")
+    items = state.queue_items
+    if items:
+        for kind in ("building", "research", "shipyard"):
+            add(_queue_line(kind, items.get(kind) or [], width))
+    else:
+        queues = cycle.get("queues") or {}
+        if queues:
+            summary = " ".join(
+                f"{QUEUE_NAMES.get(key, key)} {value}" for key, value in queues.items()
+            )
+            add(f"  队列计数  {summary}（无明细）", "muted")
+        else:
+            add("  队列数据缺失", "muted")
 
     phase_key = cycle.get("phase") or "-"
-    phase = f"{PHASE_NAMES.get(phase_key, phase_key)}（{phase_key}）"
+    phase_name = PHASE_NAMES.get(phase_key, phase_key)
     goal = cycle.get("goal") or "-"
-    slots = ((state.snapshot.get("research") or {}).get("expedition_slots"))
-    slot_text = f"    探险航道 {slots}" if slots is not None else ""
-    lines.append(truncate(f"阶段  {phase}    目标  {goal}{slot_text}", width))
+    research = (snapshot or {}).get("research") or {}
+    slots = research.get("expedition_slots")
+    add(f"阶段  {phase_name}（{phase_key}）   目标  {goal}", "normal")
 
-    if cycle:
-        action = (cycle.get("action") or {}).get("name") or "-"
-        queues = cycle.get("queues") or {}
-        queue_text = " ".join(
-            f"{QUEUE_NAMES.get(key, key)}{value}" for key, value in queues.items()
-        )
-        lines.append(
-            truncate(
-                f"上轮  {fmt_time(cycle.get('at'))}  {cycle.get('status')}: {action}"
-                f"  ·  队列 {queue_text}  ·  {cycle.get('reason')}",
-                width,
-            )
-        )
+    plan = state.plan_top
+    if plan:
+        add("候选", "section")
+        for action in plan[:5]:
+            style = "selected" if action.get("selected") else "normal"
+            add(_action_line(action, width), style)
+    elif cycle:
+        add("候选  无（本轮未产出计划）", "muted")
 
     notes = cycle.get("notes") or []
     for note in notes[:2]:
-        lines.append(truncate(f"备注  {note}", width))
+        add(f"备注  {note}", "muted")
+    add(_rule(width), "muted")
 
-    lines.append(_rule(width))
+    add("探险", "section")
+    tech = research.get("expedition_tech")
+    if slots is not None:
+        add(f"  技术 {tech if tech is not None else '-'} · 航道 {slots}")
+    else:
+        add("  暂无探险数据", "muted")
+    fleets = (snapshot or {}).get("fleets") or []
+    if fleets:
+        for fleet in fleets[:3]:
+            mission = fleet.get("mission") or "舰队"
+            target = fleet.get("target") or "-"
+            arrival = fleet.get("arrival_time") or "-"
+            state_name = "返航" if fleet.get("returning") else "前往"
+            add(f"  {mission} {state_name} {target} · 到达 {arrival}")
+    else:
+        add("  舰队  无在途", "muted")
+    expedition = state.last_expedition
+    if expedition:
+        status = STATUS_NAMES.get(str(expedition.get("status")), expedition.get("status") or "?")
+        add(f"  上次调度 {status}  {expedition.get('reason') or ''}")
+    else:
+        add("  上次调度  无（需 --expedition --execute）", "muted")
+
+    messages = state.messages
+    if messages:
+        categories = messages.get("categories") or []
+        if not categories:
+            categories = messages.get("counters") or []
+        categories = [
+            item
+            for item in categories
+            if int(item.get("category") or 0) not in (100, 999)
+            and int(item.get("unread") or 0) > 0
+        ]
+        detail = "、".join(
+            f"{item.get('name') or item.get('category')} {item.get('unread')}"
+            for item in categories[:4]
+        )
+        line = f"消息  未读 {messages.get('unread', 0)}"
+        if detail:
+            line += f"（{detail}）"
+        line += f" · 收件箱 {messages.get('total', '-')} · 发件箱 {messages.get('outbox', '-')}"
+        add(line)
+    add(_rule(width), "muted")
 
     alerts = state.alerts[-event_lines:]
+    add("告警", "section")
     if alerts:
-        lines.append("告警")
         for alert in alerts:
-            lines.append(
-                truncate(f"  {fmt_time(alert.get('at'))}  ALERT  {alert.get('message', '')}", width)
-            )
+            message = alert.get("message") or ""
+            add(f"  {fmt_time(alert.get('at'), now=state.now)}  ALERT  {message}", "alert")
+    else:
+        add("  无", "muted")
 
     events = state.events[-event_lines:]
     if events:
-        lines.append("事件")
+        add("事件", "section")
         for event in events:
-            detail = event.get("name") or event.get("queue") or event.get("resource") or ""
-            lines.append(
-                truncate(
-                    f"  {fmt_time(event.get('at'))}  {event.get('kind')}  "
-                    f"{event.get('severity', '')}  {detail}",
-                    width,
-                )
+            severity = str(event.get("severity") or "info")
+            style = "warn" if severity in {"warning", "notice"} else "normal"
+            if severity == "error":
+                style = "error"
+            add(
+                f"  {fmt_time(event.get('at'), now=state.now)}  {_event_text(event)}",
+                style,
             )
 
-    lines.append("日志")
-    for entry in state.journal[-log_lines:]:
-        if entry.get("kind") == "error":
-            text = f"error  {entry.get('error', '')}"
-        else:
-            action = (entry.get("action") or {}).get("name") or "-"
-            text = f"{entry.get('status', '?'):<8} {action}  {entry.get('reason', '')}"
-        lines.append(truncate(f"  {fmt_time(entry.get('at'))}  {text}", width))
+    add("日志", "section")
+    entries = state.journal[-log_lines:]
+    if entries:
+        for entry, group in _log_groups(entries):
+            text = f"  {fmt_time(entry.get('at'), now=state.now)}  {_log_text(entry)}"
+            if len(group) > 1:
+                first = fmt_time(group[0].get("at"), now=state.now)
+                last = fmt_time(entry.get("at"), now=state.now)
+                span = f"{first}→{last}" if first != last else last
+                text += f"  ×{len(group)}（{span}）"
+            add(text, _log_style(entry), entry)
+    else:
+        add("  无", "muted")
 
-    return [truncate(line, width).rstrip() for line in lines]
+    return lines
+
+
+def render_text(
+    state: DashboardState, *, width: int = 110, log_lines: int = 8, event_lines: int = 4
+) -> List[str]:
+    """Plain-text frame for ``--once``, logs and golden tests."""
+
+    return [
+        line.text.rstrip()
+        for line in render_lines(
+            state, width=width, log_lines=log_lines, event_lines=event_lines
+        )
+    ]

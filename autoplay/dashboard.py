@@ -10,6 +10,9 @@ Data comes from the files the daemon already writes:
 * ``state/snapshots.jsonl`` -- full account state (every N cycles)
 * ``state/journal.jsonl``   -- one line per cycle (action, queues, alerts)
 * ``state/events.jsonl``    -- diffed events (on snapshot cadence)
+* ``state/statistics.json`` -- leaderboard snapshot for the second tab
+* ``state/messages.json``   -- inbox cache for the third tab
+* ``state/battles.json``    -- battle hall snapshot for the fourth tab
 * ``state/daemon.lock``     -- pid of a running loop (fallback for old runs)
 * ``state/STOP``            -- kill switch requested by the operator
 
@@ -25,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urljoin
 
 TAIL_BYTES = 512 * 1024
 DEFAULT_INTERVAL = 60.0
@@ -41,6 +45,8 @@ PHASE_NAMES = {
 
 STATISTICS_WHO = {1: "玩家", 2: "联盟"}
 STATISTICS_SORT = {1: "积分", 2: "舰队", 3: "研究", 4: "建筑", 5: "防御"}
+
+BATTLE_ORDER_NAMES = {"units": "单位积分", "date": "日期"}
 
 STATUS_NAMES = {
     "executed": "已执行",
@@ -77,6 +83,7 @@ class DashboardState:
     events: List[Dict[str, Any]] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
     message_log: Dict[str, Any] = field(default_factory=dict)
+    battle_log: Dict[str, Any] = field(default_factory=dict)
     daemon: Dict[str, Any] = field(default_factory=dict)
     daemon_pid: Optional[int] = None
     daemon_lock_age: Optional[float] = None
@@ -333,6 +340,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
     events = _read_recent(state_dir / "events.jsonl", 80)
     statistics = _read_json(state_dir / "statistics.json")
     message_log = _read_json(state_dir / "messages.json")
+    battle_log = _read_json(state_dir / "battles.json")
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
@@ -359,6 +367,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         events=events,
         statistics=statistics,
         message_log=message_log,
+        battle_log=battle_log,
         daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
@@ -452,6 +461,36 @@ def fmt_message_time(
     if local.date() == reference.date():
         return local.strftime("%H:%M:%S")
     return local.strftime("%m-%d %H:%M")
+
+
+def fmt_battle_time(
+    row: Dict[str, Any], *, now: Optional[datetime] = None
+) -> str:
+    """Format a battle-hall timestamp.
+
+    The hall renders the viewer's wall clock without an offset, so a naive
+    value must not be treated as UTC.  The hall is historical, so the date is
+    always shown: same-year battles use ``MM-DD HH:MM`` and older ones use
+    ``YYYY-MM-DD``.
+    """
+
+    raw = row.get("time")
+    parsed: Optional[datetime] = None
+    if raw:
+        try:
+            parsed = datetime.fromisoformat(str(raw))
+        except ValueError:
+            parsed = None
+    if parsed is None:
+        return str(row.get("date") or "-")
+    if parsed.tzinfo is None:
+        local = parsed
+    else:
+        local = parsed.astimezone()
+    reference = (now or datetime.now(timezone.utc)).astimezone()
+    if local.year == reference.year:
+        return local.strftime("%m-%d %H:%M")
+    return local.strftime("%Y-%m-%d")
 
 
 def fmt_age(seconds: Optional[float]) -> str:
@@ -1152,6 +1191,199 @@ def render_messages_text(
         line.text.rstrip()
         for line in render_messages_lines(state, width=width, selected=selected)
     ]
+
+
+def _battle_has_player(row: Dict[str, Any], username: str) -> bool:
+    if not username:
+        return False
+    for side in ("attacker", "defender"):
+        names = [name.strip() for name in str(row.get(side) or "").split(" & ")]
+        if username in names:
+            return True
+    return False
+
+
+def _battle_participants_text(row: Dict[str, Any]) -> str:
+    attacker = str(row.get("attacker") or "?")
+    defender = str(row.get("defender") or "?")
+    result = str(row.get("result") or "").lower()
+    if result == "a":
+        return f"✔ {attacker} VS ✘ {defender}"
+    if result == "r":
+        return f"✘ {attacker} VS ✔ {defender}"
+    return f"{attacker} VS {defender}"
+
+
+def render_battles_lines(
+    state: DashboardState,
+    *,
+    order: str = "units",
+    sort: str = "desc",
+    width: int = 110,
+    selected: int = 0,
+) -> List[FrameLine]:
+    """Render the battle-hall tab from the daemon's snapshot."""
+
+    width = max(40, width)
+    lines: List[FrameLine] = []
+
+    def add(text: str, style: str = "normal") -> None:
+        lines.append(FrameLine(truncate(text, width), style))
+
+    payload = state.battle_log or {}
+    label = BATTLE_ORDER_NAMES.get(order, order)
+    add(f"战役 · 名人堂 · {label}榜", "title")
+    if not payload:
+        add("尚无战役数据：守护首轮会采集（--battles-every，默认 120 轮）", "warn")
+        add("命令示例：run_forever --no-verify-ssl --battles-every 120", "muted")
+        return lines
+
+    captured = _parse_time(payload.get("captured_at"))
+    age = (
+        fmt_age(max(0.0, (state.now - captured).total_seconds()))
+        if captured is not None
+        else "-"
+    )
+    source = payload.get("source") or "game.php?page=battleHall"
+    add(f"来源 {source} · 快照 {age}", "muted")
+    add(_rule(width), "muted")
+
+    errors = payload.get("errors") or []
+    if errors:
+        add("采集错误", "section")
+        for error in errors[:3]:
+            add(f"  {error.get('board')}: {error.get('error')}", "warn")
+
+    board = (payload.get("boards") or {}).get(f"{order}:{sort}")
+    if not isinstance(board, dict):
+        available = ", ".join(sorted((payload.get("boards") or {}).keys())) or "无"
+        add(f"这个排序还没有采集到（已采集：{available}）", "warn")
+        add("守护每 --battles-every 轮重试一次。", "muted")
+        return lines
+
+    rows = [row for row in (board.get("rows") or []) if isinstance(row, dict)]
+    if not rows:
+        add("（榜上暂无战役）", "muted")
+        return lines
+
+    account = (state.snapshot or {}).get("account") or {}
+    me = account.get("username") or ""
+    mine = sum(1 for row in rows if _battle_has_player(row, me))
+    summary = f"{len(rows)} 场"
+    if me:
+        summary += f" · ★ 我的战役 {mine} 场"
+    summary += " · ✔ 胜者 · ✘ 败者"
+    add(summary, "muted")
+
+    selected = max(0, min(int(selected), len(rows) - 1))
+    header = (
+        f"  {pad('排名', 6)}{pad('参战方', 40)}"
+        f"{pad('日期', 12)}{pad('单位积分', 10)}"
+    )
+    add(header, "section")
+
+    for index, row in enumerate(rows):
+        mine_row = _battle_has_player(row, me)
+        marker = "▸ " if index == selected else ("★ " if mine_row else "  ")
+        text = (
+            f"{marker}{pad(str(row.get('rank') or index + 1), 6)}"
+            f"{pad(_battle_participants_text(row), 40)}"
+            f"{pad(fmt_battle_time(row, now=state.now), 12)}"
+            f"{pad(fmt_number(row.get('units')), 10)}"
+        )
+        if index == selected:
+            style = "selected"
+        elif mine_row:
+            style = "ok"
+        else:
+            style = "normal"
+        add(text, style)
+
+    return lines
+
+
+def battle_rows(payload: Dict[str, Any], order: str, sort: str) -> List[Dict[str, Any]]:
+    """Return the battle rows of one collected ordering (possibly empty)."""
+
+    board = (payload.get("boards") or {}).get(f"{order}:{sort}")
+    if not isinstance(board, dict):
+        return []
+    return [row for row in (board.get("rows") or []) if isinstance(row, dict)]
+
+
+def render_battle_detail(
+    row: Dict[str, Any], *, base_url: str = "", width: int = 110
+) -> List[str]:
+    """Render one battle-hall entry with its report link."""
+
+    width = max(40, width)
+    attacker = str(row.get("attacker") or "?")
+    defender = str(row.get("defender") or "?")
+    result = str(row.get("result") or "").lower()
+    lines = [truncate(f"{pad('参战方', 10)}{attacker} VS {defender}", width)]
+    if result == "a":
+        lines.append(truncate(f"{pad('胜者', 10)}{attacker}", width))
+        lines.append(truncate(f"{pad('败者', 10)}{defender}", width))
+    elif result == "r":
+        lines.append(truncate(f"{pad('胜者', 10)}{defender}", width))
+        lines.append(truncate(f"{pad('败者', 10)}{attacker}", width))
+    else:
+        lines.append(truncate(f"{pad('结果', 10)}未知（页面未标注胜者）", width))
+
+    units = fmt_number(row.get("units"))
+    lines.append(truncate(f"{pad('单位积分', 10)}{units}", width))
+    date = str(row.get("date") or "").strip()
+    if date:
+        lines.append(truncate(f"{pad('日期', 10)}{date}", width))
+
+    report_id = str(row.get("report_id") or "").strip()
+    if report_id:
+        path = f"game.php?page=raport&mode=battlehall&raport={report_id}"
+        url = urljoin(base_url, path) if base_url else path
+        lines.append(pad("报告", 10))
+        lines.extend(truncate(part, width) for part in wrap_text(url, width))
+    return lines
+
+
+def render_battles_text(
+    state: DashboardState,
+    *,
+    order: str = "units",
+    sort: str = "desc",
+    width: int = 110,
+    selected: int = 0,
+) -> List[str]:
+    return [
+        line.text.rstrip()
+        for line in render_battles_lines(
+            state, order=order, sort=sort, width=width, selected=selected
+        )
+    ]
+
+
+def render_battle_text(
+    state: DashboardState,
+    *,
+    order: str = "units",
+    sort: str = "desc",
+    index: int = 0,
+    width: int = 110,
+) -> List[str]:
+    """Plain-text frame for one battle; falls back to the list without data."""
+
+    payload = state.battle_log or {}
+    rows = battle_rows(payload, order, sort)
+    if not rows:
+        return render_battles_text(state, order=order, sort=sort, width=width)
+    index = max(0, min(int(index), len(rows) - 1))
+    row = rows[index]
+    header = (
+        f"战役 · 第 {row.get('rank') or index + 1} 名"
+        f" · {row.get('date') or fmt_battle_time(row, now=state.now)}"
+    )
+    return [truncate(header, width)] + render_battle_detail(
+        row, base_url=str(payload.get("base_url") or ""), width=width
+    )
 
 
 def render_text(

@@ -2,11 +2,15 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from autoplay.dashboard import (
+    fmt_battle_time,
     fmt_message_time,
     fmt_number,
     fmt_seconds,
     load_state,
     pad,
+    render_battle_detail,
+    render_battle_text,
+    render_battles_text,
     render_lines,
     render_message_body,
     render_messages_text,
@@ -163,6 +167,7 @@ def _state_dir(
     events=None,
     statistics=None,
     messages_log=None,
+    battles=None,
     stop=False,
 ):
     if snapshot:
@@ -193,6 +198,10 @@ def _state_dir(
     if messages_log is not None:
         (tmp_path / "messages.json").write_text(
             json.dumps(messages_log, ensure_ascii=False), encoding="utf-8"
+        )
+    if battles is not None:
+        (tmp_path / "battles.json").write_text(
+            json.dumps(battles, ensure_ascii=False), encoding="utf-8"
         )
     if stop:
         (tmp_path / "STOP").write_text("", encoding="utf-8")
@@ -565,3 +574,136 @@ def test_stopped_daemon_does_not_claim_next_cycle_exit(tmp_path):
     assert "守护已停止" in health
     assert "下一轮退出" not in health
     assert "state/STOP 仍在" in health
+
+
+def _battle_log():
+    first = {
+        "rank": 1,
+        "attacker": "AttackerA",
+        "defender": "DefenderB",
+        "result": "r",
+        "winner": "DefenderB",
+        "loser": "AttackerA",
+        "date": "2026年11月13日, 07:14:37",
+        "time": "2026-11-13T07:14:37",
+        "units": 581_500,
+        "report_id": "c342df899f9cf23f2e453f86b824e280",
+    }
+    mine = {
+        "rank": 2,
+        "attacker": "TestUser",
+        "defender": "玩家二",
+        "result": "a",
+        "winner": "TestUser",
+        "loser": "玩家二",
+        "date": "2026年11月12日, 18:00:00",
+        "time": "2026-11-12T18:00:00",
+        "units": 0,
+        "report_id": "deadbeef",
+    }
+    draw = {
+        "rank": 3,
+        "attacker": "AttackerC",
+        "defender": "DefenderD",
+        "result": "",
+        "winner": "",
+        "loser": "",
+        "date": "2026年10月17日, 21:34:08",
+        "time": "2026-10-17T21:34:08",
+        "units": 0,
+        "report_id": "abc",
+    }
+    def ranked(rows):
+        return [{**row, "rank": index + 1} for index, row in enumerate(rows)]
+
+    return {
+        "schema": 1,
+        "captured_at": "2026-11-13T09:00:30+00:00",
+        "source": "game.php?page=battleHall",
+        "base_url": "https://example.test/",
+        "boards": {
+            "units:desc": {
+                "order": "units",
+                "sort": "desc",
+                "rows": ranked([first, mine, draw]),
+            },
+            "date:desc": {
+                "order": "date",
+                "sort": "desc",
+                "rows": ranked([mine, first, draw]),
+            },
+        },
+        "errors": [],
+    }
+
+
+def test_battle_tab_units(tmp_path):
+    state = load_state(_state_dir(tmp_path, battles=_battle_log()), now=NOW)
+    text = "\n".join(render_battles_text(state, order="units", width=100))
+
+    assert "战役 · 名人堂 · 单位积分榜" in text
+    assert "3 场 · ★ 我的战役 1 场" in text
+    assert "✔ 胜者 · ✘ 败者" in text
+    assert "✘ AttackerA VS ✔ DefenderB" in text
+    assert "581.50K" in text
+    assert "11-13 07:14" in text
+    assert "★ " in text  # own battle
+    assert "▸ 1" in text  # selected cursor
+
+
+def test_battle_tab_date_ordering(tmp_path):
+    state = load_state(_state_dir(tmp_path, battles=_battle_log()), now=NOW)
+    text = "\n".join(render_battles_text(state, order="date", width=100))
+    assert "战役 · 名人堂 · 日期榜" in text
+    selected = next(line for line in text.splitlines() if line.startswith("▸"))
+    assert "TestUser" in selected
+
+
+def test_battle_tab_selection_and_missing_board(tmp_path):
+    state = load_state(_state_dir(tmp_path, battles=_battle_log()), now=NOW)
+    text = "\n".join(render_battles_text(state, order="units", width=100, selected=2))
+    assert "▸ 3" in text
+
+    payload = _battle_log()
+    payload["boards"].pop("date:desc")
+    state = load_state(_state_dir(tmp_path, battles=payload), now=NOW)
+    text = "\n".join(render_battles_text(state, order="date", width=100))
+    assert "这个排序还没有采集到" in text
+
+
+def test_battle_tab_missing_data(tmp_path):
+    state = load_state(_state_dir(tmp_path), now=NOW)
+    text = "\n".join(render_battles_text(state, width=100))
+    assert "尚无战役数据" in text
+
+
+def test_battle_tab_shows_collection_errors(tmp_path):
+    payload = _battle_log()
+    payload["errors"] = [{"board": "date:desc", "error": "TransportError: timed out"}]
+    state = load_state(_state_dir(tmp_path, battles=payload), now=NOW)
+    text = "\n".join(render_battles_text(state, width=100))
+    assert "采集错误" in text
+    assert "date:desc" in text and "timed out" in text
+
+
+def test_battle_detail_links_report(tmp_path):
+    state = load_state(_state_dir(tmp_path, battles=_battle_log()), now=NOW)
+    text = "\n".join(render_battle_text(state, order="units", index=0, width=100))
+    assert "战役 · 第 1 名" in text
+    assert "胜者" in text and "DefenderB" in text
+    assert "https://example.test/game.php?page=raport" in text
+    assert "raport=c342df899f9cf23f2e453f86b824e280" in text
+
+    row = _battle_log()["boards"]["units:desc"]["rows"][2]
+    detail = "\n".join(render_battle_detail(row, base_url="", width=100))
+    assert "未知（页面未标注胜者）" in detail
+    assert "game.php?page=raport&mode=battlehall&raport=abc" in detail
+
+
+def test_battle_time_keeps_server_wall_clock():
+    now = datetime(2026, 11, 14, 9, 0, tzinfo=timezone.utc)
+    assert fmt_battle_time({"time": "2026-11-14T16:40:29"}, now=now) == "11-14 16:40"
+    assert fmt_battle_time({"time": "2025-12-31T23:59:00"}, now=now) == "2025-12-31"
+    assert fmt_battle_time({"date": "2026年11月14日, 16:40:29"}, now=now) == (
+        "2026年11月14日, 16:40:29"
+    )

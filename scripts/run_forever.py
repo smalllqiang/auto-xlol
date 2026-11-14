@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from local_config import load_config
 
+from autoplay.battles import collect_battles, write_battles
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
@@ -137,6 +138,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--messages-category",
         default="all",
         help="message category to collect (default: all)",
+    )
+    parser.add_argument(
+        "--battles-every",
+        type=int,
+        default=120,
+        help="collect the battle hall every N cycles (0 disables, default: 120)",
+    )
+    parser.add_argument(
+        "--battles-file",
+        default="state/battles.json",
+        help="battle hall snapshot for the TUI (default: state/battles.json)",
     )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
@@ -326,6 +338,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     events_path = Path(args.events)
     statistics_path = Path(args.statistics_file)
     messages_path = Path(args.messages_file)
+    battles_path = Path(args.battles_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     failures = 0
@@ -505,6 +518,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     except OSError as exc:
                         print(
                             f"    messages write failed: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+
+                if args.battles_every and (
+                    cycles == 1 or cycles % args.battles_every == 0
+                ):
+                    try:
+                        battles_payload = collect_battles(client)
+                    except NewStarError as exc:
+                        battles_payload = {
+                            "schema": 1,
+                            "captured_at": now,
+                            "source": "game.php?page=battleHall",
+                            "boards": {},
+                            "errors": [
+                                {
+                                    "board": "all",
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                }
+                            ],
+                        }
+                    try:
+                        write_battles(battles_path, battles_payload)
+                        print(
+                            "    battles written "
+                            f"({len(battles_payload.get('boards') or {})} boards, "
+                            f"{len(battles_payload.get('errors') or [])} errors)",
+                            flush=True,
+                        )
+                    except OSError as exc:
+                        print(
+                            f"    battles write failed: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )

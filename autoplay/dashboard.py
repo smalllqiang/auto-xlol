@@ -154,27 +154,46 @@ class DashboardState:
     @property
     def messages(self) -> Dict[str, Any]:
         cycle = self.last_cycle or {}
-        messages = cycle.get("messages")
-        if isinstance(messages, dict) and messages:
-            return messages
-        if self.snapshot:
-            value = self.snapshot.get("messages")
-            if isinstance(value, dict):
-                return value
-        return {}
+        cycle_messages = cycle.get("messages")
+        snapshot_messages = (self.snapshot or {}).get("messages")
+        cycle_at = _parse_time(cycle.get("at"))
+        snapshot_at = _parse_time((self.snapshot or {}).get("captured_at"))
+        if (
+            isinstance(snapshot_messages, dict)
+            and snapshot_messages
+            and snapshot_at is not None
+            and cycle_at is not None
+            and snapshot_at > cycle_at
+        ):
+            return snapshot_messages
+        if isinstance(cycle_messages, dict) and cycle_messages:
+            return cycle_messages
+        return snapshot_messages if isinstance(snapshot_messages, dict) else {}
 
     @property
     def queue_items(self) -> Dict[str, List[Dict[str, Any]]]:
-        items: Dict[str, List[Dict[str, Any]]] = {}
-        if self.snapshot:
-            queues = self.snapshot.get("queues") or {}
-            for key, value in queues.items():
-                if isinstance(value, list):
-                    items[key] = list(value)
         cycle = self.last_cycle or {}
         cycle_items = cycle.get("queue_items") or {}
+        snapshot_queues = (self.snapshot or {}).get("queues")
+        cycle_at = _parse_time(cycle.get("at"))
+        snapshot_at = _parse_time((self.snapshot or {}).get("captured_at"))
+
+        # The snapshot is written after the cycle; prefer it when it is newer
+        # (a queue may have finished in between).  With --snapshot-every > 1
+        # the per-cycle items are fresher, so fall back to them.
+        use_snapshot = isinstance(snapshot_queues, dict) and (
+            snapshot_at is None
+            or cycle_at is None
+            or snapshot_at >= cycle_at
+        )
+        items: Dict[str, List[Dict[str, Any]]] = {}
+        if use_snapshot:
+            for key, value in snapshot_queues.items():
+                if isinstance(value, list):
+                    items[key] = list(value)
+            return items
         for key, value in cycle_items.items():
-            if value:
+            if isinstance(value, list) and value:
                 items[key] = list(value)
         return items
 
@@ -524,7 +543,7 @@ def _health(state: DashboardState) -> Tuple[str, str]:
         next_at = _parse_time(status.get("next_cycle_at"))
         if next_at is not None:
             remaining = (next_at - state.now).total_seconds()
-            parts.append("即将开始" if remaining <= 0 else f"下轮 {fmt_seconds(remaining)}")
+            parts.append("即将开始" if remaining <= 1 else f"下轮 {fmt_seconds(remaining)}")
 
     if failures:
         parts.append(f"连续失败 {failures}/{max_failures}")
@@ -711,7 +730,16 @@ def render_lines(
     if snapshot:
         for row in _resource_rows(snapshot, width):
             add(row)
-        add("* 仓容字段与资源量不一致，仅供参考；产能为页面值", "muted")
+        snapshot_at = _parse_time(snapshot.get("captured_at"))
+        snapshot_age = (
+            fmt_age(max(0.0, (state.now - snapshot_at).total_seconds()))
+            if snapshot_at is not None
+            else "-"
+        )
+        add(
+            f"* 仓容字段与资源量不一致，仅供参考；产能为页面值；快照 {snapshot_age}",
+            "muted",
+        )
     else:
         add("尚无快照：先运行 scripts/collect_state.py 或 scripts/run_forever.py", "warn")
     add(_rule(width), "muted")

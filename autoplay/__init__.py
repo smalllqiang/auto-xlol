@@ -16,6 +16,7 @@ from .expedition import (
     build_expedition_report,
     compute_expedition_report,
 )
+from .expedition_cycle import ExpeditionCycleResult, run_expedition_cycle
 from .expedition_executor import ExpeditionDispatchResult, dispatch_expedition
 from .phases import PHASES, Phase, detect_phase
 from .planner import Action, Plan, build_plan, compute_plan, expand_requirement_actions
@@ -24,6 +25,7 @@ from .ship_build import ShipBuildResult, build_recommended_ships
 __all__ = [
     "Action",
     "ExecutionResult",
+    "ExpeditionCycleResult",
     "ExpeditionDispatchResult",
     "ExpeditionGroup",
     "ExpeditionReport",
@@ -39,6 +41,7 @@ __all__ = [
     "compute_plan",
     "detect_phase",
     "dispatch_expedition",
+    "run_expedition_cycle",
     "equivalent_cost",
     "execute_plan",
     "expand_requirement_actions",

@@ -706,3 +706,27 @@ allow-list、dry-run 和燃料校验。
 - 不自动等待队列、不自动连续建造；一次调用一次 `build_ships`。
 
 输出包含推荐舰船、单舰积分、目标缺口、建议数量、前置条件和执行结果。当前实例用 `--ship 202` 强制小船是为了验证执行链路，不是对舰船选择的最终策略。
+
+## 19. 多航道探险循环
+
+`scripts/expedition_cycle.py` 在有多个空闲航道时逐队处理，但单轮有上限。默认只预览第一队：
+
+```bash
+# 预览当前第一队
+.venv/bin/python scripts/expedition_cycle.py --no-verify-ssl
+
+# 真实执行，最多 2 队；必须显式 allow-list
+.venv/bin/python scripts/expedition_cycle.py --no-verify-ssl \
+  --execute --allow 202 --max-dispatch 2
+```
+
+行为：
+
+- 每次发送前重新读取探险报告，因为发完一队后空闲航道和可用舰船都会变化；
+- 每轮只取当前第 1 支编队；
+- `--max-dispatch` 默认 1，限制单轮最多发送几队；
+- 遇到没有空闲航道、没有可派遣编队、编队含未允许舰船或发送失败时停止；
+- `state/STOP` 存在时拒绝执行；
+- 不自动造舰、不自动召回。
+
+先预览、再小批量执行，是多航道场景的推荐用法。

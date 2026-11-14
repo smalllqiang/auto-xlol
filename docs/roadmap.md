@@ -58,13 +58,13 @@
 
 | # | 任务 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| P2-1 | 探险阶段规划 | 🔧 | 只读规划、单队预览/发送、单次造舰已支持；多队循环和自动造舰闭环待做 |
+| P2-1 | 探险阶段规划 | 🔧 | 只读规划、单队预览/发送、单次造舰、有上限的多航道循环已支持；自动造舰闭环待做 |
 | P2-2 | 舰队与威胁响应 | ⬜ | 被侦察/来袭时收缩或转移；需要消息与舰队状态联动 |
 | P2-3 | 多星球调度 | ⬜ | 依赖 `control` 全局面板解析（见待核实） |
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
 | P2-5 | 影子模式评估 | ⬜ | 记录「AI 建议 vs 实际执行」，用数据决定是否采纳 |
 
-P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2。多队循环和自动造舰闭环尚未接入。
+P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动造舰闭环尚未接入。
 
 ## 待核实 / 技术债
 

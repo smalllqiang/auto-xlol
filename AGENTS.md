@@ -21,7 +21,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/executor.py`（执行）、
-`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）。
+`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）。
 
 ## 环境与命令
 
@@ -47,6 +47,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/expedition.py --no-verify-ssl     # 探险只读报告
 .venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl  # 探险预览（--execute --allow 才发送）
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
+.venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```

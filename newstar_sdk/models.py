@@ -523,3 +523,55 @@ class ProductionReport:
             return self.ratios.get(resolve_element(element, "building"), default)
         except (KeyError, ValueError):
             return default
+
+
+@dataclass
+class StatisticsRow:
+    """One row of a leaderboard page."""
+
+    rank: int
+    name: str
+    score: int
+    player_id: Optional[int] = None
+    alliance: Optional[str] = None
+    alliance_id: Optional[int] = None
+    tags: List[str] = field(default_factory=list)
+    status: str = ""
+    members: Optional[int] = None
+    member_score: int = 0
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "rank": self.rank,
+            "name": self.name,
+            "score": self.score,
+            "player_id": self.player_id,
+            "alliance": self.alliance,
+            "alliance_id": self.alliance_id,
+            "tags": list(self.tags),
+            "status": self.status,
+            "members": self.members,
+            "member_score": self.member_score,
+        }
+
+
+@dataclass
+class StatisticsBoard:
+    """A parsed ``page=statistics`` ranking table.
+
+    ``who``/``sort`` mirror the page's selects: 1=players, 2=alliances;
+    sort 1=score, 2=fleet, 3=research, 4=buildings, 5=defense.
+    """
+
+    who: int = 1
+    sort: int = 1
+    range: int = 1
+    rows: List[StatisticsRow] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "who": self.who,
+            "sort": self.sort,
+            "range": self.range,
+            "rows": [row.as_dict() for row in self.rows],
+        }

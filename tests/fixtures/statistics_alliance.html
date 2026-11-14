@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><title>排行榜 - TEST - Test Universe</title></head>
+<body id="statistics">
+<form action="" id="stats" method="post" name="stats">
+  <table class="tablesorter ally_ranks">
+    <tr>
+      <td><select id="who" name="who" onchange="$('#stats').submit();">
+        <option value="1">玩家</option>
+        <option selected="selected" value="2">联盟</option>
+      </select></td>
+      <td><select id="type" name="type" onchange="$('#stats').submit();">
+        <option selected="selected" value="1">积分</option>
+      </select></td>
+      <td><select id="range" name="range" onchange="$('#stats').submit();">
+        <option selected="selected" value="1">1-100</option>
+      </select></td>
+    </tr>
+  </table>
+</form>
+<table class="tablesorter ally_ranks tabstatistica">
+  <tr class="barraclass">
+    <th colspan="2">排名</th><th>联盟</th><th>成员</th><th></th><th>积分</th><th>成员积分</th>
+  </tr>
+  <tr class="classificabarra">
+    <td class="classstat1" id="1">1</td>
+    <td class="classstat2"><span style="color:#87CEEB">*</span></td>
+    <td class="classstat3"><a class="fbox-s-name classstat5" href="game.php?page=alliance&amp;mode=info&amp;id=69"><span>ALLY-A</span></a></td>
+    <td class="classstat7">7</td>
+    <td class="classstat7"></td>
+    <td class="classstat8" style="text-align:right">605.351.710.849</td>
+    <td class="classstat10" style="text-align:right">86.478.815.835</td>
+  </tr>
+  <tr class="classificabarra">
+    <td class="classstat1" id="2">2</td>
+    <td class="classstat2"><span style="color:#87CEEB">*</span></td>
+    <td class="classstat3"><a class="fbox-s-name classstat5" href="game.php?page=alliance&amp;mode=info&amp;id=7"><span>ALLY-B</span></a></td>
+    <td class="classstat7">1</td>
+    <td class="classstat7"></td>
+    <td class="classstat8" style="text-align:right">90.598.656.243</td>
+    <td class="classstat10" style="text-align:right">90.598.656.243</td>
+  </tr>
+</table>
+</body>
+</html>

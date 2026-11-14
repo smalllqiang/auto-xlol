@@ -53,6 +53,8 @@ from .models import (
     ResourceProduction,
     Resources,
     ShipInfo,
+    StatisticsBoard,
+    StatisticsRow,
 )
 from .utils import (
     clean_text,
@@ -1290,3 +1292,143 @@ def parse_production(html: str) -> ProductionReport:
             continue
 
     return report
+
+
+_STATISTICS_PLAYERCARD_RE = re.compile(r"Playercard\s*\(\s*(\d+)", re.I)
+_STATISTICS_ALLIANCE_RE = re.compile(r"[?&]id=(\d+)")
+
+
+def _selected_int(soup: BeautifulSoup, name: str, default: int) -> int:
+    select = soup.find("select", attrs={"name": name})
+    if select is None:
+        return default
+    option = select.select_one("option[selected]") or select.find("option")
+    if option is None:
+        return default
+    try:
+        return int(str(option.get("value", default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _statistics_name(cell: Tag) -> str:
+    link = cell.select_one("a.fbox-s-name") or cell.find("a")
+    if link is not None:
+        for span in link.find_all("span", recursive=False):
+            classes = span.get("class") or []
+            if "classstat6" in classes:
+                continue
+            text = clean_text(span.get_text(" "))
+            if text:
+                return text
+        text = clean_text(link.get_text(" "))
+        if text:
+            return text
+    return clean_text(cell.get_text(" "))
+
+
+def _statistics_player_id(cell: Tag) -> Optional[int]:
+    link = cell.select_one("a.fbox-s-name") or cell.find("a")
+    if link is None:
+        return None
+    match = _STATISTICS_PLAYERCARD_RE.search(link.get("onclick", "") or "")
+    return int(match.group(1)) if match else None
+
+
+def parse_statistics(html: str) -> StatisticsBoard:
+    """Parse ``game.php?page=statistics`` (players or alliances).
+
+    The page is a form (who/type/range) plus a ``tabstatistica`` table.  Rows
+    carry stable ``classstatN`` cells; names live in ``a.fbox-s-name`` and
+    scores use dot-separated thousands, so digits are extracted explicitly.
+    """
+
+    soup = _soup(html)
+    who = _selected_int(soup, "who", 1)
+    sort = _selected_int(soup, "type", 1)
+    range_value = _selected_int(soup, "range", 1)
+
+    table = soup.select_one("table.tabstatistica")
+    if table is None:
+        candidates = [
+            item
+            for item in soup.select("table.tablesorter.ally_ranks")
+            if item.select("tr.classificabarra")
+        ]
+        table = candidates[-1] if candidates else None
+
+    rows: List[StatisticsRow] = []
+    if table is not None:
+        for index, tr in enumerate(table.select("tr.classificabarra"), start=1):
+            cells = tr.find_all("td")
+            if not cells:
+                continue
+            rank_cell = tr.select_one("td.classstat1") or cells[0]
+            rank_match = re.search(r"\d+", clean_text(rank_cell.get_text(" ")))
+            rank = int(rank_match.group(0)) if rank_match else index
+
+            name_cell = tr.select_one("td.classstat3") or (cells[1] if len(cells) > 1 else cells[0])
+            name = _statistics_name(name_cell)
+            if not name:
+                continue
+
+            status_node = name_cell.select_one(".galaxy-short, .galaxy-short-strong")
+            status = clean_text(status_node.get_text(" ")) if status_node else ""
+            tags = [
+                clean_text(img.get("data-tooltip-content") or img.get("title") or "")
+                for img in name_cell.select("img")
+            ]
+            tags = [tag for tag in tags if tag]
+
+            alliance = None
+            alliance_id = None
+            members = None
+            member_score = 0
+
+            if who == 2:
+                # Alliance table: 排名 / 联盟 / 成员 / 积分 / 成员积分.
+                members_cell = tr.select_one("td.classstat7")
+                if members_cell is not None:
+                    member_match = re.search(r"\d+", members_cell.get_text(" "))
+                    if member_match:
+                        members = int(member_match.group(0))
+                score_cell = tr.select_one("td.classstat8") or cells[-1]
+                member_score_cell = tr.select_one("td.classstat10")
+                if member_score_cell is not None:
+                    member_match = re.search(
+                        r"\d+", re.sub(r"[^\d]", "", member_score_cell.get_text(" "))
+                    )
+                    if member_match:
+                        member_score = int(member_match.group(0))
+            else:
+                ally_cell = tr.select_one("td.classstat8")
+                if ally_cell is not None:
+                    ally_link = ally_cell.find("a")
+                    ally_text = clean_text((ally_link or ally_cell).get_text(" "))
+                    if ally_text and ally_text not in {"-", "—"}:
+                        alliance = ally_text
+                    if ally_link is not None:
+                        match = _STATISTICS_ALLIANCE_RE.search(ally_link.get("href", "") or "")
+                        if match:
+                            alliance_id = int(match.group(1))
+                score_cell = tr.select_one("td.classstat10") or cells[-1]
+
+            score_match = re.search(r"\d+", re.sub(r"[^\d]", "", score_cell.get_text(" ")))
+            score = int(score_match.group(0)) if score_match else 0
+
+            rows.append(
+                StatisticsRow(
+                    rank=rank,
+                    name=name,
+                    score=score,
+                    player_id=_statistics_player_id(name_cell),
+                    alliance=alliance,
+                    alliance_id=alliance_id,
+                    tags=tags,
+                    status=status,
+                    members=members,
+                    member_score=member_score,
+                )
+            )
+
+    return StatisticsBoard(who=who, sort=sort, range=range_value, rows=rows)

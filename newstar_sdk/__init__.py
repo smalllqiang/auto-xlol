@@ -61,6 +61,8 @@ from .models import (
     Resources,
     ServerInfo,
     ShipInfo,
+    StatisticsBoard,
+    StatisticsRow,
 )
 
 __version__ = "0.1.0"
@@ -115,6 +117,8 @@ __all__ = [
     "ServerInfo",
     "SessionExpired",
     "ShipInfo",
+    "StatisticsBoard",
+    "StatisticsRow",
     "TECHNOLOGIES",
     "TransportError",
     "element_name",

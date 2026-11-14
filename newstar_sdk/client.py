@@ -58,6 +58,7 @@ from .models import (
     Resources,
     ServerInfo,
     ShipInfo,
+    StatisticsBoard,
 )
 from .parsers import (
     parse_bonuses,
@@ -79,6 +80,7 @@ from .parsers import (
     parse_research_queue,
     parse_ship_queue,
     parse_shipyard,
+    parse_statistics,
 )
 from .utils import clean_text, normalize_base_url
 
@@ -1375,6 +1377,35 @@ class NewStarClient:
             check_error=check_error,
             allow_redirects=allow_redirects,
         )
+
+    def get_statistics(
+        self,
+        who: int = 1,
+        sort: int = 1,
+        range: int = 1,
+    ) -> StatisticsBoard:
+        """Read one leaderboard table from ``page=statistics``.
+
+        ``who``: 1=players, 2=alliances.  ``sort``: 1=score, 2=fleet,
+        3=research, 4=buildings, 5=defense.  The filter form uses POST, so the
+        method posts the same fields the browser would; it never mutates game
+        state.
+        """
+
+        if who not in {1, 2}:
+            raise ValueError("who must be 1 (players) or 2 (alliances)")
+        if sort not in {1, 2, 3, 4, 5}:
+            raise ValueError("sort must be between 1 and 5")
+        if range < 1:
+            raise ValueError("range must be at least 1")
+
+        self.ensure_login()
+        response = self._game_page(
+            "statistics",
+            method="POST",
+            data={"who": int(who), "type": int(sort), "range": int(range)},
+        )
+        return parse_statistics(response.text)
 
     def get_page(self, page: str, **params: Any) -> str:
         """Return the HTML of an arbitrary ingame page (e.g. ``"messages"``)."""

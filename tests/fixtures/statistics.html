@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><title>排行榜 - TEST - Test Universe</title></head>
+<body id="statistics">
+<form action="" id="stats" method="post" name="stats">
+  <table class="tablesorter ally_ranks">
+    <tr>
+      <td><label for="who">查看</label>
+        <select id="who" name="who" onchange="$('#stats').submit();">
+          <option selected="selected" value="1">玩家</option>
+          <option value="2">联盟</option>
+        </select>
+      </td>
+      <td><label for="type">排序规则</label>
+        <select id="type" name="type" onchange="$('#stats').submit();">
+          <option selected="selected" value="1">积分</option>
+          <option value="2">舰队</option>
+        </select>
+      </td>
+      <td><label for="range">选择排名段</label>
+        <select id="range" name="range" onchange="$('#stats').submit();">
+          <option selected="selected" value="1">1-100</option>
+        </select>
+      </td>
+    </tr>
+  </table>
+</form>
+
+<table class="tablesorter ally_ranks tabstatistica">
+  <tr class="barraclass">
+    <th colspan="2">排名</th><th>玩家</th><th></th><th>联盟</th><th>积分</th>
+  </tr>
+  <tr class="classificabarra">
+    <td class="classstat1" id="1">1</td>
+    <td class="classstat2"><span style="color:#87CEEB">*</span></td>
+    <td class="classstat3">
+      <div class="barracla classstat4"></div>
+      <a class="fbox-s-name classstat5" href="#" onclick="return Dialog.Playercard(1204, 'PlayerOne');">
+        <img class="tooltip" data-tooltip-content="深空" src="./img/1504.gif" width="18"/>
+        <img class="tooltip" data-tooltip-content="帝制" src="./img/1601.png" width="18"/>
+        <span>PlayerOne</span>
+        <span class="classstat6"><span class="galaxy-short-strong galaxy-short">强</span></span>
+      </a>
+    </td>
+    <td class="classstat7"><a href="#" onclick="return Dialog.PM(1204);"><img alt="私信"/></a></td>
+    <td class="classstat8">
+      <a href="game.php?page=alliance&amp;mode=info&amp;id=69">ALLY-A</a>
+    </td>
+    <td class="classstat10" style="text-align:right">210.975.746.268</td>
+  </tr>
+  <tr class="classificabarra">
+    <td class="classstat1" id="2">2</td>
+    <td class="classstat2"><span style="color:#87CEEB">*</span></td>
+    <td class="classstat3">
+      <a class="fbox-s-name classstat5" href="#" onclick="return Dialog.Playercard(1226, '玩家二');">
+        <span>玩家二</span>
+        <span class="classstat6"><span class="galaxy-short">弱</span></span>
+      </a>
+    </td>
+    <td class="classstat7"><a href="#" onclick="return Dialog.PM(1226);"><img alt="私信"/></a></td>
+    <td class="classstat8"><a href="game.php?page=alliance&amp;mode=info&amp;id=7">ALLY-B</a></td>
+    <td class="classstat10" style="text-align:right">1.234.567</td>
+  </tr>
+</table>
+</body>
+</html>

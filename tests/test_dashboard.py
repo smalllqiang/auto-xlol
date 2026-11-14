@@ -554,3 +554,14 @@ def test_message_time_keeps_server_wall_clock():
     now = datetime(2026, 11, 14, 9, 0, tzinfo=timezone.utc)
     message = {"time": "2026-11-14T16:40:29", "time_text": "2026年11月14日, 16:40:29"}
     assert fmt_message_time(message, now=now) == "16:40:29"
+
+
+def test_stopped_daemon_does_not_claim_next_cycle_exit(tmp_path):
+    _state_dir(tmp_path, stop=True)
+    status = _daemon(state="stopped", stopped_at="2026-11-13T09:01:50+00:00")
+    (tmp_path / "daemon.json").write_text(json.dumps(status), encoding="utf-8")
+    state = load_state(tmp_path, now=NOW)
+    health = render_lines(state, width=100)[1].text
+    assert "守护已停止" in health
+    assert "下一轮退出" not in health
+    assert "state/STOP 仍在" in health

@@ -521,10 +521,11 @@ def _health(state: DashboardState) -> Tuple[str, str]:
     stale_after = max(2.0 * interval, 90.0)
     dead_after = max(5.0 * interval, 300.0)
 
+    if status.get("state") == "stopped":
+        suffix = " · state/STOP 仍在" if state.stop_requested else ""
+        return "muted", f"● 守护已停止 · 数据 {fmt_age(data_age)}{suffix}"
     if state.stop_requested:
         return "warn", "● 停止请求已存在（state/STOP），守护将在下一轮退出"
-    if status.get("state") == "stopped":
-        return "muted", f"● 守护已停止 · 数据 {fmt_age(data_age)}"
 
     # The heartbeat is authoritative: pid namespaces (containers, sandboxes)
     # can make a live daemon invisible to ``os.kill(pid, 0)``.  Fall back to

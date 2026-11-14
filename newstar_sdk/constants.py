@@ -326,6 +326,11 @@ MISSION_NAME_TO_ID.update(
         "recycle": 8,
         "expedition": 15,
         "exp": 15,
+        # The game's fleet pages use these labels; the static table uses
+        # "远征"/"星云远征", so keep both spellings working.
+        "探险": 15,
+        "探索星系": 15,
+        "远征星云区": 18,
     }
 )
 

@@ -271,3 +271,54 @@ def test_preview_fleet_runs_only_the_first_two_steps(fixture_html, monkeypatch):
     assert preview.consumption == pytest.approx(123)
     assert preview.max_speed == pytest.approx(5000)
     assert [option.id for option in preview.available_missions] == [3, 4, 6]
+    assert preview.stay_times == []
+
+
+def test_preview_fleet_exposes_expedition_stay_times(fixture_html, monkeypatch):
+    client = _make_client()
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        page = (params or {}).get("page")
+        if page == "fleetStep1":
+            return FakeResponse(fixture_html("fleet_step1.html"))
+        if page == "fleetStep2":
+            return FakeResponse(fixture_html("fleet_step2_expedition.html"))
+        raise AssertionError(f"unexpected page {page}")
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    preview = client.preview_fleet(
+        "3:505:16",
+        {"small_cargo": 1},
+        mission="expedition",
+        speed=10,
+    )
+
+    assert preview.mission == 15
+    assert preview.mission_name == "探险"
+    assert preview.consumption == pytest.approx(3)
+    assert preview.stay_times == [1]
+
+
+def test_send_fleet_rejects_invalid_expedition_stay_time(fixture_html, monkeypatch):
+    client = _make_client()
+    pages = []
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        page = (params or {}).get("page")
+        pages.append(page)
+        if page == "fleetStep1":
+            return FakeResponse(fixture_html("fleet_step1.html"))
+        if page == "fleetStep2":
+            return FakeResponse(fixture_html("fleet_step2_expedition.html"))
+        raise AssertionError(f"fleetStep3 should not be called, got {page}")
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    with pytest.raises(ActionRejected, match="stay_time"):
+        client.send_fleet(
+            "3:505:16",
+            {"small_cargo": 1},
+            mission="expedition",
+            speed=10,
+            stay_time=0,
+        )
+    assert pages == ["fleetStep1", "fleetStep2"]

@@ -67,13 +67,22 @@ def test_fleet_step_parsing(fixture_html):
     assert [m.id for m in missions] == [3, 4, 6]
     assert missions[0].name == "运输"
 
-    token, missions, consumption, fleet_room = parse_fleet_step2_details(
+    token, missions, consumption, fleet_room, stay_times = parse_fleet_step2_details(
         fixture_html("fleet_step2.html")
     )
     assert token == "tok-123"
     assert [m.id for m in missions] == [3, 4, 6]
     assert consumption == 123
     assert fleet_room is None
+    assert stay_times == []
+
+    token, missions, consumption, fleet_room, stay_times = parse_fleet_step2_details(
+        fixture_html("fleet_step2_expedition.html")
+    )
+    assert token == "tok-exp-15"
+    assert [m.id for m in missions] == [15, 18]
+    assert consumption == 3
+    assert stay_times == [1]
 
 
 def test_fleet_dispatch_result(fixture_html):
@@ -162,3 +171,11 @@ def test_error_page_needs_titled_container():
         '<div class="ally_contents">模块已禁用</div></div></body></html>'
     )
     assert parse_game_error(error_like) == "模块已禁用"
+
+
+def test_dispatch_result_maps_expedition_label(fixture_html):
+    html = fixture_html("fleet_dispatch_success.html").replace("运输", "探险")
+    result = parse_fleet_dispatch_result(html)
+    assert result is not None
+    assert result.mission == 15
+    assert result.mission_name == "探险"

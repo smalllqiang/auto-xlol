@@ -1078,6 +1078,7 @@ class NewStarClient:
         Optional[float],
         Optional[float],
         Optional[float],
+        List[int],
     ]:
         """Run the two preparation POSTs shared by preview and dispatch."""
 
@@ -1130,7 +1131,9 @@ class NewStarClient:
             }
         )
         response = self._game_page("fleetStep2", method="POST", data=step2_data)
-        token, missions, consumption, fleet_room = parse_fleet_step2_details(response.text)
+        token, missions, consumption, fleet_room, stay_times = parse_fleet_step2_details(
+            response.text
+        )
         if not token:
             raise ParseError("fleetStep2 did not return a dispatch token")
         available = {option.id for option in missions}
@@ -1149,6 +1152,7 @@ class NewStarClient:
             max_speed,
             consumption,
             fleet_room,
+            stay_times,
         )
 
     def send_fleet(
@@ -1177,6 +1181,7 @@ class NewStarClient:
             _max_speed,
             _consumption,
             _fleet_room,
+            stay_times,
         ) = self._fleet_step1_step2(
             target,
             ships,
@@ -1186,6 +1191,17 @@ class NewStarClient:
             fleet_group=fleet_group,
             target_type=target_type,
         )
+
+        if mission_id in {5, 11, 15, 18} and stay_times:
+            try:
+                requested_stay = int(stay_time)
+            except (TypeError, ValueError):
+                requested_stay = -1
+            if requested_stay not in stay_times:
+                raise ActionRejected(
+                    f"stay_time {stay_time!r} is not available for mission {mission_id}; "
+                    f"valid values: {stay_times}"
+                )
 
         step3_data = {
             "token": token,
@@ -1235,6 +1251,7 @@ class NewStarClient:
             max_speed,
             consumption,
             fleet_room,
+            stay_times,
         ) = self._fleet_step1_step2(
             target,
             ships,
@@ -1256,6 +1273,7 @@ class NewStarClient:
             fleet_room=fleet_room,
             max_speed=max_speed,
             available_missions=list(missions),
+            stay_times=stay_times,
         )
 
     def recall_fleet(self, fleet_id: int) -> List[FleetInfo]:

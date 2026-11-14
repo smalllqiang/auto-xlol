@@ -235,7 +235,7 @@ print(result.ships)
 - 目标坐标与当前星球相同（且类型相同）会被游戏拒绝。
 - 燃料从出发星球的重氢扣除；目标距离、速度、舰船组合都会影响消耗。SDK 不在本地计算燃料，交给游戏校验。
 - 派遣/运输等任务的目标类型通常是 1；回收残骸用 2；月球用 3。
-- `stay_time` 用于驻留/远征类任务，取值来自第二步页面的下拉选项；默认 `0`，可用时请按页面选项传值。
+- `stay_time` 用于驻留/探险类任务，取值来自第二步页面的下拉选项；默认 `0` 只适用于不需要停留的任务。探险任务传 `0` 会被游戏以「无效返回时间」拒绝，应使用 `preview_fleet().stay_times` 里的值（当前实例为 `1`）；`send_fleet` 会在第三步前做本地校验。
 - `fleet_group` 用于联合攻击/ACS；普通单人任务保持 0。
 - `max_wave` 和 `sectors` 会原样提交，默认 `1` 和 `3`；只在对应任务下生效。
 - 如果第二步返回的可用任务不包含请求的任务，SDK 会抛 `ActionRejected` 并列出可用任务。
@@ -263,7 +263,8 @@ print([mission.id for mission in preview.available_missions])
 - `consumption`：第二步页面显示的燃料消耗；
 - `fleet_room`：页面提供时的剩余货舱；
 - `max_speed`：第一步页面显示的最大速度；
-- `available_missions`：第二步页面允许的任务列表。
+- `available_missions`：第二步页面允许的任务列表；
+- `stay_times`：第二步页面允许的停留时间选项（探险/驻留任务用）。
 
 预览仍然会触发送出前的服务端校验（燃料不足、任务不可用等），失败时同样抛 `ActionRejected` 或 `GameError`。
 

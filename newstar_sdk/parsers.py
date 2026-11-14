@@ -862,14 +862,14 @@ def parse_fleet_step1(html: str) -> Tuple[Optional[str], Optional[float]]:
 
 
 def parse_fleet_step2(html: str) -> Tuple[Optional[str], List[MissionOption]]:
-    token, missions, _consumption, _fleet_room = parse_fleet_step2_details(html)
+    token, missions, _consumption, _fleet_room, _stay_times = parse_fleet_step2_details(html)
     return token, missions
 
 
 def parse_fleet_step2_details(
     html: str,
-) -> Tuple[Optional[str], List[MissionOption], Optional[float], Optional[float]]:
-    """Parse the dispatch token, available missions, fuel and fleet room."""
+) -> Tuple[Optional[str], List[MissionOption], Optional[float], Optional[float], List[int]]:
+    """Parse token, missions, fuel, fleet room and stay-time options."""
 
     soup = _soup(html)
     token = _attr(soup.select_one("input[name='token']"), "value") or None
@@ -902,7 +902,14 @@ def parse_fleet_step2_details(
     fleet_room = (
         parse_number(fleet_room_match.group(1)) if fleet_room_match else None
     )
-    return token, missions, consumption, fleet_room
+    stay_times: List[int] = []
+    stay_select = soup.select_one("select[name='staytime']")
+    if stay_select is not None:
+        for option in stay_select.select("option"):
+            value = option.get("value", "")
+            if value.isdigit():
+                stay_times.append(int(value))
+    return token, missions, consumption, fleet_room, stay_times
 
 
 def parse_fleet_dispatch_result(html: str) -> Optional[FleetDispatch]:

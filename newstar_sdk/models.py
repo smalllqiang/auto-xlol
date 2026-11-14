@@ -373,6 +373,7 @@ class FleetPreview:
     fleet_room: Optional[float] = None
     max_speed: Optional[float] = None
     available_missions: List[MissionOption] = field(default_factory=list)
+    stay_times: List[int] = field(default_factory=list)
 
 
 @dataclass

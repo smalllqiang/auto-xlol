@@ -64,7 +64,7 @@
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
 | P2-5 | 影子模式评估 | ⬜ | 记录「AI 建议 vs 实际执行」，用数据决定是否采纳 |
 
-P2-1 当前只读部分：`autoplay.expedition` + `scripts/expedition.py`，覆盖航道、每队积分、目标坐标、建船建议、推荐舰船前置 blocker 链和多航道编队拆分，测试见 `tests/test_expedition.py`。发舰队预览 `client.preview_fleet()` 已支持（只走前两步，不创建舰队）；本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，可选任务 15/18，预览后舰船仍在港、无在途舰队。造舰和真实发送尚未接入。
+P2-1 当前只读部分：`autoplay.expedition` + `scripts/expedition.py`，覆盖航道、每队积分、目标坐标、建船建议、推荐舰船前置 blocker 链和多航道编队拆分，测试见 `tests/test_expedition.py`。发舰队预览 `client.preview_fleet()` 已支持（只走前两步，不创建舰队）；本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，可选任务 15/18，预览后舰船仍在港、无在途舰队。真实发送/召回也已本机验证：`stay_time=0` 被游戏拒绝，改为 `1` 后发送成功，确认页与舰队表均为 mission 15，随后立即召回。造舰与 autoplay 执行器尚未接入。
 
 ## 待核实 / 技术债
 

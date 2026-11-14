@@ -287,9 +287,11 @@ for action in plan.actions:
 .venv/bin/python scripts/tui.py          # 交互式；Tab 切看板/排行榜，j/k 滚动，d 看详情
 .venv/bin/python scripts/tui.py --once   # 打印一帧
 .venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
+.venv/bin/python scripts/tui.py --once --tab messages
 ```
 排行榜由守护每 `--statistics-every` 轮写入 `state/statistics.json`，看板只读；
-第二个 tab 可切换玩家/联盟积分榜。
+第二个 tab 可切换玩家/联盟积分榜。消息由守护每 `--messages-every` 轮写入
+`state/messages.json`，第三个 tab 列表阅读正文，不标记已读。
 每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；
 日志与快照超过 `--rotate-mb` 自动切成 `.1`。
 

@@ -28,6 +28,7 @@
 | P1-8 | TUI 看板 | ✅ | `scripts/tui.py` 只读展示资源、阶段、告警、事件、日志；`--once` 可回归 |
 | P1-9 | 看板值班化 | ✅ | 心跳健康栏、队列明细/ETA、候选与缺口、探险/舰队/消息、滚动与 JSON 详情、轮转与旧 schema 兼容；真实实例 dry-run 下 `--once` 帧回归 |
 | P1-10 | 排行榜看板 | ✅ | SDK 解析 `page=statistics`；守护采集玩家/联盟积分榜；TUI 第二 tab 切换/滚动；真实实例 55 名玩家 + 2 个联盟 |
+| P1-11 | 消息阅读 tab | ✅ | 守护采集收件箱到 `state/messages.json`；TUI 第三 tab 列表 + 正文阅读；不维护已读状态；真实实例 4 页 / 33 条 |
 
 **P1-9 看板值班化记录（2026-11-14）**：真实实例上以 `run_forever --interval 30
 --snapshot-every 1`（dry-run）运行，`scripts/tui.py --once` 能看到心跳/数据年龄/下轮、
@@ -41,6 +42,12 @@
 守护首轮采集写入 `state/statistics.json`（0 错误），TUI `--once --tab leaderboard
 --stats-who 2` 可离线回归；交互模式在 pty 里验证 `2`→`w`→`1`→`q`，退出码 0。
 SDK 解析对玩家榜（联盟列）和联盟榜（成员/成员积分列）分开处理。
+
+**P1-11 消息阅读记录（2026-11-14）**：真实实例首轮采集 4 页、33 条消息、0 错误；
+`--once --tab messages` 可列出时间/发送方/主题，`--message-index 0` 可打印正文。
+交互模式在 pty 里验证 `3`→`j`→`Enter`→`d`→`2`→`1`→`q`，退出码 0。消息时间按
+服务器墙上时间显示（naive 值不按 UTC 偏移）。采集只调用 `get_messages`，不标记
+已读/归档/删除。
 
 **P1 完成的定义**：能无人值守连续跑 24 小时；dry-run 与 execute 可随时切换；
 中途崩溃重启不重复下单；每条动作都能在 journal 里回放。

@@ -584,6 +584,9 @@ touch state/STOP
 - **排行榜采集**：`--statistics-every N`（默认 120，0 关闭）每 N 轮抓一次玩家/联盟
   积分榜，写 `state/statistics.json`；首轮会先采一次。单榜失败写入 `errors`，
   不增加连续失败计数；路径可用 `--statistics-file` 覆盖。
+- **消息采集**：`--messages-every N`（默认 60，0 关闭）每 N 轮抓一次收件箱，
+  `--messages-pages`（默认 10）限制最新页数，写 `state/messages.json`；首轮会先采
+  一次。单页失败写入 `errors`，不增加连续失败计数；路径可用 `--messages-file` 覆盖。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
 `--allow`）。
@@ -626,11 +629,14 @@ touch state/STOP
 .venv/bin/python scripts/tui.py                    # 交互式，默认每 3 秒重载
 .venv/bin/python scripts/tui.py --once             # 渲染一帧到 stdout（无 curses）
 .venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
+.venv/bin/python scripts/tui.py --once --tab messages
+.venv/bin/python scripts/tui.py --once --tab messages --message-index 0
 ```
 
-按键：`q` 退出、`r` 立即刷新、`Tab`/`1`/`2` 切换「看板 / 排行榜」、`j`/`k` 移动、
-`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的 journal 条目展开成 JSON
-（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换。
+按键：`q` 退出、`r` 立即刷新、`Tab`/`1`/`2`/`3` 切换「看板 / 排行榜 / 消息」、
+`j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的 journal 条目
+展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换；消息 tab
+里 `Enter`/`d` 打开选中消息的正文，`d`/`Esc` 返回列表。
 
 面板内容：
 
@@ -647,6 +653,10 @@ touch state/STOP
 - **排行榜 tab**：读 `state/statistics.json`，显示玩家/联盟积分榜（排名、名称、
   联盟/成员、积分），自己的行用 `▸` 标出；`w` 切换玩家/联盟。守护默认每 120 轮
   采集一次（`--statistics-every`），首轮会先采一次。
+- **消息 tab**：读 `state/messages.json`，列出最近的收件箱消息（时间、发送方、
+  主题/正文摘要），`Enter`/`d` 阅读完整正文。只读缓存，**不标记已读、不归档、不删除**；
+  消息时间按页面显示的服务器本地时间展示。守护默认每 60 轮采集一次
+  （`--messages-every`），首轮会先采一次，最多取 `--messages-pages` 页。
 
 数据契约：
 
@@ -660,6 +670,9 @@ touch state/STOP
 - `state/statistics.json`：`run_forever.py` 采集的排行榜快照，含 `captured_at`、
   `boards`（`1:1`=玩家积分、`2:1`=联盟积分）与逐榜 `errors`；单个榜失败不会
   中断守护，TUI 在对应 tab 显示错误。
+- `state/messages.json`：`run_forever.py` 采集的消息缓存，含 `captured_at`、
+  `pages_total` / `pages_fetched`、`messages`（id、发送方、主题、正文、服务器时间、
+  分类、坐标）和逐页 `errors`；不保存任何已读状态。
 - 看板会读取轮转后的 `journal.jsonl.1` / `events.jsonl.1`，容忍缺 `kind` 的旧
   cycle 记录、坏 JSON 行和乱序时间；`--once` 与交互模式共用同一份渲染结果。
 

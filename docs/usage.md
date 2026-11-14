@@ -718,6 +718,10 @@ allow-list、dry-run 和燃料校验。
 # 真实执行，最多 2 队；必须显式 allow-list
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl \
   --execute --allow 202 --max-dispatch 2
+
+# 没有可用编队但有空闲航道时，先补 1 艘推荐舰船再发送
+.venv/bin/python scripts/expedition_cycle.py --no-verify-ssl \
+  --execute --allow 202 --auto-build --build-count 1 --ship 202
 ```
 
 行为：
@@ -725,8 +729,12 @@ allow-list、dry-run 和燃料校验。
 - 每次发送前重新读取探险报告，因为发完一队后空闲航道和可用舰船都会变化；
 - 每轮只取当前第 1 支编队；
 - `--max-dispatch` 默认 1，限制单轮最多发送几队；
-- 遇到没有空闲航道、没有可派遣编队、编队含未允许舰船或发送失败时停止；
+- `--auto-build` 时，如果当前没有可用编队且还有空闲航道，会先按报告推荐舰船
+  建造一批（`--build-count`，默认 1），等船坞队列完成后重新读报告再发送；
+  单轮只自动补一次；
+- `--ship` 可以强制自动补船的类型（例如 `--ship 202`）；
+- 遇到没有空闲航道、没有可派遣编队、编队含未允许舰船、建造失败或发送失败时停止；
 - `state/STOP` 存在时拒绝执行；
-- 不自动造舰、不自动召回。
+- 不自动召回。
 
 先预览、再小批量执行，是多航道场景的推荐用法。

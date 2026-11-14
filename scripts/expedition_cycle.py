@@ -3,6 +3,7 @@
 
 Default mode previews the first available group.  Real dispatch needs
 ``--execute`` plus a ship allow-list and is capped by ``--max-dispatch``.
+``--auto-build`` may build one recommended batch when a free slot has no group.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Optional, Sequence
 
 from local_config import load_config
 
-from autoplay import run_expedition_cycle
+from autoplay import build_expedition_report, run_expedition_cycle
 from newstar_sdk import NewStarClient
 
 
@@ -35,6 +36,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--speed", type=int, default=10, help="fleet speed 1..10")
     parser.add_argument("--stay-time", type=int, default=1, help="expedition stay option")
     parser.add_argument("--max-dispatch", type=int, default=1, help="max groups in this cycle")
+    parser.add_argument(
+        "--auto-build",
+        action="store_true",
+        help="build one batch of the recommended ship when no group is available",
+    )
+    parser.add_argument("--build-count", type=int, default=1, help="ships to build in auto-build")
+    parser.add_argument(
+        "--build-timeout", type=float, default=300.0, help="seconds to wait for the ship queue"
+    )
+    parser.add_argument("--ship", type=int, help="force one ship id for the report/auto-build")
     parser.add_argument("--execute", action="store_true", help="actually send (default: preview)")
     parser.add_argument(
         "--allow", action="append", default=[], metavar="ID", help="repeatable ship id allow-list"
@@ -47,8 +58,13 @@ def render(result) -> str:
     lines = [
         f"结果      {result.status}",
         f"原因      {result.reason}",
-        f"派出      {len(result.dispatches)} 队",
     ]
+    if result.build is not None:
+        lines.append(
+            f"自动造舰  {result.build.status}  {result.build.name}×{result.build.count}"
+            f"  {result.build.reason}"
+        )
+    lines.append(f"派出      {len(result.dispatches)} 队")
     for index, item in enumerate(result.dispatches, 1):
         group = item.group
         ships = ""
@@ -104,6 +120,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             speed=args.speed,
             stay_time=args.stay_time,
             target=args.target,
+            auto_build=args.auto_build,
+            build_count=args.build_count,
+            build_timeout=args.build_timeout,
+            report_loader=lambda current: build_expedition_report(
+                current, ship=args.ship
+            ),
         )
         if args.json:
             print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))

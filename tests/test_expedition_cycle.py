@@ -1,11 +1,27 @@
 from types import SimpleNamespace
 
 from autoplay import run_expedition_cycle
-from autoplay.expedition import ExpeditionGroup, ExpeditionReport
+from autoplay.expedition import ExpeditionGroup, ExpeditionReport, ShipRecommendation
 from newstar_sdk.exceptions import NewStarError
 
 
-def _report(free_slots, group=None, target="3:505:16"):
+def _recommendation(**overrides):
+    values = {
+        "element_id": 202,
+        "name": "轻型运输舰",
+        "score_per_ship": 4.0,
+        "needed": 10,
+        "total_cost": {901: 2000.0, 902: 2000.0},
+        "affordable": True,
+        "requirements_met": True,
+        "requirements": [],
+        "blockers": [],
+    }
+    values.update(overrides)
+    return ShipRecommendation(**values)
+
+
+def _report(free_slots, group=None, target="3:505:16", recommendation=None):
     return ExpeditionReport(
         expedition_tech=2,
         slots=2,
@@ -20,6 +36,7 @@ def _report(free_slots, group=None, target="3:505:16"):
         available_ships={202: 1} if group is not None else {},
         ship_names={202: "轻型运输舰"},
         fleet_groups=[group] if group is not None else [],
+        recommendation=recommendation,
         can_send=free_slots > 0 and group is not None,
     )
 
@@ -37,6 +54,19 @@ class FakeClient:
         self.calls = []
         self.sends = 0
         self.fail_on = fail_on
+        self.build_calls = []
+        self.wait_calls = []
+
+    def build_ships(self, ships):
+        self.build_calls.append(dict(ships))
+        return [{"element_id": next(iter(ships)), "amount": next(iter(ships.values()))}]
+
+    def get_ship_queue(self):
+        return []
+
+    def wait_for_ship_queue(self, timeout, poll_interval):
+        self.wait_calls.append((timeout, poll_interval))
+        return []
 
     def preview_fleet(self, target, ships, *, mission, speed):
         self.calls.append(("preview", target, dict(ships), int(mission), speed))
@@ -144,3 +174,54 @@ def test_cycle_partial_when_second_send_fails():
     assert result.status == "partial"
     assert [item.status for item in result.dispatches] == ["dispatched", "error"]
     assert len(client.calls) == 2
+
+
+def test_cycle_auto_builds_then_dispatches():
+    client = FakeClient()
+    loader = SequenceLoader(
+        [
+            _report(1, None, recommendation=_recommendation()),
+            _report(1, _group()),
+        ]
+    )
+    result = run_expedition_cycle(
+        client,
+        dry_run=False,
+        allowed_elements=[202],
+        max_dispatch=1,
+        auto_build=True,
+        build_count=1,
+        report_loader=loader,
+    )
+
+    assert result.status == "dispatched"
+    assert result.build is not None and result.build.status == "built"
+    assert client.build_calls == [{202: 1}]
+    assert client.wait_calls == [(300.0, 2)]
+    assert [call[0] for call in client.calls] == ["send"]
+
+
+def test_cycle_auto_build_skips_when_requirements_unmet():
+    client = FakeClient()
+    loader = SequenceLoader(
+        [
+            _report(
+                1,
+                None,
+                recommendation=_recommendation(requirements_met=False),
+            )
+        ]
+    )
+    result = run_expedition_cycle(
+        client,
+        dry_run=False,
+        allowed_elements=[202],
+        auto_build=True,
+        report_loader=loader,
+    )
+
+    assert result.status == "skipped"
+    assert result.build is not None
+    assert result.build.status == "skipped"
+    assert client.build_calls == []
+    assert client.calls == []

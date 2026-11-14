@@ -90,6 +90,14 @@ def render(report) -> str:
         )
         if recommendation.requirements:
             lines.append(f"前置条件  {'；'.join(recommendation.requirements)}")
+        if recommendation.blockers:
+            lines.append("前置动作:")
+            for action in recommendation.blockers:
+                target = action.required_level or action.target_level
+                lines.append(
+                    f"  - {action.name} {action.current_level}->{target}"
+                    f"（还差 {action.steps} 级）  {action.reason}"
+                )
 
     if report.active_fleets:
         lines.append("在途探险  " + "；".join(

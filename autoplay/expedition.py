@@ -17,6 +17,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from newstar_sdk.constants import Mission
 from newstar_sdk.models import Coordinates, FleetInfo, PlanetInfo, ResearchInfo, ShipInfo
 
+from .planner import Action, expand_requirement_actions
+
 EXPEDITION_TECH_ID = 124
 EXPEDITION_TARGET_POSITION = 16
 
@@ -36,6 +38,7 @@ class ShipRecommendation:
     affordable: bool = False
     requirements_met: bool = True
     requirements: List[str] = field(default_factory=list)
+    blockers: List[Action] = field(default_factory=list)
     build_seconds: Optional[float] = None
 
     def as_dict(self) -> Dict[str, Any]:
@@ -48,6 +51,7 @@ class ShipRecommendation:
             "affordable": self.affordable,
             "requirements_met": self.requirements_met,
             "requirements": list(self.requirements),
+            "blockers": [action.as_dict() for action in self.blockers],
             "build_seconds": self.build_seconds,
         }
 
@@ -280,12 +284,14 @@ def compute_expedition_report(
     fleets: Iterable[FleetInfo],
     planet: Optional[PlanetInfo],
     resources: Mapping[int, float],
+    buildings: Iterable[Any] = (),
     target_score: float = DEFAULT_TARGET_SCORE,
     ship: Optional[int] = None,
 ) -> ExpeditionReport:
     """Compute a read-only expedition readiness report from parsed page data."""
 
     research_list = list(research)
+    building_list = list(buildings)
     shipyard_list = list(shipyard)
     fleet_list = list(fleets)
 
@@ -361,6 +367,15 @@ def compute_expedition_report(
         if free_slots > 0
         else None
     )
+    if recommendation is not None:
+        recommendation.blockers = expand_requirement_actions(
+            recommendation.requirements,
+            {int(item.id): item for item in building_list},
+            {int(item.id): item for item in research_list},
+            dict(resources),
+            parent_name=recommendation.name,
+            notes=notes,
+        )
     if recommendation is not None and recommendation.needed:
         notes.append(
             f"按「{recommendation.name}」补足目标还需 {recommendation.needed} 艘"
@@ -395,6 +410,7 @@ def build_expedition_report(
     """Fetch the required pages and compute a report.  Read-only."""
 
     research = client.get_research()
+    buildings = client.get_buildings()
     shipyard = client.get_shipyard("fleet")
     available = {
         int(ship_id): int(item.count)
@@ -412,6 +428,7 @@ def build_expedition_report(
     return compute_expedition_report(
         research=research,
         shipyard=shipyard,
+        buildings=buildings,
         available_ships=available,
         fleets=fleets,
         planet=overview.planet,

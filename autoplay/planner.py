@@ -190,15 +190,63 @@ def _goal_status(phase: Phase, buildings: Dict[int, Any], research: Dict[int, An
     return phase.goal
 
 
-def _blocker_actions(
-    goal: Any,
-    goal_kind: str,
-    goal_level: int,
+def _make_blocker_action(
+    *,
+    kind: str,
+    target: Any,
+    level: int,
+    required_level: int,
+    steps: int,
+    reason: str,
+    depth: int,
+    resources: Dict[int, float],
+) -> Action:
+    cost = _cost_of(target)
+    total_cost = scale_cost(cost, getattr(target, "factor", None), steps)
+    missing = _missing_resources(target, cost, resources)
+    affordable = not missing
+    return Action(
+        category="blocker",
+        kind=kind,
+        element_id=int(target.id),
+        name=str(getattr(target, "name", "")),
+        current_level=level,
+        target_level=level + 1,
+        cost=cost,
+        cost_equivalent=equivalent_cost(cost),
+        affordable=affordable,
+        missing_resources=missing,
+        reason=reason,
+        depth=depth,
+        required_level=required_level,
+        steps=steps,
+        total_cost=total_cost,
+        total_cost_equivalent=equivalent_cost(total_cost),
+        affordable_total=(
+            affordable if steps == 1 else _affordable(total_cost, resources)
+        ),
+    )
+
+
+def expand_requirement_actions(
+    requirements: Iterable[str],
     buildings: Dict[int, Any],
     research: Dict[int, Any],
     resources: Dict[int, float],
-    notes: List[str],
+    *,
+    parent_name: str = "",
+    depth: int = 0,
+    notes: Optional[List[str]] = None,
 ) -> List[Action]:
+    """Expand raw requirement strings into actionable building/research blockers.
+
+    This is the reusable part of the phase-goal planner: it never adds the
+    parent (a ship, building or technology) itself, only the unmet prerequisites
+    needed to unlock it.  Callers such as the expedition planner can use it to
+    turn a ship's ``requirements`` into concrete next actions.
+    """
+
+    note_list = notes if notes is not None else []
     actions: List[Action] = []
     seen: set = set()
 
@@ -211,48 +259,12 @@ def _blocker_actions(
             return research.get(int(element_id))
         return None
 
-    def make_action(
-        *,
-        kind: str,
-        target: Any,
-        level: int,
-        required_level: int,
-        steps: int,
-        reason: str,
-        depth: int,
-    ) -> Action:
-        cost = _cost_of(target)
-        total_cost = scale_cost(cost, getattr(target, "factor", None), steps)
-        missing = _missing_resources(target, cost, resources)
-        affordable = not missing
-        return Action(
-            category="blocker",
-            kind=kind,
-            element_id=int(target.id),
-            name=str(getattr(target, "name", "")),
-            current_level=level,
-            target_level=level + 1,
-            cost=cost,
-            cost_equivalent=equivalent_cost(cost),
-            affordable=affordable,
-            missing_resources=missing,
-            reason=reason,
-            depth=depth,
-            required_level=required_level,
-            steps=steps,
-            total_cost=total_cost,
-            total_cost_equivalent=equivalent_cost(total_cost),
-            affordable_total=(
-                affordable if steps == 1 else _affordable(total_cost, resources)
-            ),
-        )
-
-    def walk(item: Any, depth: int) -> None:
-        for requirement in parse_requirements(getattr(item, "requirements", [])):
+    def walk(item_name: str, raw_requirements: Iterable[str], item_depth: int) -> None:
+        for requirement in parse_requirements(raw_requirements):
             if requirement.met:
                 continue
             if requirement.element_id is None:
-                notes.append(f"无法解析前置条件：{requirement.text}")
+                note_list.append(f"无法解析前置条件：{requirement.text}")
                 continue
             key = (requirement.kind, requirement.element_id)
             if key in seen:
@@ -261,34 +273,67 @@ def _blocker_actions(
 
             target = lookup(requirement.kind, requirement.element_id)
             if target is None:
-                notes.append(f"前置「{requirement.name}」未在页面数据中出现")
+                note_list.append(f"前置「{requirement.name}」未在页面数据中出现")
                 continue
 
-            unmet = [r for r in parse_requirements(getattr(target, "requirements", [])) if not r.met]
+            unmet = [
+                item
+                for item in parse_requirements(getattr(target, "requirements", []))
+                if not item.met
+            ]
             if unmet:
-                walk(target, depth + 1)
+                walk(
+                    str(getattr(target, "name", requirement.name)),
+                    getattr(target, "requirements", []),
+                    item_depth + 1,
+                )
                 continue
 
             level = int(getattr(target, "level", 0) or 0)
             actions.append(
-                make_action(
+                _make_blocker_action(
                     kind=requirement.kind,
                     target=target,
                     level=level,
                     required_level=requirement.required,
                     steps=max(1, requirement.required - level),
                     reason=(
-                        f"为「{getattr(item, 'name', '')}」解锁：需要 "
+                        f"为「{item_name}」解锁：需要 "
                         f"{requirement.required} 级（当前 {level}）"
                     ),
-                    depth=depth,
+                    depth=item_depth,
+                    resources=resources,
                 )
             )
+
+    walk(parent_name, requirements, depth)
+    return _sort_actions(actions)
+
+
+def _blocker_actions(
+    goal: Any,
+    goal_kind: str,
+    goal_level: int,
+    buildings: Dict[int, Any],
+    research: Dict[int, Any],
+    resources: Dict[int, float],
+    notes: List[str],
+) -> List[Action]:
+    actions: List[Action] = []
 
     goal_requirements = parse_requirements(getattr(goal, "requirements", []))
     unmet_requirements = [requirement for requirement in goal_requirements if not requirement.met]
     if unmet_requirements:
-        walk(goal, 0)
+        actions.extend(
+            expand_requirement_actions(
+                getattr(goal, "requirements", []),
+                buildings,
+                research,
+                resources,
+                parent_name=str(getattr(goal, "name", "")),
+                notes=notes,
+            )
+        )
     else:
         level = int(getattr(goal, "level", 0) or 0)
         if level >= goal_level:
@@ -301,7 +346,7 @@ def _blocker_actions(
             return actions
 
         actions.append(
-            make_action(
+            _make_blocker_action(
                 kind=goal_kind,
                 target=goal,
                 level=level,
@@ -309,6 +354,7 @@ def _blocker_actions(
                 steps=max(1, goal_level - level),
                 reason=f"阶段目标：{getattr(goal, 'name', '')} 升到 {goal_level} 级（当前 {level}）",
                 depth=0,
+                resources=resources,
             )
         )
 

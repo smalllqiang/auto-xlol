@@ -198,6 +198,9 @@ def test_build_report_falls_back_to_shipyard_availability():
         def get_research(self):
             return [ResearchInfo(id=124, name="探险技术", level=9)]
 
+        def get_buildings(self):
+            return []
+
         def get_shipyard(self, mode="fleet"):
             assert mode == "fleet"
             return [cargo]
@@ -220,3 +223,62 @@ def test_build_report_falls_back_to_shipyard_availability():
     assert report.available_ships == {202: 3}
     assert report.current_score == pytest.approx(12.0)
     assert report.ship_names == {202: "轻型运输舰"}
+
+
+def test_recommendation_expands_ship_prerequisites_to_blockers():
+    locked = ShipInfo(
+        id=207,
+        name="战列舰",
+        cost={901: 41000.0, 902: 17000.0},
+        requirements_met=False,
+        requirements=["星际船坞 等级 5 (0/5)", "武器技术 等级 7 (0/7)"],
+    )
+    shipyard_building = SimpleNamespace(
+        id=21,
+        name="星际船坞",
+        level=0,
+        requirements=["自律工厂 等级 2 (0/2)"],
+        requirements_met=False,
+        cost={901: 100.0, 902: 100.0},
+        factor=2.0,
+    )
+    robot_factory = SimpleNamespace(
+        id=14,
+        name="自律工厂",
+        level=0,
+        requirements=[],
+        requirements_met=True,
+        cost={901: 100.0, 902: 100.0},
+        factor=2.0,
+    )
+    weapons = SimpleNamespace(
+        id=109,
+        name="武器技术",
+        level=0,
+        requirements=[],
+        requirements_met=True,
+        cost={901: 100.0, 902: 100.0},
+        factor=2.0,
+    )
+
+    report = compute_expedition_report(
+        research=[
+            ResearchInfo(id=124, name="探险技术", level=9),
+            weapons,
+        ],
+        shipyard=[locked],
+        buildings=[shipyard_building, robot_factory],
+        available_ships={},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+    )
+
+    recommendation = report.recommendation
+    assert recommendation is not None
+    assert [action.name for action in recommendation.blockers] == [
+        "武器技术",
+        "自律工厂",
+    ]
+    assert recommendation.blockers[1].depth == 1
+    assert recommendation.as_dict()["blockers"][0]["name"] == "武器技术"

@@ -16,7 +16,7 @@ from .expedition import (
     compute_expedition_report,
 )
 from .phases import PHASES, Phase, detect_phase
-from .planner import Action, Plan, build_plan, compute_plan
+from .planner import Action, Plan, build_plan, compute_plan, expand_requirement_actions
 
 __all__ = [
     "Action",
@@ -33,6 +33,7 @@ __all__ = [
     "detect_phase",
     "equivalent_cost",
     "execute_plan",
+    "expand_requirement_actions",
     "payback_hours",
     "production_delta",
 ]

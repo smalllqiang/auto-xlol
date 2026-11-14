@@ -49,4 +49,14 @@ class ParseError(NewStarError):
 
 
 class ActionRejected(GameError):
-    """The server accepted the HTTP request but did not perform the action."""
+    """The server accepted the HTTP request but did not perform the action.
+
+    ``before_post`` is true when the SDK rejected the action from page data
+    before sending any write request.  In that case nothing was queued, so a
+    caller may safely fall through to a different action in the same cycle.
+    A rejection after the POST is ambiguous and must not be retried blindly.
+    """
+
+    def __init__(self, message: str, *, url: Optional[str] = None, before_post: bool = False):
+        super().__init__(message, url=url)
+        self.before_post = before_post

@@ -1,5 +1,6 @@
-from autoplay import compute_plan, execute_plan
+from autoplay import Action, Plan, compute_plan, execute_plan
 from autoplay.executor import ExecutionResult
+from newstar_sdk.exceptions import ActionRejected
 from newstar_sdk.parsers import (
     parse_buildings,
     parse_overview,
@@ -126,8 +127,6 @@ def test_error_is_reported_not_retried(fixture_html):
     class Failing(FakeClient):
         def upgrade_building(self, element, levels=1):
             self.calls.append(("building", element, levels))
-            from newstar_sdk.exceptions import ActionRejected
-
             raise ActionRejected("queue full")
 
     client = Failing()
@@ -141,6 +140,53 @@ def test_error_is_reported_not_retried(fixture_html):
     assert result.status == "error"
     assert "ActionRejected" in result.reason
     assert len(client.calls) == 1
+
+
+def test_precheck_rejection_falls_through_to_next_action():
+    class PrecheckFailing(FakeClient):
+        def research(self, element, levels=1):
+            self.calls.append(("research", element, levels))
+            raise ActionRejected("not enough resources", before_post=True)
+
+    plan = Plan(
+        phase="pre_gravity",
+        phase_name="种田初起",
+        goal="建成资源处理单元",
+        actions=[
+            Action(
+                category="blocker",
+                kind="research",
+                element_id=199,
+                name="引力子技术",
+                current_level=0,
+                target_level=1,
+                affordable=True,
+            ),
+            Action(
+                category="roi",
+                kind="building",
+                element_id=4,
+                name="幽能发电站",
+                current_level=19,
+                target_level=20,
+                affordable=True,
+            ),
+        ],
+    )
+    client = PrecheckFailing()
+
+    result = execute_plan(
+        client,
+        plan,
+        dry_run=False,
+        allowed_elements=[199, 4],
+    )
+
+    assert result.status == "executed"
+    assert result.action is not None and result.action.name == "幽能发电站"
+    assert client.calls == [("research", 199, 1), ("building", 4, 1)]
+    assert result.evidence["rejected"][0]["element_id"] == 199
+    assert "跳过预检查被拒：引力子技术" in result.reason
 
 
 def test_lab_upgrade_skipped_while_researching(fixture_html):
@@ -157,3 +203,42 @@ def test_lab_upgrade_skipped_while_researching(fixture_html):
     assert result.status == "skipped"
     assert "实验室暂不可升级" in result.reason
     assert client.calls == []
+
+
+def test_precheck_rejection_cap_stops_after_three_candidates():
+    class AlwaysPrecheckFailing(FakeClient):
+        def upgrade_building(self, element, levels=1):
+            self.calls.append(("building", element, levels))
+            raise ActionRejected("not enough resources", before_post=True)
+
+    actions = [
+        Action(
+            category="roi",
+            kind="building",
+            element_id=element_id,
+            name=f"建筑 {element_id}",
+            current_level=0,
+            target_level=1,
+            affordable=True,
+        )
+        for element_id in (4, 1, 2, 3)
+    ]
+    plan = Plan(
+        phase="pre_gravity",
+        phase_name="种田初起",
+        goal="建成资源处理单元",
+        actions=actions,
+    )
+    client = AlwaysPrecheckFailing()
+
+    result = execute_plan(
+        client,
+        plan,
+        dry_run=False,
+        allowed_elements=[4, 1, 2, 3],
+    )
+
+    assert result.status == "error"
+    assert len(client.calls) == 3
+    assert "连续 3 条动作在预检查阶段被拒" in result.reason
+    assert len(result.evidence["rejected"]) == 3

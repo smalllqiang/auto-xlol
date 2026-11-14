@@ -71,7 +71,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 4. **写操作必须验证**：以页面证据判断成功（队列出现目标项或等级变化），
    不能把 HTTP 200 当成功；失败抛 `ActionRejected`，不要静默。
 5. **执行默认 dry-run**：`execute_plan` 只有显式 `dry_run=False` + allow-list 才动手；
-   一次一个动作；队列忙就跳过对应类型；被拒不要自动重试。保留 `state/STOP` 急停。
+   一次一个动作；队列忙就跳过对应类型；被拒不要自动重试；预检查拒绝
+   （`ActionRejected.before_post`）可让本轮换下一条候选。保留 `state/STOP` 急停。
 6. **单写者**：同一账号不要并发写。SDK 只保证单实例内串行；守护进程必须单进程。
 7. **改代码同步文档**：新增能力更新 `docs/usage.md`；改变取舍更新 `docs/decisions.md`；
    推进任务更新 `docs/roadmap.md`。文档只描述当前状态，历史交给 git。
@@ -98,6 +99,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。
+- **幽能概览不是净可用**：概览的 `current_energy` / `energy.available` 是毛产能；
+  研究/建筑页的 `costOverflow` 才是游戏实际检查的净缺口，判断可负担性时以它为准。
 
 ## 扩展一个新页面
 

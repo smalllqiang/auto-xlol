@@ -143,10 +143,10 @@ bonuses.as_dict()                     # {名称: 倍率}
 建筑、研究、船坞方法的共同约定：
 
 1. 先读取当前页面，解析元素、等级/数量、成本、前置条件、`levelToBuild`。
-2. 本地检查前置条件与资源缺口；明显不满足时直接抛 `ActionRejected`，不发送请求。
+2. 本地检查前置条件与资源缺口；明显不满足时直接抛 `ActionRejected`（`before_post=True`），不发送请求。
 3. 发送与游戏表单一致的 POST。
 4. 解析响应页面，确认队列里出现对应条目，或等级/可用数量已经增加。
-5. 如果服务器返回成功页面但操作没有生效，抛出 `ActionRejected`。
+5. 如果服务器返回成功页面但操作没有生效，抛出 `ActionRejected`（`before_post=False`）。
 
 这意味着：**方法返回并不只是“HTTP 200”，而是“SDK 能在页面上确认操作生效”**。
 
@@ -269,6 +269,8 @@ NewStarError
 - GET 请求的网络超时、连接失败、5xx 会按 `max_retries` 重试；POST 默认不自动重试，避免重复入队或使舰队 token 失效；HTTP 4xx 直接抛 `TransportError`。
 - 游戏错误页统一解析为 `GameError`；错误文本可能是未翻译的键（例如 `NFCoosen`），SDK 原样保留。
 - HTTP 成功但操作未生效抛 `ActionRejected`。
+- `ActionRejected.before_post`：`True` 表示 SDK 在发 POST 前就本地拒绝（确定未入队），
+  `False` 表示 POST 后验证失败（可能已部分生效）。
 - 页面结构无法识别抛 `ParseError` 或返回空列表/`None`（取决于具体方法），不会伪造数据。
 - 默认请求间隔 0.25 秒。提高并发或缩短间隔前，请先确认游戏规则和服务器承受能力。
 
@@ -440,7 +442,9 @@ for action in plan.actions:
   124→9。
   每个 blocker 带 `steps`（还差几级）和 `total_cost_equivalent`（用页面给出的
   `factor` 推算整条升级链的总投入）；`affordable` 只表示下一级买得起，
-  `affordable_total` 才是整条链买得起。
+  `affordable_total` 才是整条链买得起。`affordable` / `missing_resources` 优先采用
+  页面给出的 `costOverflow`（研究页按净可用资源计算），页面没有时才退回本地资源
+  比较；概览里的幽能是毛产能，不能直接当净可用。
 - **roi**：产出建筑按回本时间排序。回本 = 等价投入 ÷ 每级预计增产量。
 
 每级增产量用 `observed * (1.1 * (L+1) / L - 1)` 自校准：只依赖页面显示的实际
@@ -479,12 +483,14 @@ print(result.status, result.reason)
 安全设计：
 
 - 默认 dry run，只有显式传 `dry_run=False` 才会改游戏；
-- 一次调用只执行一个动作，便于逐步核对；
+- 一次调用最多真正执行一个动作；预检查拒绝会让本轮继续尝试下一条候选；
 - 执行模式必须提供 allow-list，否则直接跳过；
 - 建造队列非空时不排建筑，研究队列非空时不排研究，会自动落到下一条可用动作；
 - 资源不足、超过单步预算的动作直接跳过；
 - 研究进行中不排科研实验室升级（实测会被游戏拒绝，见 AGENTS）；
-- 游戏拒绝（`ActionRejected`）只记录错误，不自动重试。
+- 预检查拒绝（`ActionRejected.before_post=True`）说明没有发出写请求，执行器会把
+  该动作排除并尝试本轮下一条候选（最多 3 条）；POST 之后的拒绝仍然直接报错，
+  不自动重试。
 
 命令行：
 

@@ -133,14 +133,23 @@ def test_plan_marks_unaffordable(fixture_html):
     assert all(action.affordable is False for action in plan.actions)
 
 
-def _item(element_id, name, level=0, requirements=None, requirements_met=True):
+def _item(
+    element_id,
+    name,
+    level=0,
+    requirements=None,
+    requirements_met=True,
+    cost=None,
+    cost_overflow=None,
+):
     return SimpleNamespace(
         id=element_id,
         name=name,
         level=level,
         requirements=list(requirements or []),
         requirements_met=requirements_met,
-        cost={901: 100},
+        cost=dict(cost or {901: 100}),
+        cost_overflow=dict(cost_overflow or {}),
         factor=2.0,
         max_level=255,
     )
@@ -218,3 +227,30 @@ def test_plan_skips_goal_when_page_requirements_unparsed():
 
     assert not [action for action in plan.actions if action.category == "blocker"]
     assert any("无法解析出具体项" in note for note in plan.notes)
+
+
+def test_plan_uses_game_reported_energy_deficit():
+    goal = _item(
+        81,
+        "资源处理单元",
+        requirements=["引力子技术 等级 1 (0/1)"],
+        requirements_met=False,
+    )
+    graviton = _item(
+        199,
+        "引力子技术",
+        cost={911: 300_000},
+        cost_overflow={911: 102_456},
+    )
+
+    plan = compute_plan(
+        [goal],
+        [graviton],
+        _production(),
+        {901: 1_000_000_000, 902: 1_000_000_000, 903: 1_000_000_000, 911: 308_289},
+    )
+
+    action = next(action for action in plan.actions if action.name == "引力子技术")
+    assert action.affordable is False
+    assert action.missing_resources[911] == pytest.approx(102_456)
+    assert any("还差 102,456" in note for note in plan.notes)

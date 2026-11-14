@@ -215,3 +215,28 @@ def test_build_ships_flow(monkeypatch):
     assert calls[0][1]["mode"] == "fleet"
     assert calls[1][0] == "POST"
     assert calls[1][2]["fmenge[202]"] == "1"
+
+
+def test_local_research_rejection_is_marked_before_post(monkeypatch):
+    from newstar_sdk.models import ResearchInfo
+
+    client = _make_client()
+    item = ResearchInfo(
+        id=199,
+        name="引力子技术",
+        level=0,
+        level_to_build=0,
+        cost={911: 300000.0},
+        cost_overflow={911: 102456.0},
+    )
+    monkeypatch.setattr(client, "get_research", lambda: [item])
+
+    with pytest.raises(ActionRejected) as caught:
+        client.research(199)
+
+    assert caught.value.before_post is True
+    assert "not enough resources" in str(caught.value)
+
+
+def test_action_rejected_defaults_to_post_rejection():
+    assert ActionRejected("queue full").before_post is False

@@ -63,6 +63,7 @@ class Action:
     cost: Dict[int, float] = field(default_factory=dict)
     cost_equivalent: float = 0.0
     affordable: bool = False
+    missing_resources: Dict[int, float] = field(default_factory=dict)
     reason: str = ""
     depth: int = 0
     payback_hours: Optional[float] = None
@@ -83,6 +84,9 @@ class Action:
             "cost": {str(key): value for key, value in self.cost.items()},
             "cost_equivalent": round(self.cost_equivalent, 1),
             "affordable": self.affordable,
+            "missing_resources": {
+                str(key): value for key, value in self.missing_resources.items()
+            },
             "reason": self.reason,
             "depth": self.depth,
             "payback_hours": (
@@ -135,6 +139,35 @@ def parse_requirements(raw: Iterable[str]) -> List[Requirement]:
             )
         )
     return parsed
+
+
+def _missing_resources(
+    item: Any,
+    cost: Dict[int, float],
+    resources: Dict[int, float],
+) -> Dict[int, float]:
+    """Return the deficit for the next level, preferring the game's own numbers.
+
+    ``costOverflow``/``missing_resources`` on the page is computed by the game
+    from the same state the write will be checked against.  The overview's
+    energy field is gross production, so comparing it with ``cost[911]`` can
+    mark an unaffordable action as affordable.  Use the page value when it is
+    present; fall back to a local subtraction only when it is absent.
+    """
+
+    overflow = getattr(item, "cost_overflow", None)
+    page_missing = {
+        int(key): float(value)
+        for key, value in (overflow or {}).items()
+        if float(value) > 0
+    }
+    if page_missing:
+        return page_missing
+    return {
+        int(rid): float(amount) - float(resources.get(int(rid), 0.0))
+        for rid, amount in cost.items()
+        if float(amount) > float(resources.get(int(rid), 0.0))
+    }
 
 
 def _affordable(cost: Dict[int, float], resources: Dict[int, float]) -> bool:
@@ -190,6 +223,8 @@ def _blocker_actions(
     ) -> Action:
         cost = _cost_of(target)
         total_cost = scale_cost(cost, getattr(target, "factor", None), steps)
+        missing = _missing_resources(target, cost, resources)
+        affordable = not missing
         return Action(
             category="blocker",
             kind=kind,
@@ -199,14 +234,17 @@ def _blocker_actions(
             target_level=level + 1,
             cost=cost,
             cost_equivalent=equivalent_cost(cost),
-            affordable=_affordable(cost, resources),
+            affordable=affordable,
+            missing_resources=missing,
             reason=reason,
             depth=depth,
             required_level=required_level,
             steps=steps,
             total_cost=total_cost,
             total_cost_equivalent=equivalent_cost(total_cost),
-            affordable_total=_affordable(total_cost, resources),
+            affordable_total=(
+                affordable if steps == 1 else _affordable(total_cost, resources)
+            ),
         )
 
     def walk(item: Any, depth: int) -> None:
@@ -293,6 +331,7 @@ def _roi_actions(
         level = int(getattr(building, "level", 0) or 0)
         cost = _cost_of(building)
         cost_equivalent = equivalent_cost(cost)
+        missing = _missing_resources(building, cost, resources)
 
         item = produced.get(resource_id)
         observed = abs(float(item.buildings.get(element_id, 0.0))) if item else 0.0
@@ -316,7 +355,8 @@ def _roi_actions(
                 target_level=level + 1,
                 cost=cost,
                 cost_equivalent=cost_equivalent,
-                affordable=_affordable(cost, resources),
+                affordable=not missing,
+                missing_resources=missing,
                 reason=reason,
                 payback_hours=payback,
             )
@@ -381,14 +421,17 @@ def compute_plan(
 
     actions.extend(_roi_actions(building_map, production, resources, notes))
 
-    # Graviton needs a huge amount of energy; surface the gap explicitly.
+    # Graviton needs a huge amount of energy; surface the deficit explicitly.
     graviton = research_map.get(199)
-    if graviton is not None and not getattr(graviton, "requirements_met", True):
-        needed = float(_cost_of(graviton).get(911, 0.0))
-        available = float(resources.get(911, 0.0))
-        if needed > available:
+    if graviton is not None:
+        cost = _cost_of(graviton)
+        missing = _missing_resources(graviton, cost, resources)
+        if missing.get(911):
+            needed = float(cost.get(911, 0.0))
+            available = max(0.0, needed - float(missing[911]))
             notes.append(
-                f"引力子技术需要 {needed:,.0f} 幽能，当前只有 {available:,.0f}"
+                f"引力子技术需要 {needed:,.0f} 幽能，当前净可用约 {available:,.0f}"
+                f"（还差 {float(missing[911]):,.0f}）"
             )
 
     return Plan(

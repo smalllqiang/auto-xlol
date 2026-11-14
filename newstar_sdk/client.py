@@ -664,7 +664,8 @@ class NewStarClient:
             raise GameError(f"building {element_id} is not available on this planet")
         if not item.requirements_met:
             raise ActionRejected(
-                f"{item.name} requirements are not met: {', '.join(item.requirements)}"
+                f"{item.name} requirements are not met: {', '.join(item.requirements)}",
+                before_post=True,
             )
         if item.missing_resources:
             raise ActionRejected(
@@ -672,7 +673,8 @@ class NewStarClient:
                 + ", ".join(
                     f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
                     for rid, amount in sorted(item.missing_resources.items())
-                )
+                ),
+                before_post=True,
             )
 
         if target_level is None and int(levels) < 1:
@@ -808,7 +810,8 @@ class NewStarClient:
             raise GameError(f"technology {element_id} is not available")
         if not item.requirements_met:
             raise ActionRejected(
-                f"{item.name} requirements are not met: {', '.join(item.requirements)}"
+                f"{item.name} requirements are not met: {', '.join(item.requirements)}",
+                before_post=True,
             )
         if item.missing_resources:
             raise ActionRejected(
@@ -816,7 +819,8 @@ class NewStarClient:
                 + ", ".join(
                     f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
                     for rid, amount in sorted(item.missing_resources.items())
-                )
+                ),
+                before_post=True,
             )
 
         if target_level is None and int(levels) < 1:
@@ -939,11 +943,13 @@ class NewStarClient:
                 raise GameError(f"element {element_id} is not available in this shipyard")
             if not item.requirements_met:
                 raise ActionRejected(
-                    f"{item.name} requirements are not met: {', '.join(item.requirements)}"
+                    f"{item.name} requirements are not met: {', '.join(item.requirements)}",
+                    before_post=True,
                 )
             if item.max_buildable <= 0:
                 raise ActionRejected(
-                    f"{item.name} cannot be built now (resources or prerequisites)"
+                    f"{item.name} cannot be built now (resources or prerequisites)",
+                    before_post=True,
                 )
             if amount > item.max_buildable:
                 raise ValueError(

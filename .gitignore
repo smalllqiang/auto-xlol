@@ -19,6 +19,7 @@ passwd.txt
 
 # Local game state (snapshots, journals)
 state/
+temp/
 
 # Local game source / downloaded fixtures (not part of the SDK)
 newstar/

@@ -125,13 +125,18 @@ SDK 不把 HTTP 200 当作成功。每个写操作都做“页面证据”验证
 
 代价是每个写操作需要多解析一次响应（通常不需要额外请求），以及多级操作可能出现“部分入队后抛错”。文档中明确提示优先一次一级。
 
+`ActionRejected.before_post` 区分两种来源：SDK 在发送 POST 前用页面数据挡住的动作
+标记为 `True`，可以确定没有入队；POST 之后验证失败标记为 `False`，可能已经部分
+生效。执行器只对前者尝试本轮的下一条候选，后者直接报错。
+
 ## 7. 错误模型
 
 - 网络/超时/5xx：`TransportError`。GET 按 `max_retries` 重试；POST 默认不自动重试，避免重复执行写操作或使舰队 token 失效。
 - 登录被拒：`AuthenticationError`。
 - 会话失效：`SessionExpired`。
 - 游戏错误页：`GameError`（带标题的错误容器，见 §3.1）。
-- 动作未生效：`ActionRejected`（继承 `GameError`）。
+- 动作未生效：`ActionRejected`（继承 `GameError`）；`before_post=True` 表示 SDK
+  在发请求前就拒绝了，`False` 表示 POST 后验证失败。
 - 页面结构无法解析：`ParseError`，或返回空列表/`None` 由调用方判断。
 
 错误页文本可能是未翻译的键（如 `NFCoosen`），SDK 不做翻译，避免把猜测写进错误信息。

@@ -8,7 +8,7 @@
 
 - 登录、会话保存/恢复、会话过期后自动重登（需提供密码）
 - 读取账号、资源、产能、星球、活动状态
-- 读取消息（分类/分页/未读计数）、加成总表、生产控制明细
+- 读取消息（分类/分页/未读计数）、加成总表、生产控制明细、排行榜与战役名人堂
 - 全量状态快照、快照 diff 事件、趋势统计
 - 建筑升级、拆除、建造队列取消
 - 科技研究、研究队列取消
@@ -284,14 +284,17 @@ for action in plan.actions:
 心跳，看板据此显示存活、数据年龄和下一轮时间：
 
 ```bash
-.venv/bin/python scripts/tui.py          # 交互式；Tab 切看板/排行榜，j/k 滚动，d 看详情
+.venv/bin/python scripts/tui.py          # 交互式；Tab 切看板/排行榜/消息/战役
 .venv/bin/python scripts/tui.py --once   # 打印一帧
 .venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
 .venv/bin/python scripts/tui.py --once --tab messages
+.venv/bin/python scripts/tui.py --once --tab battles
 ```
 排行榜由守护每 `--statistics-every` 轮写入 `state/statistics.json`，看板只读；
 第二个 tab 可切换玩家/联盟积分榜。消息由守护每 `--messages-every` 轮写入
-`state/messages.json`，第三个 tab 列表阅读正文，不标记已读。
+`state/messages.json`，第三个 tab 列表阅读正文，不标记已读。战役由守护每
+`--battles-every` 轮写入 `state/battles.json`，第四个 tab 显示名人堂，`o` 切换
+单位积分/日期排序，`d` 看单场详情和战报链接。
 每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；
 日志与快照超过 `--rotate-mb` 自动切成 `.1`。
 

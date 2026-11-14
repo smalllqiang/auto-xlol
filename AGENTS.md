@@ -111,6 +111,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   解析器按 `who` 分支，TUI 只读 `state/statistics.json`。
 - **消息时间是服务器墙上时间**：`Message.time` 是 naive，别按 UTC 转换；TUI 用
   `fmt_message_time`。消息缓存 `state/messages.json` 只读，不标记已读/归档/删除。
+- **战役时间同理**：`BattleRow.time` 是 naive 墙上时间，TUI 用 `fmt_battle_time`；
+  战役胜败只由模板颜色表达（`result` 为 `a`/`r`/空），战报正文不采集，只在详情里
+  给出 `page=raport` 链接。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。

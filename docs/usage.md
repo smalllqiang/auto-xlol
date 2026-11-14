@@ -145,6 +145,26 @@ alliances = client.get_statistics(who=2)
 - 分数里的千分位点会被去掉，返回 `int`；`tags` 是名字旁图标的 tooltip，
   `status` 是页面上的强/弱标签（页面提供时才有）。
 
+### 战役名人堂
+
+`page=battleHall` 是全服前 100 场战役的列表，`order` 可按单位积分（`units`）或
+日期（`date`）排序。SDK 用 GET 读取，不发写操作，也不打开具体战报：
+
+```python
+hall = client.get_battle_hall(order="units", sort="desc")
+hall.order, hall.sort, hall.rows
+for row in hall.rows[:10]:
+    print(row.rank, row.attacker, "VS", row.defender, row.result, row.units)
+    print(row.date, row.time, row.report_id)
+```
+
+- `order`：`units` 单位积分、`date` 战役时间；`sort`：`asc` / `desc`。
+- `result`：`a` 攻击方胜、`r` 防守方胜、空串表示页面没有标注胜败；`winner` /
+  `loser` 是派生属性。
+- `units` 是页面上的单位积分整数；`report_id` 是战报 URL 里的 `raport` 参数。
+- `date` 是页面原文（如 `2026年11月13日, 07:14:37`），`time` 是同一时刻的 naive
+  ISO 字符串。游戏按查看者的时区渲染墙上时间，**不要当 UTC 转换**。
+
 ### 加成（乘数）
 
 `page=infobonus` 给出全部加成项。标签就是页面上的文案（本实例是中文），SDK 不做
@@ -587,6 +607,10 @@ touch state/STOP
 - **消息采集**：`--messages-every N`（默认 60，0 关闭）每 N 轮抓一次收件箱，
   `--messages-pages`（默认 10）限制最新页数，写 `state/messages.json`；首轮会先采
   一次。单页失败写入 `errors`，不增加连续失败计数；路径可用 `--messages-file` 覆盖。
+- **战役采集**：`--battles-every N`（默认 120，0 关闭）每 N 轮抓一次战役名人堂的
+  「单位积分」和「日期」两种排序（两次 GET），写 `state/battles.json`；首轮会先采
+  一次。不抓战报正文；单榜失败写入 `errors`，不增加连续失败计数；路径可用
+  `--battles-file` 覆盖。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
 `--allow`）。
@@ -631,12 +655,17 @@ touch state/STOP
 .venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
 .venv/bin/python scripts/tui.py --once --tab messages
 .venv/bin/python scripts/tui.py --once --tab messages --message-index 0
+.venv/bin/python scripts/tui.py --once --tab battles
+.venv/bin/python scripts/tui.py --once --tab battles --battles-order date
+.venv/bin/python scripts/tui.py --once --tab battles --battle-index 0
 ```
 
-按键：`q` 退出、`r` 立即刷新、`Tab`/`1`/`2`/`3` 切换「看板 / 排行榜 / 消息」、
+按键：`q` 退出、`r` 立即刷新、`Tab`/`1`-`4` 切换「看板 / 排行榜 / 消息 / 战役」、
 `j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的 journal 条目
 展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换；消息 tab
-里 `Enter`/`d` 打开选中消息的正文，`d`/`Esc` 返回列表。
+里 `Enter`/`d` 打开选中消息的正文，`d`/`Esc` 返回列表；战役 tab 里 `o` 在
+「单位积分 / 日期」两种排序间切换，`Enter`/`d` 查看单场详情和战报链接，
+`d`/`Esc` 返回列表。
 
 面板内容：
 
@@ -657,6 +686,11 @@ touch state/STOP
   主题/正文摘要），`Enter`/`d` 阅读完整正文。只读缓存，**不标记已读、不归档、不删除**；
   消息时间按页面显示的服务器本地时间展示。守护默认每 60 轮采集一次
   （`--messages-every`），首轮会先采一次，最多取 `--messages-pages` 页。
+- **战役 tab**：读 `state/battles.json`，列出名人堂的战役（排名、参战方、日期、
+  单位积分），`✔`/`✘` 标出胜者/败者，`★` 标出自己参与的战役；`o` 在「单位积分 /
+  日期」排序间切换，`Enter`/`d` 查看单场详情和 `game.php?page=raport...` 战报链接。
+  只读缓存，**不抓取战报正文**。守护默认每 120 轮采集一次（`--battles-every`），
+  首轮会先采一次。
 
 数据契约：
 
@@ -673,6 +707,10 @@ touch state/STOP
 - `state/messages.json`：`run_forever.py` 采集的消息缓存，含 `captured_at`、
   `pages_total` / `pages_fetched`、`messages`（id、发送方、主题、正文、服务器时间、
   分类、坐标）和逐页 `errors`；不保存任何已读状态。
+- `state/battles.json`：`run_forever.py` 采集的战役名人堂快照，含 `captured_at`、
+  `base_url`、`boards`（`units:desc` / `date:desc` 两种排序，每榜 `order`、`sort`、
+  `rows`）和逐榜 `errors`；每行有 rank、attacker、defender、result、winner、loser、
+  date、time、units、report_id。不保存战报正文。
 - 看板会读取轮转后的 `journal.jsonl.1` / `events.jsonl.1`，容忍缺 `kind` 的旧
   cycle 记录、坏 JSON 行和乱序时间；`--once` 与交互模式共用同一份渲染结果。
 

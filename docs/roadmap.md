@@ -29,6 +29,7 @@
 | P1-9 | 看板值班化 | ✅ | 心跳健康栏、队列明细/ETA、候选与缺口、探险/舰队/消息、滚动与 JSON 详情、轮转与旧 schema 兼容；真实实例 dry-run 下 `--once` 帧回归 |
 | P1-10 | 排行榜看板 | ✅ | SDK 解析 `page=statistics`；守护采集玩家/联盟积分榜；TUI 第二 tab 切换/滚动；真实实例 55 名玩家 + 2 个联盟 |
 | P1-11 | 消息阅读 tab | ✅ | 守护采集收件箱到 `state/messages.json`；TUI 第三 tab 列表 + 正文阅读；不维护已读状态；真实实例 4 页 / 33 条 |
+| P1-12 | 战役名人堂 tab | ✅ | SDK 解析 `page=battleHall`；守护采集单位积分/日期两种排序到 `state/battles.json`；TUI 第四 tab 列表/详情/切换排序；真实实例 3 场 |
 
 **P1-9 看板值班化记录（2026-11-14）**：真实实例上以 `run_forever --interval 30
 --snapshot-every 1`（dry-run）运行，`scripts/tui.py --once` 能看到心跳/数据年龄/下轮、
@@ -48,6 +49,12 @@ SDK 解析对玩家榜（联盟列）和联盟榜（成员/成员积分列）分
 交互模式在 pty 里验证 `3`→`j`→`Enter`→`d`→`2`→`1`→`q`，退出码 0。消息时间按
 服务器墙上时间显示（naive 值不按 UTC 偏移）。采集只调用 `get_messages`，不标记
 已读/归档/删除。
+
+**P1-12 战役记录（2026-11-14）**：真实实例 `get_battle_hall(order="units"/"date")`
+各解析出 3 场战役，单位积分 581,500、胜败颜色与战报 `raport` id 都能读出；
+`run_forever --once --battles-every 1` 写入两份榜、0 错误；`tui.py --once --tab
+battles` 与 `--battles-order date` 可离线回归，`--battle-index 0` 打印战报链接。
+交互模式在 pty 里验证 `4`→`o`→`j`→`Enter`→`d`→`q`，退出码 0。
 
 **P1 完成的定义**：能无人值守连续跑 24 小时；dry-run 与 execute 可随时切换；
 中途崩溃重启不重复下单；每条动作都能在 journal 里回放。

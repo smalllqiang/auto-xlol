@@ -43,10 +43,12 @@ from .models import (
     Coordinates,
     FleetDispatch,
     FleetInfo,
+    FleetPreview,
     FleetShips,
     GalaxyView,
     MessageCounter,
     MessagePage,
+    MissionOption,
     Overview,
     PlanetInfo,
     PlanetSummary,
@@ -64,7 +66,7 @@ from .parsers import (
     parse_fleet_dispatch_result,
     parse_fleet_selection,
     parse_fleet_step1,
-    parse_fleet_step2,
+    parse_fleet_step2_details,
     parse_fleets,
     parse_galaxy,
     parse_game_error,
@@ -1057,22 +1059,27 @@ class NewStarClient:
         response = self._game_page("fleetTable")
         return parse_fleet_selection(response.text)
 
-    def send_fleet(
+    def _fleet_step1_step2(
         self,
         target: TargetLike,
         ships: ShipsLike,
-        mission: Union[int, Mission, str] = Mission.TRANSPORT,
+        mission: Union[int, Mission, str],
         *,
-        speed: int = 10,
-        resources: Optional[ResourceLike] = None,
-        stay_time: Union[int, str] = 0,
-        fleet_group: int = 0,
-        target_type: Optional[Union[int, PlanetType]] = None,
-        max_wave: int = 1,
-        sectors: int = 3,
-        verify: bool = True,
-    ) -> FleetDispatch:
-        """Send a fleet through the game's three-step dispatch flow."""
+        speed: int,
+        resources: Optional[ResourceLike],
+        fleet_group: int,
+        target_type: Optional[Union[int, PlanetType]],
+    ) -> Tuple[
+        int,
+        Coordinates,
+        str,
+        List[MissionOption],
+        Dict[int, float],
+        Optional[float],
+        Optional[float],
+        Optional[float],
+    ]:
+        """Run the two preparation POSTs shared by preview and dispatch."""
 
         self.ensure_login()
         resolved_type = (
@@ -1109,7 +1116,7 @@ class NewStarClient:
         step1_data["target_mission"] = str(mission_id)
         step1_data.update(ship_payload)
         response = self._game_page("fleetStep1", method="POST", data=step1_data)
-        token, _max_speed = parse_fleet_step1(response.text)
+        token, max_speed = parse_fleet_step1(response.text)
         if not token:
             raise ParseError("fleetStep1 did not return a dispatch token")
 
@@ -1123,7 +1130,7 @@ class NewStarClient:
             }
         )
         response = self._game_page("fleetStep2", method="POST", data=step2_data)
-        token, missions = parse_fleet_step2(response.text)
+        token, missions, consumption, fleet_room = parse_fleet_step2_details(response.text)
         if not token:
             raise ParseError("fleetStep2 did not return a dispatch token")
         available = {option.id for option in missions}
@@ -1132,6 +1139,53 @@ class NewStarClient:
             raise ActionRejected(
                 f"mission {mission_id} is not available for this target; available: {names}"
             )
+
+        return (
+            mission_id,
+            coordinates,
+            token,
+            missions,
+            resource_payload,
+            max_speed,
+            consumption,
+            fleet_room,
+        )
+
+    def send_fleet(
+        self,
+        target: TargetLike,
+        ships: ShipsLike,
+        mission: Union[int, Mission, str] = Mission.TRANSPORT,
+        *,
+        speed: int = 10,
+        resources: Optional[ResourceLike] = None,
+        stay_time: Union[int, str] = 0,
+        fleet_group: int = 0,
+        target_type: Optional[Union[int, PlanetType]] = None,
+        max_wave: int = 1,
+        sectors: int = 3,
+        verify: bool = True,
+    ) -> FleetDispatch:
+        """Send a fleet through the game's three-step dispatch flow."""
+
+        (
+            mission_id,
+            _coordinates,
+            token,
+            _missions,
+            resource_payload,
+            _max_speed,
+            _consumption,
+            _fleet_room,
+        ) = self._fleet_step1_step2(
+            target,
+            ships,
+            mission,
+            speed=speed,
+            resources=resources,
+            fleet_group=fleet_group,
+            target_type=target_type,
+        )
 
         step3_data = {
             "token": token,
@@ -1153,6 +1207,56 @@ class NewStarClient:
                 )
             return FleetDispatch(mission=mission_id)
         return result
+
+    def preview_fleet(
+        self,
+        target: TargetLike,
+        ships: ShipsLike,
+        mission: Union[int, Mission, str] = Mission.TRANSPORT,
+        *,
+        speed: int = 10,
+        resources: Optional[ResourceLike] = None,
+        fleet_group: int = 0,
+        target_type: Optional[Union[int, PlanetType]] = None,
+    ) -> FleetPreview:
+        """Run the first two dispatch steps without sending the fleet.
+
+        This still POSTs to ``fleetStep1`` and ``fleetStep2``; the game creates
+        a temporary session token, but no fleet is created.  Use it to inspect
+        available missions and fuel consumption before a real dispatch.
+        """
+
+        (
+            mission_id,
+            coordinates,
+            _token,
+            missions,
+            _resource_payload,
+            max_speed,
+            consumption,
+            fleet_room,
+        ) = self._fleet_step1_step2(
+            target,
+            ships,
+            mission,
+            speed=speed,
+            resources=resources,
+            fleet_group=fleet_group,
+            target_type=target_type,
+        )
+        mission_name = next(
+            (option.name for option in missions if option.id == mission_id),
+            "",
+        )
+        return FleetPreview(
+            mission=mission_id,
+            mission_name=mission_name,
+            target_coordinates=coordinates,
+            consumption=consumption,
+            fleet_room=fleet_room,
+            max_speed=max_speed,
+            available_missions=list(missions),
+        )
 
     def recall_fleet(self, fleet_id: int) -> List[FleetInfo]:
         """Recall one of your own fleets."""

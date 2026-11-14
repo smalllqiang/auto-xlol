@@ -362,6 +362,20 @@ class FleetDispatch:
 
 
 @dataclass
+class FleetPreview:
+    """Result of the first two fleet-dispatch steps; no fleet is sent."""
+
+    mission: int = 0
+    mission_name: str = ""
+    from_coordinates: Optional[Coordinates] = None
+    target_coordinates: Optional[Coordinates] = None
+    consumption: Optional[float] = None
+    fleet_room: Optional[float] = None
+    max_speed: Optional[float] = None
+    available_missions: List[MissionOption] = field(default_factory=list)
+
+
+@dataclass
 class ServerInfo:
     username: Optional[str] = None
     universe: Optional[str] = None

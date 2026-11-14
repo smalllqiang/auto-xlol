@@ -3,6 +3,7 @@ from newstar_sdk.parsers import (
     parse_fleet_selection,
     parse_fleet_step1,
     parse_fleet_step2,
+    parse_fleet_step2_details,
     parse_fleets,
     parse_galaxy,
     parse_game_error,
@@ -65,6 +66,14 @@ def test_fleet_step_parsing(fixture_html):
     assert token == "tok-123"
     assert [m.id for m in missions] == [3, 4, 6]
     assert missions[0].name == "运输"
+
+    token, missions, consumption, fleet_room = parse_fleet_step2_details(
+        fixture_html("fleet_step2.html")
+    )
+    assert token == "tok-123"
+    assert [m.id for m in missions] == [3, 4, 6]
+    assert consumption == 123
+    assert fleet_room is None
 
 
 def test_fleet_dispatch_result(fixture_html):

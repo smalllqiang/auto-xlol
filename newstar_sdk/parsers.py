@@ -862,6 +862,15 @@ def parse_fleet_step1(html: str) -> Tuple[Optional[str], Optional[float]]:
 
 
 def parse_fleet_step2(html: str) -> Tuple[Optional[str], List[MissionOption]]:
+    token, missions, _consumption, _fleet_room = parse_fleet_step2_details(html)
+    return token, missions
+
+
+def parse_fleet_step2_details(
+    html: str,
+) -> Tuple[Optional[str], List[MissionOption], Optional[float], Optional[float]]:
+    """Parse the dispatch token, available missions, fuel and fleet room."""
+
     soup = _soup(html)
     token = _attr(soup.select_one("input[name='token']"), "value") or None
     missions: List[MissionOption] = []
@@ -886,7 +895,14 @@ def parse_fleet_step2(html: str) -> Tuple[Optional[str], List[MissionOption]]:
                 name=label or MISSION_NAMES_ZH.get(mission_id, f"Mission {mission_id}"),
             )
         )
-    return token, missions
+
+    consumption_node = soup.select_one("#consumption")
+    consumption = parse_number(_text(consumption_node)) if consumption_node else None
+    fleet_room_match = re.search(r'fleetroom\s*:\s*"([^"]+)"', html or "")
+    fleet_room = (
+        parse_number(fleet_room_match.group(1)) if fleet_room_match else None
+    )
+    return token, missions, consumption, fleet_room
 
 
 def parse_fleet_dispatch_result(html: str) -> Optional[FleetDispatch]:

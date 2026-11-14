@@ -241,6 +241,32 @@ print(result.ships)
 - 如果第二步返回的可用任务不包含请求的任务，SDK 会抛 `ActionRejected` 并列出可用任务。
 - 第三步没有到达确认页时，SDK 认为发送失败并抛 `ActionRejected`（可能原因：燃料不足、舰队槽满、目标无效、任务规则不满足）。
 
+### 发舰队预览
+
+如果只想确认任务可选、燃料消耗和货舱空间，可以只走前两步：
+
+```python
+preview = client.preview_fleet(
+    "3:505:16",
+    {"small_cargo": 10},
+    mission="expedition",
+    speed=10,
+)
+print(preview.mission_name, preview.consumption, preview.fleet_room)
+print([mission.id for mission in preview.available_missions])
+```
+
+`preview_fleet()` 会向 `fleetStep1` 和 `fleetStep2` 发 POST，因此游戏会创建一个临时派遣 token；它**不调用 `fleetStep3`，不会创建舰队**。这个 token 只适合紧接着做一次真实发送，不能当作长期预留。它返回：
+
+- `mission` / `mission_name`：请求的任务；
+- `target_coordinates`：请求的目标；
+- `consumption`：第二步页面显示的燃料消耗；
+- `fleet_room`：页面提供时的剩余货舱；
+- `max_speed`：第一步页面显示的最大速度；
+- `available_missions`：第二步页面允许的任务列表。
+
+预览仍然会触发送出前的服务端校验（燃料不足、任务不可用等），失败时同样抛 `ActionRejected` 或 `GameError`。
+
 召回：
 
 ```python

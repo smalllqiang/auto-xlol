@@ -240,3 +240,34 @@ def test_local_research_rejection_is_marked_before_post(monkeypatch):
 
 def test_action_rejected_defaults_to_post_rejection():
     assert ActionRejected("queue full").before_post is False
+
+
+def test_preview_fleet_runs_only_the_first_two_steps(fixture_html, monkeypatch):
+    client = _make_client()
+    pages = []
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        page = (params or {}).get("page")
+        pages.append(page)
+        if page == "fleetStep1":
+            return FakeResponse(fixture_html("fleet_step1.html"))
+        if page == "fleetStep2":
+            return FakeResponse(fixture_html("fleet_step2.html"))
+        raise AssertionError(f"unexpected page {page}")
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    preview = client.preview_fleet(
+        "3:505:9",
+        {"small_cargo": 1},
+        mission="transport",
+        speed=8,
+        resources={"metal": 1},
+    )
+
+    assert pages == ["fleetStep1", "fleetStep2"]
+    assert preview.mission == 3
+    assert preview.mission_name == "运输"
+    assert preview.target_coordinates == Coordinates(3, 505, 9)
+    assert preview.consumption == pytest.approx(123)
+    assert preview.max_speed == pytest.approx(5000)
+    assert [option.id for option in preview.available_missions] == [3, 4, 6]

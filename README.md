@@ -246,7 +246,7 @@ response = client.request("POST", "game.php?page=...", data={"key": "value"})
 ## 策略层（规划器）
 
 `autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开阶段目标及其依赖链、按回本时间
-排序产出建筑。
+排序产出建筑。探险准备另有只读报告（航道、舰队积分、建船建议）：`scripts/expedition.py`。
 
 ```python
 from autoplay import build_plan
@@ -404,6 +404,7 @@ autoplay/         # 策略层（易变）
   phases.py       # 阶段识别
   economy.py      # 等价换算 / 增产估算 / 回本
   planner.py      # 依赖展开 + ROI 排序
+  expedition.py   # 探险航道 / 积分 / 建船建议（只读）
   executor.py     # 队列感知 + 安全闸
 newstar_sdk/      # 客户端（稳定契约）
   client.py       # HTTP 会话 + 高层操作

@@ -563,3 +563,42 @@ journal 尾部。按键 `q` 退出、`r` 立即刷新；数据陈旧时显示「
 
 实现只用标准库 `curses`，没有引入 TUI 框架；渲染逻辑在
 `autoplay/dashboard.py`，是纯函数，`--once` 与测试都复用它。
+
+## 16. 探险准备报告
+
+`scripts/expedition.py` 只读回答「现在能不能探险、还差多少舰队积分」：读取研究、
+船坞、舰队和概览页，输出航道占用、当前积分、目标坐标和舰船建造建议。不建造、
+不发舰队。
+
+```bash
+.venv/bin/python scripts/expedition.py --no-verify-ssl
+.venv/bin/python scripts/expedition.py --no-verify-ssl --json
+.venv/bin/python scripts/expedition.py --no-verify-ssl --target-score 50000
+.venv/bin/python scripts/expedition.py --no-verify-ssl --ship 207
+```
+
+口径：
+
+- 探险航道数 = `floor(sqrt(探险技术等级))`；在途和返航中的探险队都占用航道；
+- 舰队积分 = `(舰船造价中的合金 + 水晶) / 1000`，不使用重氢；
+- 默认目标 `500,000` 来自攻略的「高级资源门槛」，是策略先验而不是游戏常量，
+  用 `--target-score` 覆盖；
+- 建造建议优先无重氢、单舰积分高、合金占比高的舰船；`--ship` 可强制指定元素 ID；
+- `can_send` 只表示有空闲航道、有可派遣舰船且能确定目标坐标；燃料、距离和编队
+  风险仍由游戏在发送时校验。
+
+输出示例：
+
+```text
+探险技术  9
+探险航道  3（占用 1，空闲 2）
+当前积分  66.0 / 目标 500,000.0
+目标坐标  3:505:16
+可派遣    True
+建造建议  战列舰（207） 还需 8620 艘  单舰积分 58.0
+备注:
+  - 按「战列舰」补足目标还需 8620 艘
+```
+
+当前只做只读报告；把「造舰/发探险」接入执行器是后续独立步骤，需要单独的
+allow-list、dry-run 和燃料校验。

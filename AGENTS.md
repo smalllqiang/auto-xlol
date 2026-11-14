@@ -20,7 +20,8 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 5. `docs/roadmap.md` — 做到哪了、下一步是什么、验收标准。
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
-（纯解析）、`autoplay/planner.py`（计划）、`autoplay/executor.py`（执行）。
+（纯解析）、`autoplay/planner.py`（计划）、`autoplay/executor.py`（执行）、
+`autoplay/expedition.py`（探险只读报告）。
 
 ## 环境与命令
 
@@ -43,6 +44,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/collect_state.py                  # 一次快照 + 事件
 .venv/bin/python scripts/state_report.py --hours 24        # 趋势报表
 .venv/bin/python scripts/plan.py                          # 只读计划
+.venv/bin/python scripts/expedition.py --no-verify-ssl     # 探险只读报告
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```

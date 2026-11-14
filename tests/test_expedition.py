@@ -1,0 +1,184 @@
+import json
+import math
+from types import SimpleNamespace
+
+import pytest
+
+from autoplay.expedition import (
+    ExpeditionReport,
+    build_expedition_report,
+    compute_expedition_report,
+)
+from newstar_sdk.models import Coordinates, FleetInfo, PlanetInfo, ResearchInfo, Resources, ShipInfo
+
+BATTLESHIP = ShipInfo(
+    id=207,
+    name="战列舰",
+    cost={901: 41000.0, 902: 17000.0},
+    build_seconds=20.0,
+)
+SMALL_CARGO = ShipInfo(
+    id=202,
+    name="轻型运输舰",
+    cost={901: 2000.0, 902: 2000.0},
+    build_seconds=5.0,
+)
+RESOURCES = {901: 1_000_000_000, 902: 1_000_000_000, 903: 1_000_000_000}
+
+
+def _planet() -> PlanetInfo:
+    return PlanetInfo(name="母星", coordinates=Coordinates(3, 505, 8))
+
+
+def test_report_slots_score_target_and_recommendation():
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=9)],
+        shipyard=[BATTLESHIP, SMALL_CARGO],
+        available_ships={207: 1, 202: 2},
+        fleets=[
+            FleetInfo(
+                mission="远征",
+                mission_id=15,
+                target_coordinates=Coordinates(3, 505, 16),
+            )
+        ],
+        planet=_planet(),
+        resources=RESOURCES,
+        target_score=500_000,
+    )
+
+    assert report.expedition_tech == 9
+    assert report.slots == 3
+    assert report.active_expeditions == 1
+    assert report.free_slots == 2
+    assert report.current_score == pytest.approx(58.0 + 2 * 4.0)
+    assert report.target == "3:505:16"
+    assert report.can_send is True
+
+    recommendation = report.recommendation
+    assert recommendation is not None
+    assert recommendation.element_id == 207
+    assert recommendation.name == "战列舰"
+    assert recommendation.score_per_ship == pytest.approx(58.0)
+    expected = math.ceil((500_000 - report.current_score) / 58.0)
+    assert recommendation.needed == expected
+    assert recommendation.total_cost[901] == pytest.approx(41000.0 * expected)
+    assert recommendation.affordable is True
+    assert any("补足目标" in note for note in report.notes)
+    json.dumps(report.as_dict(), ensure_ascii=False)
+
+
+def test_report_treats_returning_expeditions_as_occupied():
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=4)],
+        shipyard=[BATTLESHIP],
+        available_ships={207: 1},
+        fleets=[
+            FleetInfo(mission_id=15, mission="远征", returning=False),
+            FleetInfo(mission_id=15, mission="远征", returning=True),
+        ],
+        planet=_planet(),
+        resources=RESOURCES,
+    )
+
+    assert report.slots == 2
+    assert report.active_expeditions == 2
+    assert report.free_slots == 0
+    assert report.can_send is False
+    assert any("航道已满" in note for note in report.notes)
+
+
+def test_report_without_expedition_tech():
+    report = compute_expedition_report(
+        research=[],
+        shipyard=[BATTLESHIP],
+        available_ships={},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+    )
+
+    assert report.expedition_tech == 0
+    assert report.slots == 0
+    assert report.free_slots == 0
+    assert report.can_send is False
+    assert any("未解锁" in note for note in report.notes)
+
+
+def test_recommendation_marks_unmet_requirements():
+    locked = ShipInfo(
+        id=207,
+        name="战列舰",
+        cost={901: 41000.0, 902: 17000.0},
+        requirements_met=False,
+        requirements=["星际船坞 等级 5 (0/5)"],
+    )
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=9)],
+        shipyard=[locked],
+        available_ships={},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+    )
+
+    assert report.recommendation is not None
+    assert report.recommendation.requirements_met is False
+    assert report.recommendation.affordable is False
+    assert any("前置未满足" in note for note in report.notes)
+
+
+def test_recommendation_prefers_no_deuterium_and_high_score():
+    destroyer = ShipInfo(
+        id=225,
+        name="毁灭者",
+        cost={901: 900_000.0, 902: 700_000.0, 903: 200_000.0},
+    )
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=9)],
+        shipyard=[SMALL_CARGO, destroyer, BATTLESHIP],
+        available_ships={},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+        target_score=500_000,
+    )
+
+    assert report.recommendation is not None
+    assert report.recommendation.element_id == 207
+
+
+def test_build_report_falls_back_to_shipyard_availability():
+    cargo = ShipInfo(
+        id=202,
+        name="轻型运输舰",
+        cost={901: 2000.0, 902: 2000.0},
+        available=3,
+    )
+
+    class FakeClient:
+        def get_research(self):
+            return [ResearchInfo(id=124, name="探险技术", level=9)]
+
+        def get_shipyard(self, mode="fleet"):
+            assert mode == "fleet"
+            return [cargo]
+
+        def get_available_ships(self):
+            return {}
+
+        def get_fleets(self):
+            return []
+
+        def get_overview(self):
+            return SimpleNamespace(
+                planet=_planet(),
+                resources=Resources(amounts=RESOURCES),
+            )
+
+    report = build_expedition_report(FakeClient())
+
+    assert isinstance(report, ExpeditionReport)
+    assert report.available_ships == {202: 3}
+    assert report.current_score == pytest.approx(12.0)
+    assert report.ship_names == {202: "轻型运输舰"}

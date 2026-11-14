@@ -32,6 +32,7 @@ from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
+from autoplay.statistics import collect_statistics, write_statistics
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
@@ -102,6 +103,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=12,
         help="write a full snapshot every N cycles (0 disables)",
+    )
+    parser.add_argument(
+        "--statistics-every",
+        type=int,
+        default=120,
+        help="collect the leaderboard every N cycles (0 disables, default: 120)",
+    )
+    parser.add_argument(
+        "--statistics-file",
+        default="state/statistics.json",
+        help="leaderboard snapshot for the TUI (default: state/statistics.json)",
     )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
@@ -289,6 +301,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     journal_path = Path(args.journal)
     snapshots_path = Path(args.snapshots)
     events_path = Path(args.events)
+    statistics_path = Path(args.statistics_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     failures = 0
@@ -401,6 +414,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         )
                     previous_snapshot = snapshot
                     print(f"    snapshot written ({len(events)} events)", flush=True)
+
+                if args.statistics_every and (
+                    cycles == 1 or cycles % args.statistics_every == 0
+                ):
+                    try:
+                        statistics_payload = collect_statistics(client)
+                    except NewStarError as exc:
+                        statistics_payload = {
+                            "schema": 1,
+                            "captured_at": now,
+                            "source": "game.php?page=statistics",
+                            "boards": {},
+                            "errors": [
+                                {
+                                    "board": "all",
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                }
+                            ],
+                        }
+                    try:
+                        write_statistics(statistics_path, statistics_payload)
+                        print(
+                            "    statistics written "
+                            f"({len(statistics_payload.get('boards') or {})} boards, "
+                            f"{len(statistics_payload.get('errors') or [])} errors)",
+                            flush=True,
+                        )
+                    except OSError as exc:
+                        print(
+                            f"    statistics write failed: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
             except NewStarError as exc:
                 failures += 1
                 append_jsonl(

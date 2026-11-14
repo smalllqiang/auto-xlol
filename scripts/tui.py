@@ -2,9 +2,13 @@
 """Read-only TUI dashboard for the auto-play loop.
 
 It only displays what the daemon already wrote to ``state/`` -- it never talks
-to the game and never triggers actions.  Keys: ``q`` quit, ``r`` refresh,
+to the game and never triggers actions.  There are two tabs: the live dashboard
+and the leaderboard collected by ``run_forever`` into ``state/statistics.json``.
+
+Keys: ``q`` quit, ``r`` refresh, ``Tab``/``1``/``2`` switch tabs,
 ``j``/``k`` move, ``PgUp``/``PgDn`` page, ``g``/``G`` top/bottom, ``d`` open
-the selected journal entry as JSON.
+the selected journal entry as JSON, ``w`` switch players/alliances on the
+leaderboard tab.
 
 ``--once`` renders a single frame to stdout (no curses), which is handy for
 scripts, logs and tests.
@@ -23,12 +27,16 @@ from autoplay.dashboard import (
     FrameLine,
     load_state,
     render_lines,
+    render_statistics_lines,
+    render_statistics_text,
     render_text,
     text_width,
     truncate,
 )
 
-FOOTER = "q 退出 · r 刷新 · j/k 移动 · PgUp/PgDn 翻页 · g/G 顶/底 · d 详情"
+DASHBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 移动 · PgUp/PgDn 翻页 · g/G · d 详情"
+LEADERBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · w 玩家/联盟 · j/k 移动 · PgUp/PgDn 翻页 · g/G"
+TAB_LABELS = (" 1 看板 ", " 2 排行榜 ")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -41,11 +49,34 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--log-lines", type=int, default=10, help="journal lines to show")
     parser.add_argument("--event-lines", type=int, default=4, help="event/alert lines to show")
     parser.add_argument("--once", action="store_true", help="print one frame and exit")
+    parser.add_argument(
+        "--tab",
+        choices=("dashboard", "leaderboard"),
+        default="dashboard",
+        help="initial tab for --once and the interactive TUI",
+    )
+    parser.add_argument(
+        "--stats-who",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="leaderboard view: 1=players, 2=alliances",
+    )
     return parser.parse_args(argv)
 
 
-def _frame(state_dir: Path, width: int, log_lines: int, event_lines: int) -> List[str]:
+def _frame(
+    state_dir: Path,
+    width: int,
+    log_lines: int,
+    event_lines: int,
+    *,
+    tab: str = "dashboard",
+    stats_who: int = 1,
+) -> List[str]:
     state = load_state(state_dir)
+    if tab == "leaderboard":
+        return render_statistics_text(state, who=stats_who, width=width)
     return render_text(
         state, width=width, log_lines=log_lines, event_lines=event_lines
     )
@@ -114,6 +145,28 @@ def _footer(stdscr, height: int, width: int, text: str) -> None:
         pass
 
 
+def _draw_tabs(stdscr, tab: int, colors: bool, width: int) -> None:
+    import curses
+
+    try:
+        stdscr.move(0, 0)
+        stdscr.clrtoeol()
+    except curses.error:
+        pass
+    x = 0
+    for index, label in enumerate(TAB_LABELS):
+        attr = (
+            curses.A_REVERSE | curses.A_BOLD
+            if index == tab
+            else (curses.A_DIM if colors else curses.A_NORMAL)
+        )
+        try:
+            stdscr.addnstr(0, x, label, max(0, width - 1 - x), attr)
+        except curses.error:
+            pass
+        x += text_width(label)
+
+
 def _draw(
     stdscr,
     frame: List[FrameLine],
@@ -121,12 +174,14 @@ def _draw(
     cursor: int,
     colors: bool,
     footer: str,
+    tab: int,
 ) -> None:
     import curses
 
     height, width = stdscr.getmaxyx()
     stdscr.erase()
-    viewport = max(1, height - 1)
+    _draw_tabs(stdscr, tab, colors, width)
+    viewport = max(1, height - 2)
     for row in range(viewport):
         index = scroll + row
         if index >= len(frame):
@@ -135,7 +190,7 @@ def _draw(
         attr = _attr(line.style, colors)
         if index == cursor:
             attr |= curses.A_REVERSE
-        _write(stdscr, row, line.text, attr, max(0, width - 1))
+        _write(stdscr, row + 1, line.text, attr, max(0, width - 1))
     _footer(stdscr, height, width, footer)
     stdscr.refresh()
 
@@ -178,6 +233,8 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
     colors = _init_colors()
 
     state_dir = Path(args.state_dir)
+    tab = 1 if args.tab == "leaderboard" else 0
+    stats_who = args.stats_who
     last_reload = 0.0
     frame: List[FrameLine] = []
     scroll = 0
@@ -191,18 +248,24 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
         if now - last_reload >= args.refresh or not frame:
             height, width = stdscr.getmaxyx()
             state = load_state(state_dir)
-            frame = render_lines(
-                state,
-                width=max(40, width - 1),
-                log_lines=args.log_lines,
-                event_lines=args.event_lines,
-            )
+            if tab == 0:
+                frame = render_lines(
+                    state,
+                    width=max(40, width - 1),
+                    log_lines=args.log_lines,
+                    event_lines=args.event_lines,
+                )
+            else:
+                frame = render_statistics_lines(
+                    state,
+                    who=stats_who,
+                    width=max(40, width - 1),
+                )
             last_reload = now
-            if cursor >= len(frame):
-                cursor = max(0, len(frame) - 1)
+            cursor = max(0, min(cursor, len(frame) - 1))
 
         height, width = stdscr.getmaxyx()
-        viewport = max(1, height - 1)
+        viewport = max(1, height - 2)
 
         if detail_lines is not None:
             _draw_detail(stdscr, detail_title, detail_lines, detail_scroll, colors)
@@ -213,8 +276,9 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
             elif cursor >= scroll + viewport:
                 scroll = cursor - viewport + 1
             scroll = max(0, min(scroll, max_scroll))
-            footer = f"{FOOTER} · {cursor + 1}/{len(frame)}"
-            _draw(stdscr, frame, scroll, cursor, colors, footer)
+            base = DASHBOARD_FOOTER if tab == 0 else LEADERBOARD_FOOTER
+            footer = f"{base} · {cursor + 1}/{len(frame)}"
+            _draw(stdscr, frame, scroll, cursor, colors, footer, tab)
 
         key = stdscr.getch()
         if key in (ord("q"), ord("Q")):
@@ -224,6 +288,21 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                 detail_lines = None
             else:
                 return
+
+        if key in (9, curses.KEY_BTAB):
+            tab = 1 - tab
+            cursor = 0
+            scroll = 0
+            detail_lines = None
+            last_reload = 0.0
+            continue
+        if key in (ord("1"), ord("2")):
+            tab = key - ord("1")
+            cursor = 0
+            scroll = 0
+            detail_lines = None
+            last_reload = 0.0
+            continue
         if key in (ord("r"), ord("R"), curses.KEY_RESIZE):
             last_reload = 0.0
             continue
@@ -245,6 +324,13 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                 detail_scroll = max(0, len(detail_lines) - 1)
             continue
 
+        if tab == 1 and key in (ord("w"), ord("W")):
+            stats_who = 2 if stats_who == 1 else 1
+            cursor = 0
+            scroll = 0
+            last_reload = 0.0
+            continue
+
         if key in (ord("j"), curses.KEY_DOWN):
             cursor = min(len(frame) - 1, cursor + 1)
         elif key in (ord("k"), curses.KEY_UP):
@@ -258,7 +344,7 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
             scroll = 0
         elif key == ord("G"):
             cursor = max(0, len(frame) - 1)
-        elif key in (ord("d"), ord("D")):
+        elif tab == 0 and key in (ord("d"), ord("D")):
             if frame and frame[cursor].entry is not None:
                 entry = frame[cursor].entry or {}
                 detail_title = f"详情 · {entry.get('kind') or 'cycle'} · {entry.get('at') or '-'}"
@@ -276,7 +362,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     if args.once:
-        print("\n".join(_frame(state_dir, args.width, args.log_lines, args.event_lines)))
+        print(
+            "\n".join(
+                _frame(
+                    state_dir,
+                    args.width,
+                    args.log_lines,
+                    args.event_lines,
+                    tab=args.tab,
+                    stats_who=args.stats_who,
+                )
+            )
+        )
         return 0
 
     try:

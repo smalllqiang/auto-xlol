@@ -7,6 +7,7 @@ from autoplay.dashboard import (
     load_state,
     pad,
     render_lines,
+    render_statistics_text,
     render_text,
     text_width,
     truncate,
@@ -150,7 +151,9 @@ def _daemon(**overrides):
     return status
 
 
-def _state_dir(tmp_path, *, snapshot=True, daemon=True, journal=None, events=None, stop=False):
+def _state_dir(
+    tmp_path, *, snapshot=True, daemon=True, journal=None, events=None, statistics=None, stop=False
+):
     if snapshot:
         _write(tmp_path / "snapshots.jsonl", [_snapshot()])
     _write(tmp_path / "journal.jsonl", journal if journal is not None else [_cycle()])
@@ -172,6 +175,10 @@ def _state_dir(tmp_path, *, snapshot=True, daemon=True, journal=None, events=Non
             json.dumps(_daemon(), ensure_ascii=False), encoding="utf-8"
         )
     (tmp_path / "daemon.lock").write_text("4242", encoding="utf-8")
+    if statistics is not None:
+        (tmp_path / "statistics.json").write_text(
+            json.dumps(statistics, ensure_ascii=False), encoding="utf-8"
+        )
     if stop:
         (tmp_path / "STOP").write_text("", encoding="utf-8")
     return tmp_path
@@ -372,3 +379,84 @@ def test_expedition_and_fleet_panels(tmp_path):
     text = "\n".join(render_text(state, width=100))
     assert "探险 前往 [3:505:16]" in text
     assert "上次调度 已派出" in text
+
+
+def _statistics():
+    return {
+        "schema": 1,
+        "captured_at": "2026-11-13T09:00:30+00:00",
+        "source": "game.php?page=statistics",
+        "boards": {
+            "1:1": {
+                "who": 1,
+                "sort": 1,
+                "range": 1,
+                "rows": [
+                    {
+                        "rank": 1,
+                        "name": "PlayerOne",
+                        "score": 210_975_746_268,
+                        "alliance": "ALLY-A",
+                        "status": "强",
+                    },
+                    {
+                        "rank": 2,
+                        "name": "TestUser",
+                        "score": 1_234_567,
+                        "alliance": "ALLY-B",
+                    },
+                ],
+            },
+            "2:1": {
+                "who": 2,
+                "sort": 1,
+                "range": 1,
+                "rows": [
+                    {
+                        "rank": 1,
+                        "name": "ALLY-A",
+                        "score": 300_000_000,
+                        "members": 7,
+                        "member_score": 42_000_000,
+                    },
+                ],
+            },
+        },
+        "errors": [],
+    }
+
+
+def test_leaderboard_players_tab(tmp_path):
+    state = load_state(_state_dir(tmp_path, statistics=_statistics()), now=NOW)
+    text = "\n".join(render_statistics_text(state, who=1, width=100))
+
+    assert "排行榜 · 玩家积分榜" in text
+    assert "2 名 · 我的排名 #2" in text
+    assert "PlayerOne" in text and "210.98B" in text
+    assert "ALLY-A" in text
+    assert "▸" in text and "TestUser" in text
+
+
+def test_leaderboard_alliance_tab(tmp_path):
+    state = load_state(_state_dir(tmp_path, statistics=_statistics()), now=NOW)
+    text = "\n".join(render_statistics_text(state, who=2, width=100))
+
+    assert "排行榜 · 联盟积分榜" in text
+    assert "ALLY-A" in text
+    assert "成员" in text and "7" in text
+    assert "ALLY-B" not in text
+
+
+def test_leaderboard_missing_data(tmp_path):
+    state = load_state(_state_dir(tmp_path), now=NOW)
+    text = "\n".join(render_statistics_text(state, who=1, width=100))
+    assert "尚无排行榜数据" in text
+
+
+def test_leaderboard_shows_collection_errors(tmp_path):
+    payload = _statistics()
+    payload["errors"] = [{"board": "2:1", "error": "TransportError: timed out"}]
+    state = load_state(_state_dir(tmp_path, statistics=payload), now=NOW)
+    text = "\n".join(render_statistics_text(state, who=1, width=100))
+    assert "采集错误" in text
+    assert "2:1" in text and "timed out" in text

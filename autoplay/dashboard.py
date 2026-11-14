@@ -39,6 +39,9 @@ PHASE_NAMES = {
     "expedition": "探险纪元",
 }
 
+STATISTICS_WHO = {1: "玩家", 2: "联盟"}
+STATISTICS_SORT = {1: "积分", 2: "舰队", 3: "研究", 4: "建筑", 5: "防御"}
+
 STATUS_NAMES = {
     "executed": "已执行",
     "dry_run": "预览",
@@ -72,6 +75,7 @@ class DashboardState:
     snapshot: Optional[Dict[str, Any]] = None
     journal: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
+    statistics: Dict[str, Any] = field(default_factory=dict)
     daemon: Dict[str, Any] = field(default_factory=dict)
     daemon_pid: Optional[int] = None
     daemon_lock_age: Optional[float] = None
@@ -326,6 +330,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
     snapshots = _read_tail(state_dir / "snapshots.jsonl", 1)
     journal = _read_recent(state_dir / "journal.jsonl", 120)
     events = _read_recent(state_dir / "events.jsonl", 80)
+    statistics = _read_json(state_dir / "statistics.json")
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
@@ -350,6 +355,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         snapshot=snapshots[-1] if snapshots else None,
         journal=journal,
         events=events,
+        statistics=statistics,
         daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
@@ -862,6 +868,111 @@ def render_lines(
         add("  无", "muted")
 
     return lines
+
+
+def render_statistics_lines(
+    state: DashboardState,
+    *,
+    who: int = 1,
+    sort: int = 1,
+    width: int = 110,
+) -> List[FrameLine]:
+    """Render the leaderboard tab from the daemon's statistics snapshot."""
+
+    width = max(40, width)
+    lines: List[FrameLine] = []
+
+    def add(text: str, style: str = "normal") -> None:
+        lines.append(FrameLine(truncate(text, width), style))
+
+    payload = state.statistics or {}
+    label = f"{STATISTICS_WHO.get(who, who)}{STATISTICS_SORT.get(sort, sort)}榜"
+    add(f"排行榜 · {label} · 1-100", "title")
+
+    if not payload:
+        add("尚无排行榜数据：守护在首轮会采集（--statistics-every，默认 120 轮）", "warn")
+        add("命令示例：run_forever --no-verify-ssl --statistics-every 120", "muted")
+        return lines
+
+    captured = _parse_time(payload.get("captured_at"))
+    age = (
+        fmt_age(max(0.0, (state.now - captured).total_seconds()))
+        if captured is not None
+        else "-"
+    )
+    add(f"来源 {payload.get('source') or 'page=statistics'} · 快照 {age}", "muted")
+    add(_rule(width), "muted")
+
+    errors = payload.get("errors") or []
+    if errors:
+        add("采集错误", "section")
+        for error in errors[:3]:
+            add(f"  {error.get('board')}: {error.get('error')}", "warn")
+
+    board = (payload.get("boards") or {}).get(f"{int(who)}:{int(sort)}")
+    if not isinstance(board, dict):
+        available = ", ".join(sorted((payload.get("boards") or {}).keys())) or "无"
+        add(f"这张榜还没有采集到（已采集：{available}）", "warn")
+        add("看板每 --statistics-every 轮重试一次。", "muted")
+        return lines
+
+    rows = board.get("rows") or []
+    account = (state.snapshot or {}).get("account") or {}
+    me = account.get("username") or ""
+    my_rank = next(
+        (row.get("rank") for row in rows if me and row.get("name") == me), None
+    )
+    summary = f"{len(rows)} 名"
+    if my_rank is not None:
+        summary += f" · 我的排名 #{my_rank}"
+    add(summary, "muted")
+
+    if who == 1:
+        header = f"{pad('排名', 5)}{pad('玩家', 24)}{pad('联盟', 20)}{pad('积分', 12)}"
+    else:
+        header = f"{pad('排名', 5)}{pad('联盟', 30)}{pad('成员', 8)}{pad('积分', 12)}"
+    add(header, "section")
+
+    for row in rows:
+        name = str(row.get("name") or "")
+        score = fmt_number(row.get("score"))
+        selected = bool(me and name == me)
+        marker = "▸ " if selected else "  "
+        rank = str(row.get("rank") or "-")
+        if who == 1:
+            alliance = str(row.get("alliance") or "-")
+            text = (
+                f"{marker}{pad(rank, 4)}"
+                f"{pad(name, 24)}"
+                f"{pad(alliance, 20)}"
+                f"{pad(score, 12)}"
+            )
+        else:
+            members = str(row.get("members") if row.get("members") is not None else "-")
+            text = (
+                f"{marker}{pad(rank, 4)}"
+                f"{pad(name, 30)}"
+                f"{pad(members, 8)}"
+                f"{pad(score, 12)}"
+            )
+        add(text, "selected" if selected else "normal")
+
+    return lines
+
+
+def render_statistics_text(
+    state: DashboardState,
+    *,
+    who: int = 1,
+    sort: int = 1,
+    width: int = 110,
+) -> List[str]:
+    return [
+        line.text.rstrip()
+        for line in render_statistics_lines(
+            state, who=who, sort=sort, width=width
+        )
+    ]
 
 
 def render_text(

@@ -25,8 +25,13 @@ from typing import List, Optional, Sequence
 
 from autoplay.dashboard import (
     FrameLine,
+    fmt_message_time,
     load_state,
     render_lines,
+    render_message_body,
+    render_message_text,
+    render_messages_lines,
+    render_messages_text,
     render_statistics_lines,
     render_statistics_text,
     render_text,
@@ -36,7 +41,8 @@ from autoplay.dashboard import (
 
 DASHBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 移动 · PgUp/PgDn 翻页 · g/G · d 详情"
 LEADERBOARD_FOOTER = "q 退出 · r 刷新 · Tab 切页 · w 玩家/联盟 · j/k 移动 · PgUp/PgDn 翻页 · g/G"
-TAB_LABELS = (" 1 看板 ", " 2 排行榜 ")
+MESSAGES_FOOTER = "q 退出 · r 刷新 · Tab 切页 · j/k 选择 · Enter/d 阅读 · PgUp/PgDn 翻页 · g/G"
+TAB_LABELS = (" 1 看板 ", " 2 排行榜 ", " 3 消息 ")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -51,7 +57,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="print one frame and exit")
     parser.add_argument(
         "--tab",
-        choices=("dashboard", "leaderboard"),
+        choices=("dashboard", "leaderboard", "messages"),
         default="dashboard",
         help="initial tab for --once and the interactive TUI",
     )
@@ -61,6 +67,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         choices=(1, 2),
         default=1,
         help="leaderboard view: 1=players, 2=alliances",
+    )
+    parser.add_argument(
+        "--message-index",
+        type=int,
+        default=None,
+        help="with --once --tab messages, print this message body instead of the list",
     )
     return parser.parse_args(argv)
 
@@ -73,10 +85,15 @@ def _frame(
     *,
     tab: str = "dashboard",
     stats_who: int = 1,
+    message_index: Optional[int] = None,
 ) -> List[str]:
     state = load_state(state_dir)
     if tab == "leaderboard":
         return render_statistics_text(state, who=stats_who, width=width)
+    if tab == "messages":
+        if message_index is not None:
+            return render_message_text(state, index=message_index, width=width)
+        return render_messages_text(state, width=width)
     return render_text(
         state, width=width, log_lines=log_lines, event_lines=event_lines
     )
@@ -233,12 +250,14 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
     colors = _init_colors()
 
     state_dir = Path(args.state_dir)
-    tab = 1 if args.tab == "leaderboard" else 0
+    tab = {"dashboard": 0, "leaderboard": 1, "messages": 2}[args.tab]
     stats_who = args.stats_who
     last_reload = 0.0
+    state = None
     frame: List[FrameLine] = []
     scroll = 0
     cursor = 0
+    msg_cursor = 0
     detail_lines: Optional[List[str]] = None
     detail_title = ""
     detail_scroll = 0
@@ -255,11 +274,19 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                     log_lines=args.log_lines,
                     event_lines=args.event_lines,
                 )
-            else:
+            elif tab == 1:
                 frame = render_statistics_lines(
                     state,
                     who=stats_who,
                     width=max(40, width - 1),
+                )
+            else:
+                messages = (state.message_log or {}).get("messages") or []
+                msg_cursor = max(0, min(msg_cursor, max(0, len(messages) - 1)))
+                frame = render_messages_lines(
+                    state,
+                    width=max(40, width - 1),
+                    selected=msg_cursor,
                 )
             last_reload = now
             cursor = max(0, min(cursor, len(frame) - 1))
@@ -290,13 +317,13 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                 return
 
         if key in (9, curses.KEY_BTAB):
-            tab = 1 - tab
+            tab = (tab + (1 if key == 9 else -1)) % len(TAB_LABELS)
             cursor = 0
             scroll = 0
             detail_lines = None
             last_reload = 0.0
             continue
-        if key in (ord("1"), ord("2")):
+        if key in (ord("1"), ord("2"), ord("3")):
             tab = key - ord("1")
             cursor = 0
             scroll = 0
@@ -322,6 +349,40 @@ def _loop(stdscr, args: argparse.Namespace) -> None:
                 detail_scroll = 0
             elif key == ord("G"):
                 detail_scroll = max(0, len(detail_lines) - 1)
+            continue
+
+        if tab == 2:
+            messages = (state.message_log or {}).get("messages") or []
+            if messages:
+                if key in (ord("j"), curses.KEY_DOWN):
+                    msg_cursor = min(len(messages) - 1, msg_cursor + 1)
+                elif key in (ord("k"), curses.KEY_UP):
+                    msg_cursor = max(0, msg_cursor - 1)
+                elif key == curses.KEY_NPAGE:
+                    msg_cursor = min(len(messages) - 1, msg_cursor + viewport)
+                elif key == curses.KEY_PPAGE:
+                    msg_cursor = max(0, msg_cursor - viewport)
+                elif key == ord("g"):
+                    msg_cursor = 0
+                elif key == ord("G"):
+                    msg_cursor = max(0, len(messages) - 1)
+                elif key in (10, 13, curses.KEY_ENTER, ord("d"), ord("D")):
+                    message = messages[msg_cursor]
+                    detail_title = (
+                        "消息 · "
+                        f"{fmt_message_time(message, now=state.now)}"
+                        f" · {message.get('sender') or '?'}"
+                    )
+                    detail_lines = render_message_body(
+                        message, width=max(40, width - 1)
+                    )
+                    detail_scroll = 0
+            if detail_lines is None:
+                frame = render_messages_lines(
+                    state,
+                    width=max(40, width - 1),
+                    selected=msg_cursor,
+                )
             continue
 
         if tab == 1 and key in (ord("w"), ord("W")):
@@ -371,6 +432,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     args.event_lines,
                     tab=args.tab,
                     stats_who=args.stats_who,
+                    message_index=args.message_index,
                 )
             )
         )

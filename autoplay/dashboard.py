@@ -76,6 +76,7 @@ class DashboardState:
     journal: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
+    message_log: Dict[str, Any] = field(default_factory=dict)
     daemon: Dict[str, Any] = field(default_factory=dict)
     daemon_pid: Optional[int] = None
     daemon_lock_age: Optional[float] = None
@@ -331,6 +332,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
     journal = _read_recent(state_dir / "journal.jsonl", 120)
     events = _read_recent(state_dir / "events.jsonl", 80)
     statistics = _read_json(state_dir / "statistics.json")
+    message_log = _read_json(state_dir / "messages.json")
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
@@ -356,6 +358,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         journal=journal,
         events=events,
         statistics=statistics,
+        message_log=message_log,
         daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
@@ -416,6 +419,35 @@ def fmt_time(value: Any, *, now: Optional[datetime] = None) -> str:
     if parsed is None:
         return "-"
     local = parsed.astimezone()
+    reference = (now or datetime.now(timezone.utc)).astimezone()
+    if local.date() == reference.date():
+        return local.strftime("%H:%M:%S")
+    return local.strftime("%m-%d %H:%M")
+
+
+def fmt_message_time(
+    message: Dict[str, Any], *, now: Optional[datetime] = None
+) -> str:
+    """Format a message timestamp.
+
+    Message pages render the *server's* wall clock without an offset, so a
+    naive value must not be treated as UTC (doing so shifts it by the local
+    timezone).  Aware values are converted to local time as usual.
+    """
+
+    raw = message.get("time")
+    parsed: Optional[datetime] = None
+    if raw:
+        try:
+            parsed = datetime.fromisoformat(str(raw))
+        except ValueError:
+            parsed = None
+    if parsed is None:
+        return str(message.get("time_text") or "-")
+    if parsed.tzinfo is None:
+        local = parsed
+    else:
+        local = parsed.astimezone()
     reference = (now or datetime.now(timezone.utc)).astimezone()
     if local.date() == reference.date():
         return local.strftime("%H:%M:%S")
@@ -972,6 +1004,152 @@ def render_statistics_text(
         for line in render_statistics_lines(
             state, who=who, sort=sort, width=width
         )
+    ]
+
+
+def wrap_text(text: str, width: int) -> List[str]:
+    """Wrap text by display width; wide CJK characters count as two."""
+
+    width = max(10, width)
+    lines: List[str] = []
+    for paragraph in str(text or "").splitlines():
+        paragraph = paragraph.rstrip()
+        if not paragraph.strip():
+            lines.append("")
+            continue
+        current = ""
+        for char in paragraph:
+            if text_width(current + char) > width:
+                lines.append(current)
+                current = char
+            else:
+                current += char
+        if current:
+            lines.append(current)
+    return lines or [""]
+
+
+def _message_subject(message: Dict[str, Any], width: int = 60) -> str:
+    subject = str(message.get("subject") or "").strip()
+    if subject:
+        return subject
+    body = " ".join(str(message.get("body") or "").split())
+    return body[:width] if body else "(无主题)"
+
+
+def render_messages_lines(
+    state: DashboardState,
+    *,
+    width: int = 110,
+    selected: int = 0,
+) -> List[FrameLine]:
+    """Render the inbox reader's message list."""
+
+    width = max(40, width)
+    lines: List[FrameLine] = []
+
+    def add(text: str, style: str = "normal") -> None:
+        lines.append(FrameLine(truncate(text, width), style))
+
+    payload = state.message_log or {}
+    add("消息 · 收件箱", "title")
+    if not payload:
+        add("尚无消息缓存：守护首轮会采集（--messages-every，默认 60 轮）", "warn")
+        add("命令示例：run_forever --no-verify-ssl --messages-pages 10", "muted")
+        return lines
+
+    captured = _parse_time(payload.get("captured_at"))
+    age = (
+        fmt_age(max(0.0, (state.now - captured).total_seconds()))
+        if captured is not None
+        else "-"
+    )
+    category = payload.get("category_name") or payload.get("category") or "收件箱"
+    pages = payload.get("pages_fetched")
+    total = payload.get("pages_total")
+    add(
+        f"来源 {category} · 快照 {age} · 页 {pages}/{total}",
+        "muted",
+    )
+    add(_rule(width), "muted")
+
+    errors = payload.get("errors") or []
+    if errors:
+        add("采集错误", "section")
+        for error in errors[:3]:
+            add(f"  第 {error.get('page')} 页: {error.get('error')}", "warn")
+
+    messages = [item for item in (payload.get("messages") or []) if isinstance(item, dict)]
+    if not messages:
+        add("（没有消息）", "muted")
+        return lines
+
+    selected = max(0, min(int(selected), len(messages) - 1))
+    add(f"{len(messages)} 条 · j/k 选择 · Enter/d 阅读", "muted")
+    header = f"{pad('#', 4)}{pad('时间', 17)}{pad('发送方', 18)}主题"
+    add(header, "section")
+
+    for index, message in enumerate(messages):
+        when = fmt_message_time(message, now=state.now)
+        sender = str(message.get("sender") or "?")
+        subject = _message_subject(message)
+        marker = "▸ " if index == selected else "  "
+        text = (
+            f"{marker}{pad(str(index + 1), 4)}"
+            f"{pad(when, 17)}"
+            f"{pad(sender, 18)}"
+            f"{subject}"
+        )
+        add(text, "selected" if index == selected else "normal")
+
+    return lines
+
+
+def render_message_body(message: Dict[str, Any], *, width: int = 110) -> List[str]:
+    """Wrap one message's body for the full-screen reader."""
+
+    width = max(40, width)
+    lines: List[str] = []
+    subject = str(message.get("subject") or "").strip()
+    if subject:
+        lines.append(truncate(subject, width))
+    lines.append(_rule(width))
+    lines.extend(truncate(line, width) for line in wrap_text(message.get("body") or "", width))
+
+    coordinates = message.get("coordinates") or []
+    if coordinates:
+        lines.append("")
+        lines.append(truncate("坐标 " + "、".join(str(item) for item in coordinates), width))
+    return lines
+
+
+def render_message_text(
+    state: DashboardState,
+    *,
+    index: int = 0,
+    width: int = 110,
+) -> List[str]:
+    messages = (state.message_log or {}).get("messages") or []
+    if not messages:
+        return render_messages_text(state, width=width)
+    index = max(0, min(int(index), len(messages) - 1))
+    message = messages[index]
+    header = (
+        f"消息 · {fmt_message_time(message, now=state.now)}"
+        f" · {message.get('sender') or '?'}"
+    )
+    return [truncate(header, width)] + render_message_body(message, width=width)
+
+
+def render_messages_text(
+    state: DashboardState,
+    *,
+    width: int = 110,
+    selected: int = 0,
+) -> List[str]:
+    return [
+        line.text.rstrip()
+        for line in render_messages_lines(state, width=width, selected=selected)
     ]
 
 

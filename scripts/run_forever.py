@@ -32,6 +32,7 @@ from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
+from autoplay.messages import collect_messages, write_messages
 from autoplay.statistics import collect_statistics, write_statistics
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
@@ -114,6 +115,28 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--statistics-file",
         default="state/statistics.json",
         help="leaderboard snapshot for the TUI (default: state/statistics.json)",
+    )
+    parser.add_argument(
+        "--messages-every",
+        type=int,
+        default=60,
+        help="collect inbox messages every N cycles (0 disables, default: 60)",
+    )
+    parser.add_argument(
+        "--messages-pages",
+        type=int,
+        default=10,
+        help="newest inbox pages to collect (default: 10)",
+    )
+    parser.add_argument(
+        "--messages-file",
+        default="state/messages.json",
+        help="message archive for the TUI (default: state/messages.json)",
+    )
+    parser.add_argument(
+        "--messages-category",
+        default="all",
+        help="message category to collect (default: all)",
     )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
@@ -302,6 +325,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     snapshots_path = Path(args.snapshots)
     events_path = Path(args.events)
     statistics_path = Path(args.statistics_file)
+    messages_path = Path(args.messages_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     failures = 0
@@ -444,6 +468,43 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     except OSError as exc:
                         print(
                             f"    statistics write failed: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+
+                if args.messages_every and (
+                    cycles == 1 or cycles % args.messages_every == 0
+                ):
+                    try:
+                        messages_payload = collect_messages(
+                            client,
+                            category=args.messages_category,
+                            max_pages=args.messages_pages,
+                        )
+                    except NewStarError as exc:
+                        messages_payload = {
+                            "schema": 1,
+                            "captured_at": now,
+                            "category": args.messages_category,
+                            "messages": [],
+                            "errors": [
+                                {
+                                    "page": 0,
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                }
+                            ],
+                        }
+                    try:
+                        write_messages(messages_path, messages_payload)
+                        print(
+                            "    messages written "
+                            f"({len(messages_payload.get('messages') or [])} messages, "
+                            f"{len(messages_payload.get('errors') or [])} errors)",
+                            flush=True,
+                        )
+                    except OSError as exc:
+                        print(
+                            f"    messages write failed: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )

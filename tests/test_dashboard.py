@@ -2,11 +2,14 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from autoplay.dashboard import (
+    fmt_message_time,
     fmt_number,
     fmt_seconds,
     load_state,
     pad,
     render_lines,
+    render_message_body,
+    render_messages_text,
     render_statistics_text,
     render_text,
     text_width,
@@ -152,7 +155,15 @@ def _daemon(**overrides):
 
 
 def _state_dir(
-    tmp_path, *, snapshot=True, daemon=True, journal=None, events=None, statistics=None, stop=False
+    tmp_path,
+    *,
+    snapshot=True,
+    daemon=True,
+    journal=None,
+    events=None,
+    statistics=None,
+    messages_log=None,
+    stop=False,
 ):
     if snapshot:
         _write(tmp_path / "snapshots.jsonl", [_snapshot()])
@@ -178,6 +189,10 @@ def _state_dir(
     if statistics is not None:
         (tmp_path / "statistics.json").write_text(
             json.dumps(statistics, ensure_ascii=False), encoding="utf-8"
+        )
+    if messages_log is not None:
+        (tmp_path / "messages.json").write_text(
+            json.dumps(messages_log, ensure_ascii=False), encoding="utf-8"
         )
     if stop:
         (tmp_path / "STOP").write_text("", encoding="utf-8")
@@ -460,3 +475,82 @@ def test_leaderboard_shows_collection_errors(tmp_path):
     text = "\n".join(render_statistics_text(state, who=1, width=100))
     assert "采集错误" in text
     assert "2:1" in text and "timed out" in text
+
+
+def _message_log():
+    return {
+        "schema": 1,
+        "captured_at": "2026-11-13T09:00:30+00:00",
+        "category": 100,
+        "category_name": "所有消息",
+        "pages_total": 2,
+        "pages_fetched": 2,
+        "messages": [
+            {
+                "id": 11,
+                "sender": "舰队司令部",
+                "subject": "运输到达",
+                "body": "一支友好的舰队已到达并交付了资源。",
+                "time": "2026-11-13T08:55:00",
+                "time_text": "2026年11月13日, 08:55:00",
+                "category": 5,
+                "category_name": "运输报告",
+                "coordinates": ["[1:2:3]"],
+            },
+            {
+                "id": 10,
+                "sender": "系统",
+                "subject": "",
+                "body": "这是一条没有主题的长消息，用来验证正文换行是否按显示宽度处理。",
+                "time": "2026-11-13T08:50:00",
+                "time_text": "2026年11月13日, 08:50:00",
+                "category": 4,
+                "category_name": "系统消息",
+                "coordinates": [],
+            },
+        ],
+        "errors": [],
+    }
+
+
+def test_message_list_and_selection(tmp_path):
+    state = load_state(_state_dir(tmp_path, messages_log=_message_log()), now=NOW)
+    text = "\n".join(render_messages_text(state, width=100, selected=1))
+
+    assert "消息 · 收件箱" in text
+    assert "2 条" in text
+    assert "舰队司令部" in text and "运输到达" in text
+    assert "这是一条没有主题的长消息" in text
+    assert "▸" in text
+
+
+def test_message_body_wraps_and_shows_coordinates(tmp_path):
+    state = load_state(_state_dir(tmp_path, messages_log=_message_log()), now=NOW)
+    message = state.message_log["messages"][0]
+    lines = render_message_body(message, width=40)
+
+    assert any("运输到达" in line for line in lines)
+    assert any("友好" in line for line in lines)
+    assert any("[1:2:3]" in line for line in lines)
+    assert all(text_width(line) <= 40 for line in lines)
+
+
+def test_message_tab_missing_archive(tmp_path):
+    state = load_state(_state_dir(tmp_path), now=NOW)
+    text = "\n".join(render_messages_text(state, width=100))
+    assert "尚无消息缓存" in text
+
+
+def test_message_tab_shows_collection_errors(tmp_path):
+    payload = _message_log()
+    payload["errors"] = [{"page": 2, "error": "TransportError: timed out"}]
+    state = load_state(_state_dir(tmp_path, messages_log=payload), now=NOW)
+    text = "\n".join(render_messages_text(state, width=100))
+    assert "采集错误" in text
+    assert "第 2 页" in text and "timed out" in text
+
+
+def test_message_time_keeps_server_wall_clock():
+    now = datetime(2026, 11, 14, 9, 0, tzinfo=timezone.utc)
+    message = {"time": "2026-11-14T16:40:29", "time_text": "2026年11月14日, 16:40:29"}
+    assert fmt_message_time(message, now=now) == "16:40:29"

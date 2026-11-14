@@ -416,6 +416,20 @@ class Message:
     unread: bool = False
     coordinates: List[Coordinates] = field(default_factory=list)
 
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "id": self.id,
+            "sender": self.sender,
+            "subject": self.subject,
+            "body": self.body,
+            "time": self.time.isoformat() if self.time is not None else None,
+            "time_text": self.time_text,
+            "category": self.category,
+            "category_name": self.category_name,
+            "unread": self.unread,
+            "coordinates": [str(item) for item in self.coordinates],
+        }
+
 
 @dataclass
 class MessagePage:

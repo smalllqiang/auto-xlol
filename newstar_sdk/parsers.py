@@ -51,12 +51,15 @@ from .models import (
     PlanetSummary,
     ProductionReport,
     QueueEntry,
+    RecordEntry,
+    RecordSection,
     ResearchInfo,
     ResourceProduction,
     Resources,
     ShipInfo,
     StatisticsBoard,
     StatisticsRow,
+    UniverseRecords,
 )
 from .utils import (
     clean_text,
@@ -1452,8 +1455,8 @@ _BATTLE_WIN_COLORS = frozenset({"#00ff00", "#0f0", "lime", "green"})
 _BATTLE_LOSS_COLORS = frozenset({"#ff0000", "#f00", "red"})
 
 
-def _battle_time(text: str) -> str:
-    """Convert a localized battle date to naive ISO, or ``""``.
+def _wall_clock_time(text: str) -> str:
+    """Convert a localized page timestamp to naive ISO, or ``""``.
 
     The game renders the viewer's wall clock (``_date(..., user.timezone)``),
     so the value is kept naive and must not be treated as UTC.
@@ -1613,10 +1616,141 @@ def parse_battle_hall(
                     defender=defender,
                     result=result,
                     date=date_text,
-                    time=_battle_time(date_text),
+                    time=_wall_clock_time(date_text),
                     units=units,
                     report_id=report_id,
                 )
             )
 
     return BattleHall(order=order, sort=sort, rows=rows)
+
+
+# ---------------------------------------------------------------------------
+# Universe records (page=records)
+# ---------------------------------------------------------------------------
+
+_RECORD_SECTION_ID_RE = re.compile(r"^u\d+$")
+_RECORD_ITEM_ID_RE = re.compile(r"Dialog\.info\((\d+)\)")
+_RECORD_HOLDER_RE = re.compile(r"Playercard\(\d+\)[^>]*>([^<]+)</a>")
+
+
+def _record_value(node: Optional[Tag]) -> int:
+    """Parse a record cell such as ``729.964.130`` into ``729964130``."""
+
+    text = node.get_text(" ") if node is not None else ""
+    digits = re.sub(r"\D", "", text)
+    return int(digits) if digits else 0
+
+
+def _record_holders(made: Optional[Tag]) -> List[str]:
+    """Read the record holders from the tooltip attribute.
+
+    The template stores the holder list as escaped HTML inside
+    ``data-tooltip-content`` (one ``Dialog.Playercard`` link per tied player),
+    so the attribute text is parsed as an HTML fragment.
+    """
+
+    if made is None:
+        return []
+    raw = str(made.get("data-tooltip-content") or "")
+    if not raw.strip():
+        return []
+    names: List[str] = []
+    for anchor in BeautifulSoup(raw, "html.parser").find_all("a"):
+        name = clean_text(anchor.get_text(" "))
+        if name:
+            names.append(name)
+    if not names:
+        names = [clean_text(item) for item in _RECORD_HOLDER_RE.findall(raw)]
+    return list(dict.fromkeys(name for name in names if name))
+
+
+def parse_universe_records(html: str) -> UniverseRecords:
+    """Parse ``game.php?page=records`` (the four universe-record blocks).
+
+    Each ``div#uNNN`` holds a ``.record_header`` label and one
+    ``.record_rows`` per element.  A row without holder/value markup means the
+    element has no record yet; those rows are skipped.
+    """
+
+    soup = _soup(html)
+    updated_text = ""
+    updated_at = ""
+    stripe = soup.select_one(".gray_stripe")
+    if stripe is not None:
+        match = _BATTLE_CN_DATE_RE.search(clean_text(stripe.get_text(" ")))
+        if match:
+            updated_text = clean_text(match.group(0))
+            updated_at = _wall_clock_time(updated_text)
+
+    container = (
+        soup.select_one("#ally_content")
+        or soup.select_one("#content")
+        or soup
+    )
+    blocks = [
+        block
+        for block in container.find_all("div", recursive=False)
+        if _RECORD_SECTION_ID_RE.fullmatch(str(block.get("id") or ""))
+    ]
+    if not blocks:
+        blocks = [
+            block
+            for block in soup.find_all("div", id=_RECORD_SECTION_ID_RE)
+            if block.select_one(".record_rows")
+        ]
+    sections: List[RecordSection] = []
+    for block in blocks:
+        header = block.select_one(".record_header")
+        label = clean_text(header.get_text(" ")) if header is not None else ""
+        entries: List[RecordEntry] = []
+        for row in block.select(".record_rows"):
+            name_node = row.select_one(".record_name_utits")
+            name = clean_text(name_node.get_text(" ")) if name_node is not None else ""
+            holders = _record_holders(row.select_one(".record_made"))
+
+            cells = row.select(".record_count > .record_text")
+            values = [_record_value(cell.find("div") or cell) for cell in cells]
+            server_index = next(
+                (
+                    index
+                    for index, cell in enumerate(cells)
+                    if "record_server" in (cell.get("class") or [])
+                ),
+                None,
+            )
+            if server_index is not None:
+                server = values[server_index]
+                others = [
+                    value for index, value in enumerate(values) if index != server_index
+                ]
+                own = others[0] if others else 0
+            elif len(values) >= 2:
+                # The template renders the server cell first when the class is
+                # missing (e.g. a theme override).
+                server, own = values[0], values[1]
+            else:
+                server = own = 0
+
+            if not holders and server == 0 and own == 0:
+                continue
+
+            match = _RECORD_ITEM_ID_RE.search(str(row))
+            entries.append(
+                RecordEntry(
+                    section=label,
+                    item_id=int(match.group(1)) if match else 0,
+                    name=name,
+                    server=server,
+                    own=own,
+                    holders=holders,
+                )
+            )
+        if entries:
+            sections.append(RecordSection(label=label, entries=entries))
+
+    return UniverseRecords(
+        updated_at=updated_at,
+        updated_text=updated_text,
+        sections=sections,
+    )

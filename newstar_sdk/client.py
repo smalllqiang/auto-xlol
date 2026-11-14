@@ -60,6 +60,7 @@ from .models import (
     ServerInfo,
     ShipInfo,
     StatisticsBoard,
+    UniverseRecords,
 )
 from .parsers import (
     parse_battle_hall,
@@ -83,6 +84,7 @@ from .parsers import (
     parse_ship_queue,
     parse_shipyard,
     parse_statistics,
+    parse_universe_records,
 )
 from .utils import clean_text, normalize_base_url
 
@@ -1428,6 +1430,18 @@ class NewStarClient:
             params={"order": order, "sort": sort.upper()},
         )
         return parse_battle_hall(response.text, order=order, sort=sort)
+
+    def get_universe_records(self) -> UniverseRecords:
+        """Read the universe records from ``page=records``.
+
+        One read-only GET returns all four blocks (buildings, research, ships,
+        defense): each row carries the universe record, the viewer's personal
+        best, the record holders and the derived completion percentage.
+        """
+
+        self.ensure_login()
+        response = self._game_page("records")
+        return parse_universe_records(response.text)
 
     def get_page(self, page: str, **params: Any) -> str:
         """Return the HTML of an arbitrary ingame page (e.g. ``"messages"``)."""

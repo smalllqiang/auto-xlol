@@ -58,6 +58,8 @@ from .models import (
     PlanetSummary,
     ProductionReport,
     QueueEntry,
+    RecordEntry,
+    RecordSection,
     ResearchInfo,
     ResourceProduction,
     Resources,
@@ -65,6 +67,7 @@ from .models import (
     ShipInfo,
     StatisticsBoard,
     StatisticsRow,
+    UniverseRecords,
 )
 
 __version__ = "0.1.0"
@@ -113,6 +116,8 @@ __all__ = [
     "ProductionReport",
     "PlanetType",
     "QueueEntry",
+    "RecordEntry",
+    "RecordSection",
     "ResearchInfo",
     "ResourceId",
     "ResourceProduction",
@@ -125,6 +130,7 @@ __all__ = [
     "StatisticsRow",
     "TECHNOLOGIES",
     "TransportError",
+    "UniverseRecords",
     "element_name",
     "message_category_name",
     "resolve_message_category",

@@ -658,3 +658,76 @@ class BattleHall:
             "sort": self.sort,
             "rows": [row.as_dict() for row in self.rows],
         }
+
+
+@dataclass
+class RecordEntry:
+    """One row of the universe records page (``page=records``).
+
+    ``server`` is the universe-wide record, ``own`` the viewer's personal best.
+    ``holders`` lists the players tied with the universe record (the template
+    renders one bullet per holder) and ``percent`` is the derived
+    ``own / server`` completion, clamped to 0..100.
+    """
+
+    section: str = ""
+    item_id: int = 0
+    name: str = ""
+    server: int = 0
+    own: int = 0
+    holders: List[str] = field(default_factory=list)
+
+    @property
+    def percent(self) -> int:
+        if self.server <= 0:
+            return 0
+        return max(0, min(100, round(self.own * 100 / self.server)))
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "section": self.section,
+            "item_id": self.item_id,
+            "name": self.name,
+            "server": self.server,
+            "own": self.own,
+            "holders": list(self.holders),
+            "percent": self.percent,
+        }
+
+
+@dataclass
+class RecordSection:
+    """One block of the universe records page, e.g. 建筑 or 行星防御."""
+
+    label: str = ""
+    entries: List[RecordEntry] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "label": self.label,
+            "entries": [entry.as_dict() for entry in self.entries],
+        }
+
+
+@dataclass
+class UniverseRecords:
+    """The four record blocks from ``page=records`` plus the page timestamp.
+
+    ``updated_at`` is the naive ISO form of the page's ``最后更新于`` line (the
+    game renders the viewer's wall clock, not UTC).
+    """
+
+    updated_at: str = ""
+    updated_text: str = ""
+    sections: List[RecordSection] = field(default_factory=list)
+
+    @property
+    def entries(self) -> List[RecordEntry]:
+        return [entry for section in self.sections for entry in section.entries]
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "updated_at": self.updated_at,
+            "updated_text": self.updated_text,
+            "sections": [section.as_dict() for section in self.sections],
+        }

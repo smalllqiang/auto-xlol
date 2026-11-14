@@ -52,6 +52,7 @@ def test_report_slots_score_target_and_recommendation():
     assert report.active_expeditions == 1
     assert report.free_slots == 2
     assert report.current_score == pytest.approx(58.0 + 2 * 4.0)
+    assert report.target_slots == 2
     assert report.required_score == pytest.approx(1_000_000.0)
     assert report.score_gap == pytest.approx(1_000_000.0 - report.current_score)
     assert report.target == "3:505:16"
@@ -122,6 +123,9 @@ def test_report_treats_returning_expeditions_as_occupied():
     assert report.slots == 2
     assert report.active_expeditions == 2
     assert report.free_slots == 0
+    assert report.target_slots == 0
+    assert report.required_score == pytest.approx(0.0)
+    assert report.recommendation is None
     assert report.can_send is False
     assert any("航道已满" in note for note in report.notes)
 
@@ -139,8 +143,12 @@ def test_report_without_expedition_tech():
     assert report.expedition_tech == 0
     assert report.slots == 0
     assert report.free_slots == 0
+    assert report.target_slots == 1
+    assert report.required_score == pytest.approx(500_000.0)
+    assert report.recommendation is not None
     assert report.can_send is False
     assert any("未解锁" in note for note in report.notes)
+    assert any("按 1 队目标估算" in note for note in report.notes)
 
 
 def test_recommendation_marks_unmet_requirements():

@@ -47,7 +47,7 @@ def render(report) -> str:
         f"探险技术  {report.expedition_tech}",
         f"探险航道  {report.slots}（占用 {report.active_expeditions}，空闲 {report.free_slots}）",
         f"当前积分  {report.current_score:,.1f} / 需要 {report.required_score:,.1f}"
-        f"（每队 {report.target_score:,.1f} × {report.free_slots} 空闲航道）",
+        f"（每队 {report.target_score:,.1f} × {report.target_slots} 目标航道）",
         f"积分缺口  {report.score_gap:,.1f}",
         f"目标坐标  {report.target or '-'}",
         f"可派遣    {'是' if report.can_send else '否'}",

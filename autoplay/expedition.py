@@ -76,6 +76,7 @@ class ExpeditionReport:
     slots: int
     active_expeditions: int
     free_slots: int
+    target_slots: int
     current_score: float
     target_score: float
     required_score: float
@@ -95,6 +96,7 @@ class ExpeditionReport:
             "slots": self.slots,
             "active_expeditions": self.active_expeditions,
             "free_slots": self.free_slots,
+            "target_slots": self.target_slots,
             "current_score": round(self.current_score, 3),
             "target_score": self.target_score,
             "required_score": self.required_score,
@@ -321,7 +323,10 @@ def compute_expedition_report(
         current_score += count * fleet_score(cost)
 
     target = _target_coordinates(planet)
-    required_score = float(target_score) * free_slots
+    target_slots = free_slots
+    if target_slots == 0 and slots == 0:
+        target_slots = 1
+    required_score = float(target_score) * target_slots
     score_gap = max(0.0, required_score - current_score)
     available_ids = {int(ship_id) for ship_id in available_ships}
     ship_names = {
@@ -344,11 +349,13 @@ def compute_expedition_report(
         notes.append("无法从概览确定当前星球坐标")
     if float(resources.get(903, 0.0)) <= 0:
         notes.append("重氢为 0，发送前需确认燃料")
-    if free_slots > 0 and score_gap > 0:
+    if target_slots > 0 and score_gap > 0:
         notes.append(
-            f"每队目标 {float(target_score):,.0f}，{free_slots} 个空闲航道需要 "
+            f"每队目标 {float(target_score):,.0f}，{target_slots} 个目标航道需要 "
             f"{required_score:,.0f}；当前 {current_score:,.0f}，还差 {score_gap:,.0f}"
         )
+    if target_slots and target_slots != free_slots:
+        notes.append("当前没有探险航道，按 1 队目标估算建船")
 
     fleet_groups = _group_fleets(
         available_ships,
@@ -364,7 +371,7 @@ def compute_expedition_report(
 
     recommendation = (
         _recommend(shipyard_list, resources, score_gap, ship, notes)
-        if free_slots > 0
+        if target_slots > 0
         else None
     )
     if recommendation is not None:
@@ -386,6 +393,7 @@ def compute_expedition_report(
         slots=slots,
         active_expeditions=len(active),
         free_slots=free_slots,
+        target_slots=target_slots,
         current_score=current_score,
         target_score=float(target_score),
         required_score=required_score,

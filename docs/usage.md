@@ -165,6 +165,27 @@ for row in hall.rows[:10]:
 - `date` 是页面原文（如 `2026年11月13日, 07:14:37`），`time` 是同一时刻的 naive
   ISO 字符串。游戏按查看者的时区渲染墙上时间，**不要当 UTC 转换**。
 
+### 宇宙记录
+
+`page=records` 是四个记录块（建筑 / 科研 / 舰只 / 行星防御），每项给出宇宙最高
+记录、本账号的最高记录和记录保持者。SDK 用 GET 读取，不发写操作：
+
+```python
+records = client.get_universe_records()
+records.updated_at, records.updated_text
+for section in records.sections:
+    for entry in section.entries:
+        print(section.label, entry.name, entry.server, entry.own, entry.percent)
+        print(entry.holders, entry.item_id)
+```
+
+- `server` 是宇宙最高记录，`own` 是本账号最高记录；页面上的千分位点会被去掉。
+- `percent` 是派生的 `own / server` 完成度（0–100 整数）。
+- `holders` 是并列保持者列表（模板用 tooltip 里的 `Dialog.Playercard` 链接渲染）。
+- 没有记录的行（页面不渲染保持者和数值）会被跳过，不生成空条目。
+- `updated_at` 是页面「最后更新于」的 naive ISO 时间，按查看者墙上时间显示，
+  **不要当 UTC 转换**；`updated_text` 保留页面原文。
+
 ### 加成（乘数）
 
 `page=infobonus` 给出全部加成项。标签就是页面上的文案（本实例是中文），SDK 不做
@@ -611,6 +632,9 @@ touch state/STOP
   「单位积分」和「日期」两种排序（两次 GET），写 `state/battles.json`；首轮会先采
   一次。不抓战报正文；单榜失败写入 `errors`，不增加连续失败计数；路径可用
   `--battles-file` 覆盖。
+- **宇宙记录采集**：`--records-every N`（默认 120，0 关闭）每 N 轮抓一次
+  `page=records`（一次 GET），写 `state/records.json`；首轮会先采一次。页面失败写入
+  `errors`（`section=all`），不增加连续失败计数；路径可用 `--records-file` 覆盖。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
 `--allow`）。
@@ -658,14 +682,16 @@ touch state/STOP
 .venv/bin/python scripts/tui.py --once --tab battles
 .venv/bin/python scripts/tui.py --once --tab battles --battles-order date
 .venv/bin/python scripts/tui.py --once --tab battles --battle-index 0
+.venv/bin/python scripts/tui.py --once --tab records
+.venv/bin/python scripts/tui.py --once --tab records --record-index 0
 ```
 
-按键：`q` 退出、`r` 立即刷新、`Tab`/`1`-`4` 切换「看板 / 排行榜 / 消息 / 战役」、
-`j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的 journal 条目
-展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换；消息 tab
+按键：`q` 退出、`r` 立即刷新、`Tab`/`1`-`5` 切换「看板 / 排行榜 / 消息 /
+战役 / 记录」、`j`/`k` 移动、`PgUp`/`PgDn` 翻页、`g`/`G` 到顶/底、`d` 把选中的
+journal 条目展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w` 在玩家/联盟之间切换；消息 tab
 里 `Enter`/`d` 打开选中消息的正文，`d`/`Esc` 返回列表；战役 tab 里 `o` 在
-「单位积分 / 日期」两种排序间切换，`Enter`/`d` 查看单场详情和战报链接，
-`d`/`Esc` 返回列表。
+「单位积分 / 日期」两种排序间切换，`Enter`/`d` 查看单场详情和战报链接；
+记录 tab 里 `Enter`/`d` 查看单项的全部保持者，`d`/`Esc` 返回列表。
 
 面板内容：
 
@@ -691,6 +717,10 @@ touch state/STOP
   日期」排序间切换，`Enter`/`d` 查看单场详情和 `game.php?page=raport...` 战报链接。
   只读缓存，**不抓取战报正文**。守护默认每 120 轮采集一次（`--battles-every`），
   首轮会先采一次。
+- **记录 tab**：读 `state/records.json`，按「建筑 / 科研 / 舰只 / 行星防御」分组列出
+  每项的宇宙最高记录、本账号最高记录、达成度和保持者；`★` 标出自己保持的记录，
+  `Enter`/`d` 查看单项详情（全部保持者、还差多少、元素 id）。只读缓存。守护默认每
+  120 轮采集一次（`--records-every`），首轮会先采一次。
 
 数据契约：
 
@@ -711,6 +741,10 @@ touch state/STOP
   `base_url`、`boards`（`units:desc` / `date:desc` 两种排序，每榜 `order`、`sort`、
   `rows`）和逐榜 `errors`；每行有 rank、attacker、defender、result、winner、loser、
   date、time、units、report_id。不保存战报正文。
+- `state/records.json`：`run_forever.py` 采集的宇宙记录快照，含 `captured_at`、
+  `base_url`、`updated_at` / `updated_text`（页面“最后更新于”）、`sections`
+  （label + entries）和 `errors`；每条 entry 有 section、item_id、name、server、
+  own、holders、percent。
 - 看板会读取轮转后的 `journal.jsonl.1` / `events.jsonl.1`，容忍缺 `kind` 的旧
   cycle 记录、坏 JSON 行和乱序时间；`--once` 与交互模式共用同一份渲染结果。
 

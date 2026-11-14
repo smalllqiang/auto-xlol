@@ -88,6 +88,7 @@ HTML 片段。`parse_messages()` 解析该片段，`parse_message_counters()` �
 | `statistics.json` | 每 `--statistics-every` 轮（首轮先采） | 排行榜：玩家/联盟积分榜、采集时间、逐榜错误 |
 | `messages.json` | 每 `--messages-every` 轮（首轮先采） | 收件箱缓存：id、发送方、主题、正文、服务器时间、分类、坐标、逐页错误 |
 | `battles.json` | 每 `--battles-every` 轮（首轮先采） | 战役名人堂：单位积分/日期两种排序的排名、参战方、胜败、时间、单位积分、报告 id、逐榜错误 |
+| `records.json` | 每 `--records-every` 轮（首轮先采） | 宇宙记录：建筑/科研/舰只/行星防御四块的宇宙最高、本人最高、达成度、保持者、页面更新时间 |
 | `daemon.lock` | 启动时创建、退出删除 | pid，单写者锁 |
 | `STOP` | 操作者创建 | 急停开关，循环在下一拍退出 |
 

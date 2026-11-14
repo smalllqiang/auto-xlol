@@ -30,6 +30,7 @@
 | P1-10 | 排行榜看板 | ✅ | SDK 解析 `page=statistics`；守护采集玩家/联盟积分榜；TUI 第二 tab 切换/滚动；真实实例 55 名玩家 + 2 个联盟 |
 | P1-11 | 消息阅读 tab | ✅ | 守护采集收件箱到 `state/messages.json`；TUI 第三 tab 列表 + 正文阅读；不维护已读状态；真实实例 4 页 / 33 条 |
 | P1-12 | 战役名人堂 tab | ✅ | SDK 解析 `page=battleHall`；守护采集单位积分/日期两种排序到 `state/battles.json`；TUI 第四 tab 列表/详情/切换排序；真实实例 3 场 |
+| P1-13 | 宇宙记录 tab | ✅ | SDK 解析 `page=records`；守护采集四个记录块到 `state/records.json`；TUI 第五 tab 分组列表/详情；真实实例 142 项 / 4 类 |
 
 **P1-9 看板值班化记录（2026-11-14）**：真实实例上以 `run_forever --interval 30
 --snapshot-every 1`（dry-run）运行，`scripts/tui.py --once` 能看到心跳/数据年龄/下轮、
@@ -55,6 +56,12 @@ SDK 解析对玩家榜（联盟列）和联盟榜（成员/成员积分列）分
 `run_forever --once --battles-every 1` 写入两份榜、0 错误；`tui.py --once --tab
 battles` 与 `--battles-order date` 可离线回归，`--battle-index 0` 打印战报链接。
 交互模式在 pty 里验证 `4`→`o`→`j`→`Enter`→`d`→`q`，退出码 0。
+
+**P1-13 宇宙记录（2026-11-14）**：真实实例 `get_universe_records()` 解析出建筑 23、
+科研 19、舰只 61、防御 39 共 142 项（空记录行被跳过），页面更新时间和
+`danyi` 等保持者都能读出；`run_forever --once --records-every 1` 写入
+`state/records.json`、0 错误；`tui.py --once --tab records` 与 `--record-index 1`
+可离线回归，记录值（48/21、44%）与保持者均正确。
 
 **P1 完成的定义**：能无人值守连续跑 24 小时；dry-run 与 execute 可随时切换；
 中途崩溃重启不重复下单；每条动作都能在 journal 里回放。

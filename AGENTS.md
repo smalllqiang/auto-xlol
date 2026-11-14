@@ -114,6 +114,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **战役时间同理**：`BattleRow.time` 是 naive 墙上时间，TUI 用 `fmt_battle_time`；
   战役胜败只由模板颜色表达（`result` 为 `a`/`r`/空），战报正文不采集，只在详情里
   给出 `page=raport` 链接。
+- **宇宙记录保持者在 tooltip 属性里**：`page=records` 的保持者列表写在
+  `div.record_made[data-tooltip-content]` 的转义 HTML 中（`Dialog.Playercard` 链接），
+  行内没有独立节点；没有保持者/数值的行使表示该项暂无记录，解析时跳过。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。

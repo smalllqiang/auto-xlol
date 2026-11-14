@@ -184,3 +184,16 @@
   多航道场景又需要逐队推进，不能一次把所有舰队发出去。
 - 代价：多队需要外部循环反复调用；`max_dispatch` 是安全上限，不是最优调度；
   自动补船只补一批，召回仍由调用方决定。
+
+
+## ADR-017：探险调度接入守护循环但不共享 allow-list
+
+- 状态：接受（2026-11-14）
+- 决定：`run_forever --expedition` 按 `--expedition-every` 轮次节流调用
+  `run_expedition_cycle()`；只有全局 `--execute` 时启用，dry-run 下直接禁用（避免
+  preview 的 POST）。探险使用独立的 `--expedition-allow` 舰船 allow-list、
+  独立的 `--expedition-max-dispatch` 上限；每次调度写一条 `kind=expedition` journal。
+- 背景：P2-1 的循环能力已经就绪；但建筑/研究 allow-list 不能复用为舰船授权，
+  且 dry-run 不应触发舰队 POST。
+- 代价：探险和资源动作共用单写者节拍；补船等待队列会拉长当轮；不自动召回，
+  威胁响应仍归 P2-2。

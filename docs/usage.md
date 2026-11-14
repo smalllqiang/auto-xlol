@@ -575,6 +575,19 @@ touch state/STOP
 **轮转**：`journal` / `snapshots` / `events` 任意文件超过 `--rotate-mb`
 （默认 10MB）时切成 `<name>.1`，只保留一个备份；`0` 关闭。
 
+**探险调度**：`--expedition` 让守护循环每 N 轮跑一次多航道探险循环，默认 N=12：
+
+```bash
+.venv/bin/python scripts/run_forever.py --no-verify-ssl   --execute --allow 4   --expedition --expedition-allow 202   --expedition-every 12 --expedition-max-dispatch 1
+```
+
+- 只有 `--execute` 才会启用探险调度；dry-run 下会打印提示并禁用，避免预览 POST；
+- `--expedition-allow` 是独立的舰船 allow-list，与建筑/研究 allow-list 分开；
+- `--expedition-auto-build` 在空闲航道没有编队时先补一批（`--build-count`，默认 1），
+  需要 `--expedition-ship` 或报告推荐舰船；
+- 每次调度追加一条 `kind=expedition` 的 journal，包含派出队列和原因；
+- 探险发送、补船都不会自动召回。
+
 ## 15. TUI 看板
 
 `scripts/tui.py` 只读展示 `state/` 里已有的数据，不连游戏、不触发任何动作。

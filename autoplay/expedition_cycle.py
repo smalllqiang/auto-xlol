@@ -21,6 +21,12 @@ from .ship_build import ShipBuildResult, build_recommended_ships
 ReportLoader = Callable[[Any], ExpeditionReport]
 
 
+def expedition_due(cycle: int, every: int) -> bool:
+    """Whether a completed cycle should run the expedition scheduler."""
+
+    return int(every) > 0 and int(cycle) > 0 and int(cycle) % int(every) == 0
+
+
 @dataclass
 class ExpeditionCycleResult:
     status: str  # "dry_run" | "dispatched" | "partial" | "skipped" | "error"

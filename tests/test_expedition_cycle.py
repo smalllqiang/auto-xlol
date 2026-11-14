@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from autoplay import run_expedition_cycle
 from autoplay.expedition import ExpeditionGroup, ExpeditionReport, ShipRecommendation
+from autoplay.expedition_cycle import expedition_due
 from newstar_sdk.exceptions import NewStarError
 
 
@@ -225,3 +226,11 @@ def test_cycle_auto_build_skips_when_requirements_unmet():
     assert result.build.status == "skipped"
     assert client.build_calls == []
     assert client.calls == []
+
+
+def test_expedition_due_respects_interval():
+    assert expedition_due(12, 12) is True
+    assert expedition_due(13, 12) is False
+    assert expedition_due(1, 1) is True
+    assert expedition_due(0, 12) is False
+    assert expedition_due(12, 0) is False

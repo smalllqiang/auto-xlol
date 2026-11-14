@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from local_config import load_config
 
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
+from autoplay.expedition import build_expedition_report
+from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
@@ -98,6 +100,41 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
     parser.add_argument("--once", action="store_true", help="run exactly one cycle")
+    parser.add_argument(
+        "--expedition",
+        action="store_true",
+        help="run the expedition cycle every --expedition-every cycles (requires --execute)",
+    )
+    parser.add_argument(
+        "--expedition-allow",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="repeatable ship id allow-list for expedition dispatch/build",
+    )
+    parser.add_argument(
+        "--expedition-every",
+        type=int,
+        default=12,
+        help="run expedition cycle every N plan cycles (default: 12)",
+    )
+    parser.add_argument(
+        "--expedition-max-dispatch",
+        type=int,
+        default=1,
+        help="max expedition groups per cycle (default: 1)",
+    )
+    parser.add_argument(
+        "--expedition-auto-build",
+        action="store_true",
+        help="build one recommended batch when a free slot has no group",
+    )
+    parser.add_argument("--expedition-build-count", type=int, default=1)
+    parser.add_argument("--expedition-build-timeout", type=float, default=300.0)
+    parser.add_argument("--expedition-ship", type=int, help="force a ship id for auto-build")
+    parser.add_argument("--expedition-target", help="override expedition target coordinates")
+    parser.add_argument("--expedition-speed", type=int, default=10)
+    parser.add_argument("--expedition-stay-time", type=int, default=1)
     return parser.parse_args(argv)
 
 
@@ -137,6 +174,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     if args.execute and not args.allow:
         print("--execute requires at least one --allow element", file=sys.stderr)
+        return 2
+
+    if args.expedition and not args.execute:
+        print("--expedition requires --execute; expedition scheduling disabled", file=sys.stderr)
+        args.expedition = False
+    if args.expedition and args.expedition_every < 1:
+        print("--expedition-every must be at least 1", file=sys.stderr)
+        return 2
+    if args.expedition and not args.expedition_allow:
+        print("--expedition requires at least one --expedition-allow ship id", file=sys.stderr)
+        return 2
+    try:
+        expedition_allowed = [int(item) for item in args.expedition_allow] if args.expedition else []
+    except ValueError:
+        print("--expedition-allow values must be ship element ids", file=sys.stderr)
         return 2
 
     stop_file = Path(args.stop_file)
@@ -219,6 +271,54 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 for alert in result.alerts:
                     print(f"    ALERT {alert['message']}", flush=True)
+
+                if args.expedition and expedition_due(cycles, args.expedition_every):
+                    try:
+                        expedition_result = run_expedition_cycle(
+                            client,
+                            dry_run=False,
+                            allowed_elements=expedition_allowed,
+                            max_dispatch=args.expedition_max_dispatch,
+                            speed=args.expedition_speed,
+                            stay_time=args.expedition_stay_time,
+                            target=args.expedition_target,
+                            auto_build=args.expedition_auto_build,
+                            build_count=args.expedition_build_count,
+                            build_timeout=args.expedition_build_timeout,
+                            report_loader=lambda current: build_expedition_report(
+                                current, ship=args.expedition_ship
+                            ),
+                        )
+                        append_jsonl(
+                            journal_path,
+                            {
+                                "at": now,
+                                "kind": "expedition",
+                                "mode": "execute",
+                                **expedition_result.as_dict(),
+                            },
+                            max_bytes=rotate_bytes,
+                        )
+                        print(
+                            f"    expedition {expedition_result.status}: "
+                            f"{expedition_result.reason}",
+                            flush=True,
+                        )
+                    except NewStarError as exc:
+                        append_jsonl(
+                            journal_path,
+                            {
+                                "at": now,
+                                "kind": "expedition_error",
+                                "error": f"{type(exc).__name__}: {exc}",
+                            },
+                            max_bytes=rotate_bytes,
+                        )
+                        print(
+                            f"[{now}] expedition error: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
 
                 if args.snapshot_every and cycles % args.snapshot_every == 0:
                     snapshot = build_snapshot(client)

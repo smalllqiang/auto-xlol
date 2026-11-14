@@ -21,7 +21,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/executor.py`（执行）、
-`autoplay/expedition.py`（探险只读报告）。
+`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）。
 
 ## 环境与命令
 
@@ -45,6 +45,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/state_report.py --hours 24        # 趋势报表
 .venv/bin/python scripts/plan.py                          # 只读计划
 .venv/bin/python scripts/expedition.py --no-verify-ssl     # 探险只读报告
+.venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl  # 探险预览（--execute --allow 才发送）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
@@ -74,7 +75,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
    不能把 HTTP 200 当成功；失败抛 `ActionRejected`，不要静默。
 5. **执行默认 dry-run**：`execute_plan` 只有显式 `dry_run=False` + allow-list 才动手；
    一次一个动作；队列忙就跳过对应类型；被拒不要自动重试；预检查拒绝
-   （`ActionRejected.before_post`）可让本轮换下一条候选。保留 `state/STOP` 急停。
+   （`ActionRejected.before_post`）可让本轮换下一条候选。探险发送同样默认预览，
+   真实发送需 `--execute` + 舰船 allow-list。保留 `state/STOP` 急停。
 6. **单写者**：同一账号不要并发写。SDK 只保证单实例内串行；守护进程必须单进程。
 7. **改代码同步文档**：新增能力更新 `docs/usage.md`；改变取舍更新 `docs/decisions.md`；
    推进任务更新 `docs/roadmap.md`。文档只描述当前状态，历史交给 git。

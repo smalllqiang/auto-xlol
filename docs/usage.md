@@ -649,3 +649,32 @@ journal 尾部。按键 `q` 退出、`r` 立即刷新；数据陈旧时显示「
 
 当前只做只读报告；把「造舰/发探险」接入执行器是后续独立步骤，需要单独的
 allow-list、dry-run 和燃料校验。
+
+## 17. 探险发送执行
+
+`scripts/dispatch_expedition.py` 把探险报告里的某一队落成预览或真实发送。默认只预览：
+
+```bash
+# 只走 fleetStep1 + fleetStep2，不创建舰队
+.venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl
+
+# 真实发送，必须显式 allow-list
+.venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl \
+  --execute --allow 202
+
+# 指定编队、目标、速度和探险停留选项
+.venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl \
+  --group 1 --target 3:505:16 --speed 10 --stay-time 1 \
+  --execute --allow 202
+```
+
+规则：
+
+- 一次只处理报告里的一支编队（`--group`，从 1 开始）；
+- 默认 `dry_run`：用 `preview_fleet()` 走前两步，不创建舰队；
+- 真实发送必须同时给 `--execute` 和 `--allow`，否则退出码 2；
+- `state/STOP` 存在时拒绝发送；
+- 不自动召回、不自动重试；召回仍用 `client.recall_fleet()`。
+- 探险停留时间用 `--stay-time`，取值来自预览里的 `停留选项`；当前实例为 `1`。
+
+输出会显示编队舰船、燃料、可用任务、停留选项和确认页的任务/到达时间。真实发送后舰队出现在 `get_fleets()` 里，可用 SDK 召回。

@@ -107,6 +107,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   在 `research_queue` 非空时跳过该动作。
 - **幽能概览不是净可用**：概览的 `current_energy` / `energy.available` 是毛产能；
   研究/建筑页的 `costOverflow` 才是游戏实际检查的净缺口，判断可负担性时以它为准。
+- **探险停留时间**：确认页/舰队表的任务名是「探险」；`stay_time=0` 会被游戏以
+  「无效返回时间」拒绝，必须用第二步页面的 `staytime` 选项（1..探险技术等级）。
 
 ## 扩展一个新页面
 

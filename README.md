@@ -246,7 +246,10 @@ response = client.request("POST", "game.php?page=...", data={"key": "value"})
 ## 策略层（规划器）
 
 `autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开阶段目标及其依赖链、按回本时间
-排序产出建筑。探险准备另有只读报告（航道、舰队积分、建船建议、前置链）：`scripts/expedition.py`。
+排序产出建筑。探险准备另有只读报告（航道、舰队积分、建船建议、前置链）：`scripts/expedition.py`；
+预览/发送、造船和多航道循环分别见 `scripts/dispatch_expedition.py`、
+`scripts/build_expedition_ships.py`、`scripts/expedition_cycle.py`（用法见
+`docs/usage.md` 第 16–19 节）。
 
 ```python
 from autoplay import build_plan
@@ -275,6 +278,7 @@ for action in plan.actions:
 ```
 
 单实例锁、`state/STOP` 急停、失败指数退避都内建；默认每 12 轮写一次快照。
+加 `--expedition` 可每 N 轮调度探险，探险使用独立的舰船 allow-list。
 
 看板只读展示 `state/` 的现状与日志，不连游戏：
 

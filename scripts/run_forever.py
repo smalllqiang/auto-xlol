@@ -16,12 +16,13 @@ it also writes a state snapshot and the diffed events (0 disables).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import sys
 import time
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -80,6 +81,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--journal", default="state/journal.jsonl")
     parser.add_argument("--snapshots", default="state/snapshots.jsonl")
     parser.add_argument("--events", default="state/events.jsonl")
+    parser.add_argument(
+        "--status-file",
+        default="state/daemon.json",
+        help="heartbeat JSON for the read-only TUI (default: state/daemon.json)",
+    )
     parser.add_argument(
         "--pause-on-alert",
         action="store_true",
@@ -148,6 +154,17 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def write_status(path: Path, payload: Dict[str, Any]) -> None:
+    """Atomically publish the daemon heartbeat for the read-only TUI."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, path)
+
+
 def acquire_lock(path: Path) -> int:
     """Create a pid lock file; take over a stale one."""
 
@@ -199,9 +216,50 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
+    allowed_ids = resolve_allow(args.allow) if args.allow else None
+    status_path = Path(args.status_file)
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    status: Dict[str, Any] = {
+        "schema": 1,
+        "pid": os.getpid(),
+        "started_at": started_at,
+        "state": "starting",
+        "mode": "execute" if args.execute else "dry_run",
+        "interval": args.interval,
+        "snapshot_every": args.snapshot_every,
+        "allow": list(allowed_ids or []),
+        "max_cost": args.max_cost,
+        "pause_on_alert": bool(args.pause_on_alert),
+        "expedition": bool(args.expedition),
+        "expedition_allow": expedition_allowed,
+        "expedition_every": args.expedition_every,
+        "max_failures": args.max_failures,
+        "cycles": 0,
+        "failures": 0,
+        "last_cycle_at": None,
+        "next_cycle_at": None,
+        "cycle_started_at": None,
+        "last_status": None,
+        "last_reason": None,
+        "phase": None,
+        "goal": None,
+        "updated_at": started_at,
+    }
+
+    def update_status(**fields: Any) -> None:
+        status.update(fields)
+        status["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            write_status(status_path, status)
+        except OSError:
+            # The heartbeat is optional: a full disk must not stop the loop.
+            pass
+
+    update_status(state="running")
+
     daemon_config = DaemonConfig(
         dry_run=not args.execute,
-        allowed_elements=resolve_allow(args.allow) if args.allow else None,
+        allowed_elements=allowed_ids,
         max_cost_equivalent=args.max_cost,
         interval_seconds=args.interval,
         backoff_base=args.backoff_base,
@@ -246,6 +304,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 break
 
             now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            update_status(state="running", cycle_started_at=now)
             try:
                 if failures == 0:
                     client.ensure_login()
@@ -271,6 +330,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
                 for alert in result.alerts:
                     print(f"    ALERT {alert['message']}", flush=True)
+                update_status(
+                    cycles=cycles,
+                    failures=0,
+                    last_cycle_at=now,
+                    cycle_started_at=None,
+                    last_status=result.status,
+                    last_reason=result.reason,
+                    phase=result.phase,
+                    goal=result.goal,
+                )
 
                 if args.expedition and expedition_due(cycles, args.expedition_every):
                     try:
@@ -345,6 +414,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     max_bytes=rotate_bytes,
                 )
                 print(f"[{now}] error ({failures}): {exc}", file=sys.stderr, flush=True)
+                update_status(
+                    failures=failures,
+                    last_cycle_at=now,
+                    cycle_started_at=None,
+                    last_status="error",
+                    last_reason=f"{type(exc).__name__}: {exc}",
+                )
                 if failures >= daemon_config.max_failures:
                     print("too many consecutive failures; exiting", file=sys.stderr)
                     return 1
@@ -359,11 +435,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     failures, daemon_config.backoff_base, daemon_config.backoff_max
                 )
             )
+            next_cycle_at = (
+                datetime.now(timezone.utc) + timedelta(seconds=delay)
+            ).isoformat(timespec="seconds")
+            update_status(next_cycle_at=next_cycle_at)
             deadline = time.monotonic() + delay
             while not stop["requested"] and time.monotonic() < deadline:
                 time.sleep(min(1.0, deadline - time.monotonic()))
         return 0
     finally:
+        update_status(
+            state="stopped",
+            stopped_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            next_cycle_at=None,
+        )
         client.close()
         try:
             os.close(lock_fd)

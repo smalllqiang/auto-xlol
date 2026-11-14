@@ -42,11 +42,15 @@ class CycleResult:
     status: str
     reason: str
     queues: Dict[str, int] = field(default_factory=dict)
+    queue_items: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     action: Optional[Dict[str, Any]] = None
+    plan_top: List[Dict[str, Any]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
     alerts: List[Dict[str, Any]] = field(default_factory=list)
     counters: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    messages: Dict[str, Any] = field(default_factory=dict)
+    evidence: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -55,10 +59,14 @@ class CycleResult:
             "status": self.status,
             "reason": self.reason,
             "queues": dict(self.queues),
+            "queue_items": {key: list(value) for key, value in self.queue_items.items()},
             "action": self.action,
+            "plan_top": list(self.plan_top),
             "notes": list(self.notes),
             "events": list(self.events),
             "alerts": list(self.alerts),
+            "messages": dict(self.messages),
+            "evidence": dict(self.evidence),
         }
 
 
@@ -108,6 +116,72 @@ def _observe(
     return events, react(events), current
 
 
+def _messages_summary(counters: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+    """Compact unread summary for the journal/dashboard.
+
+    Category 100 aggregates the inbox and 999 is the outbox; summing every tab
+    would double count, so use the aggregate when present.
+    """
+
+    if not counters:
+        return {}
+    inbox = counters.get(100) or {}
+    normal = [item for key, item in counters.items() if key not in (100, 999)]
+    unread = (
+        int(inbox.get("unread", 0))
+        if inbox
+        else sum(int(item.get("unread", 0)) for item in normal)
+    )
+    total = (
+        int(inbox.get("total", 0))
+        if inbox
+        else sum(int(item.get("total", 0)) for item in normal)
+    )
+    categories = [
+        {
+            "category": int(item.get("category", 0)),
+            "name": item.get("name") or str(item.get("category", "")),
+            "unread": int(item.get("unread", 0)),
+        }
+        for item in sorted(normal, key=lambda entry: int(entry.get("category", 0)))
+        if int(item.get("unread", 0)) > 0
+    ]
+    return {
+        "unread": unread,
+        "total": total,
+        "outbox": int((counters.get(999) or {}).get("total", 0)),
+        "categories": categories,
+    }
+
+
+def _same_action(action: Any, selected: Any) -> bool:
+    if selected is None:
+        return False
+    return (
+        int(action.element_id) == int(selected.element_id)
+        and action.kind == selected.kind
+    )
+
+
+def _plan_top(plan: Any, selected: Any, limit: int = 6) -> List[Dict[str, Any]]:
+    """First few candidates, with the selected one flagged.
+
+    The TUI needs to explain *why* this action and not the others; the chosen
+    action is appended if it falls outside the top N.
+    """
+
+    items: List[Dict[str, Any]] = []
+    for action in list(plan.actions)[:limit]:
+        item = action.as_dict()
+        item["selected"] = _same_action(action, selected)
+        items.append(item)
+    if selected is not None and not any(item["selected"] for item in items):
+        item = selected.as_dict()
+        item["selected"] = True
+        items.append(item)
+    return items
+
+
 def run_cycle(
     client: Any,
     config: DaemonConfig,
@@ -147,9 +221,13 @@ def run_cycle(
         status=result.status,
         reason=result.reason,
         queues=dict(result.queues),
+        queue_items={key: list(value) for key, value in result.queue_items.items()},
         action=result.action.as_dict() if result.action is not None else None,
+        plan_top=_plan_top(plan, result.action),
         notes=list(plan.notes),
         events=[event.as_dict() for event in events],
         alerts=[alert.as_dict() for alert in alerts],
         counters=counters,
+        messages=_messages_summary(counters),
+        evidence=dict(result.evidence),
     )

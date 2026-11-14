@@ -38,6 +38,7 @@ class ExecutionResult:
     action: Optional[Action] = None
     reason: str = ""
     queues: Dict[str, int] = field(default_factory=dict)
+    queue_items: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     evidence: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -45,6 +46,7 @@ class ExecutionResult:
             "status": self.status,
             "reason": self.reason,
             "queues": dict(self.queues),
+            "queue_items": {key: list(value) for key, value in self.queue_items.items()},
             "evidence": dict(self.evidence),
         }
         if self.action is not None:
@@ -57,6 +59,34 @@ def _queue_lengths(client: Any) -> Dict[str, int]:
         "building": len(client.get_building_queue()),
         "research": len(client.get_research_queue()),
     }
+
+
+def _queue_item_list(entries: Iterable[Any]) -> List[Dict[str, Any]]:
+    """Serialise queue entries for the journal / dashboard.
+
+    ``QueueEntry`` is the real type, but tests pass bare objects; keep the
+    serializer tolerant so a fake queue never breaks a cycle.
+    """
+
+    items: List[Dict[str, Any]] = []
+    for index, entry in enumerate(entries):
+        name = getattr(entry, "name", "") or ""
+        element_id = getattr(entry, "element_id", None)
+        if not name and element_id is None:
+            continue
+        items.append(
+            {
+                "index": getattr(entry, "index", index),
+                "element_id": element_id,
+                "name": name or f"#{element_id}",
+                "amount": getattr(entry, "amount", None),
+                "target_level": getattr(entry, "target_level", None),
+                "remaining_seconds": getattr(entry, "remaining_seconds", None),
+                "end_time": getattr(entry, "end_time", None),
+                "active": bool(getattr(entry, "active", False)),
+            }
+        )
+    return items
 
 
 def _action_key(action: Action) -> Tuple[str, int]:
@@ -124,6 +154,10 @@ def execute_plan(
         "building": len(building_queue),
         "research": len(research_queue),
     }
+    queue_items = {
+        "building": _queue_item_list(building_queue),
+        "research": _queue_item_list(research_queue),
+    }
 
     allowed = set(int(item) for item in allowed_elements) if allowed_elements is not None else None
 
@@ -132,6 +166,7 @@ def execute_plan(
             status="skipped",
             reason="执行模式必须提供允许列表",
             queues=queue_lengths,
+            queue_items=queue_items,
         )
 
     excluded: Set[Tuple[str, int]] = set()
@@ -156,12 +191,14 @@ def execute_plan(
                     action=last_action,
                     reason=f"预检查拒绝后没有更多可执行动作：{names}",
                     queues=queue_lengths,
+            queue_items=queue_items,
                     evidence={"rejected": rejected, "skipped": skip_reasons},
                 )
             return ExecutionResult(
                 status="skipped",
                 reason="；".join(skip_reasons) if skip_reasons else "没有可执行的动作",
                 queues=queue_lengths,
+            queue_items=queue_items,
             )
 
         last_action = action
@@ -172,6 +209,7 @@ def execute_plan(
                 action=action,
                 reason=f"计划执行：{action.name} {action.current_level}->{action.target_level}",
                 queues=queue_lengths,
+            queue_items=queue_items,
             )
 
         try:
@@ -185,6 +223,7 @@ def execute_plan(
                     action=action,
                     reason=f"不支持的动作类型：{action.kind}",
                     queues=queue_lengths,
+            queue_items=queue_items,
                 )
         except ActionRejected as exc:
             # A rejection raised before the POST means nothing was queued.
@@ -196,6 +235,7 @@ def execute_plan(
                     action=action,
                     reason=f"{type(exc).__name__}: {exc}",
                     queues=queue_lengths,
+            queue_items=queue_items,
                 )
             rejected.append(
                 {
@@ -212,6 +252,7 @@ def execute_plan(
                     action=action,
                     reason=f"连续 {len(rejected)} 条动作在预检查阶段被拒：{names}",
                     queues=queue_lengths,
+            queue_items=queue_items,
                     evidence={"rejected": rejected, "skipped": skip_reasons},
                 )
             continue
@@ -221,6 +262,7 @@ def execute_plan(
                 action=action,
                 reason=f"{type(exc).__name__}: {exc}",
                 queues=queue_lengths,
+            queue_items=queue_items,
             )
 
         try:
@@ -234,10 +276,13 @@ def execute_plan(
             names = "、".join(item["name"] for item in rejected)
             reason += f"（跳过预检查被拒：{names}）"
             evidence["rejected"] = rejected
+        if action.kind in queue_items:
+            queue_items[action.kind] = _queue_item_list(queue)
         return ExecutionResult(
             status="executed",
             action=action,
             reason=reason,
             queues=after,
+            queue_items=queue_items,
             evidence=evidence,
         )

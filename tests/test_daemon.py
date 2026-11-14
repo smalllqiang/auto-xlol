@@ -149,3 +149,31 @@ def test_pause_on_alert_skips_execution(fixture_html, monkeypatch):
     assert result.status == "paused"
     assert result.alerts
     assert client.calls == []
+
+
+def test_cycle_carries_dashboard_fields(fixture_html, monkeypatch):
+    from newstar_sdk.models import QueueEntry
+
+    queue = QueueEntry(
+        index=0,
+        element_id=3,
+        name="合金冶炼厂",
+        target_level=22,
+        remaining_seconds=125,
+        active=True,
+    )
+    client = FakeClient(building_queue=[queue], counters=_counters(**{"3": 2, "4": 3}))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+
+    result = run_cycle(
+        client,
+        DaemonConfig(dry_run=True),
+        previous_counters={3: {"category": 3, "name": "战斗报告", "unread": 0, "total": 0}},
+    )
+
+    assert result.plan_top
+    assert sum(1 for item in result.plan_top if item["selected"]) == 1
+    assert result.queue_items["building"][0]["name"] == "合金冶炼厂"
+    assert result.queue_items["building"][0]["remaining_seconds"] == 125
+    assert result.messages["unread"] == 5
+    assert result.messages["categories"]

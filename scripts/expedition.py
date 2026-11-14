@@ -46,9 +46,11 @@ def render(report) -> str:
     lines = [
         f"探险技术  {report.expedition_tech}",
         f"探险航道  {report.slots}（占用 {report.active_expeditions}，空闲 {report.free_slots}）",
-        f"当前积分  {report.current_score:,.1f} / 目标 {report.target_score:,.1f}",
+        f"当前积分  {report.current_score:,.1f} / 需要 {report.required_score:,.1f}"
+        f"（每队 {report.target_score:,.1f} × {report.free_slots} 空闲航道）",
+        f"积分缺口  {report.score_gap:,.1f}",
         f"目标坐标  {report.target or '-'}",
-        f"可派遣    {report.can_send}",
+        f"可派遣    {'是' if report.can_send else '否'}",
     ]
 
     if report.available_ships:
@@ -60,6 +62,15 @@ def render(report) -> str:
         lines.append(f"现有舰船  {ships}")
     else:
         lines.append("现有舰船  -")
+
+    if report.fleet_groups:
+        lines.append("编队:")
+        for group in report.fleet_groups:
+            ships = "、".join(
+                f"{report.ship_names.get(ship_id, f'#{ship_id}')}×{count}"
+                for ship_id, count in group.ships.items()
+            )
+            lines.append(f"  第 {group.index} 队  {ships}  积分 {group.score:,.1f}")
 
     recommendation = report.recommendation
     if recommendation is not None:
@@ -74,8 +85,8 @@ def render(report) -> str:
         if cost:
             lines.append(f"总成本    {cost}")
         lines.append(
-            f"前置满足  {recommendation.requirements_met}  "
-            f"资源足够  {recommendation.affordable}"
+            f"前置满足  {'是' if recommendation.requirements_met else '否'}  "
+            f"资源足够  {'是' if recommendation.affordable else '否'}"
         )
         if recommendation.requirements:
             lines.append(f"前置条件  {'；'.join(recommendation.requirements)}")

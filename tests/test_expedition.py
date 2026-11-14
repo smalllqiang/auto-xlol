@@ -52,6 +52,8 @@ def test_report_slots_score_target_and_recommendation():
     assert report.active_expeditions == 1
     assert report.free_slots == 2
     assert report.current_score == pytest.approx(58.0 + 2 * 4.0)
+    assert report.required_score == pytest.approx(1_000_000.0)
+    assert report.score_gap == pytest.approx(1_000_000.0 - report.current_score)
     assert report.target == "3:505:16"
     assert report.can_send is True
 
@@ -60,12 +62,48 @@ def test_report_slots_score_target_and_recommendation():
     assert recommendation.element_id == 207
     assert recommendation.name == "战列舰"
     assert recommendation.score_per_ship == pytest.approx(58.0)
-    expected = math.ceil((500_000 - report.current_score) / 58.0)
+    expected = math.ceil(report.score_gap / 58.0)
     assert recommendation.needed == expected
     assert recommendation.total_cost[901] == pytest.approx(41000.0 * expected)
     assert recommendation.affordable is True
     assert any("补足目标" in note for note in report.notes)
+    assert any("每队目标" in note for note in report.notes)
     json.dumps(report.as_dict(), ensure_ascii=False)
+
+
+def test_groups_split_ships_evenly():
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=4)],
+        shipyard=[BATTLESHIP, SMALL_CARGO],
+        available_ships={207: 2, 202: 4},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+        target_score=500_000,
+    )
+
+    assert len(report.fleet_groups) == 2
+    assert [group.score for group in report.fleet_groups] == pytest.approx([66.0, 66.0])
+    for group in report.fleet_groups:
+        assert group.ships == {207: 1, 202: 2}
+    assert sum(group.score for group in report.fleet_groups) == pytest.approx(
+        report.current_score
+    )
+
+
+def test_groups_use_fewer_when_not_enough_ships():
+    report = compute_expedition_report(
+        research=[ResearchInfo(id=124, name="探险技术", level=9)],
+        shipyard=[BATTLESHIP],
+        available_ships={207: 1},
+        fleets=[],
+        planet=_planet(),
+        resources=RESOURCES,
+    )
+
+    assert report.free_slots == 3
+    assert len(report.fleet_groups) == 1
+    assert any("只够编成 1 队" in note for note in report.notes)
 
 
 def test_report_treats_returning_expeditions_as_occupied():

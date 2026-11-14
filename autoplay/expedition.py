@@ -20,8 +20,9 @@ from newstar_sdk.models import Coordinates, FleetInfo, PlanetInfo, ResearchInfo,
 EXPEDITION_TECH_ID = 124
 EXPEDITION_TARGET_POSITION = 16
 
-#: Default no-deuterium fleet score from the guide (high-resource threshold).
-#: This is a prior, not a game constant; callers can override it.
+#: Default no-deuterium score per expedition fleet from the guide
+#: (high-resource threshold).  This is a prior, not a game constant; callers
+#: can override it.
 DEFAULT_TARGET_SCORE = 500_000.0
 
 
@@ -52,6 +53,20 @@ class ShipRecommendation:
 
 
 @dataclass
+class ExpeditionGroup:
+    index: int
+    ships: Dict[int, int] = field(default_factory=dict)
+    score: float = 0.0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "index": self.index,
+            "ships": {str(key): value for key, value in self.ships.items()},
+            "score": round(self.score, 3),
+        }
+
+
+@dataclass
 class ExpeditionReport:
     expedition_tech: int
     slots: int
@@ -59,10 +74,13 @@ class ExpeditionReport:
     free_slots: int
     current_score: float
     target_score: float
+    required_score: float
+    score_gap: float
     target: Optional[str]
     available_ships: Dict[int, int]
     ship_names: Dict[int, str] = field(default_factory=dict)
     active_fleets: List[Dict[str, Any]] = field(default_factory=list)
+    fleet_groups: List[ExpeditionGroup] = field(default_factory=list)
     recommendation: Optional[ShipRecommendation] = None
     can_send: bool = False
     notes: List[str] = field(default_factory=list)
@@ -75,12 +93,15 @@ class ExpeditionReport:
             "free_slots": self.free_slots,
             "current_score": round(self.current_score, 3),
             "target_score": self.target_score,
+            "required_score": self.required_score,
+            "score_gap": round(self.score_gap, 3),
             "target": self.target,
             "available_ships": {
                 str(key): value for key, value in self.available_ships.items()
             },
             "ship_names": {str(key): value for key, value in self.ship_names.items()},
             "active_fleets": [dict(fleet) for fleet in self.active_fleets],
+            "fleet_groups": [group.as_dict() for group in self.fleet_groups],
             "recommendation": (
                 self.recommendation.as_dict() if self.recommendation is not None else None
             ),
@@ -138,11 +159,67 @@ def _target_coordinates(planet: Optional[PlanetInfo]) -> Optional[str]:
     return f"{target.galaxy}:{target.system}:{target.planet}"
 
 
+def _group_fleets(
+    available_ships: Mapping[int, int],
+    shipyard: Iterable[ShipInfo],
+    free_slots: int,
+    notes: List[str],
+) -> List[ExpeditionGroup]:
+    """Split available ships into up to ``free_slots`` balanced groups.
+
+    Counts are distributed without expanding every hull, so a fleet of
+    millions of probes stays cheap to plan.  Remainders go to the currently
+    weakest groups, which keeps the score gap between groups small.
+    """
+
+    if free_slots <= 0:
+        return []
+
+    costs = {
+        int(item.id): item.cost or {}
+        for item in shipyard
+        if not item.is_defense
+    }
+    usable = {
+        int(ship_id): int(count)
+        for ship_id, count in available_ships.items()
+        if int(count) > 0 and int(ship_id) in costs
+    }
+    total_ships = sum(usable.values())
+    if total_ships <= 0:
+        return []
+
+    group_count = min(int(free_slots), total_ships)
+    if group_count < int(free_slots):
+        notes.append(
+            f"可派遣舰船只够编成 {group_count} 队（空闲航道 {free_slots}）"
+        )
+
+    groups = [ExpeditionGroup(index=index + 1) for index in range(group_count)]
+    ordered = sorted(
+        usable.items(),
+        key=lambda item: -fleet_score(costs[item[0]]),
+    )
+    for ship_id, count in ordered:
+        score = fleet_score(costs[ship_id])
+        base, remainder = divmod(count, group_count)
+        if base:
+            for group in groups:
+                group.ships[ship_id] = group.ships.get(ship_id, 0) + base
+                group.score += base * score
+        if remainder:
+            weakest = sorted(groups, key=lambda group: (group.score, group.index))
+            for group in weakest[:remainder]:
+                group.ships[ship_id] = group.ships.get(ship_id, 0) + 1
+                group.score += score
+
+    return [group for group in groups if group.ships]
+
+
 def _recommend(
     shipyard: Iterable[ShipInfo],
     resources: Mapping[int, float],
-    current_score: float,
-    target_score: float,
+    score_gap: float,
     ship: Optional[int],
     notes: List[str],
 ) -> Optional[ShipRecommendation]:
@@ -162,7 +239,7 @@ def _recommend(
     pool = eligible or ships
     best = min(pool, key=_ship_rank)
     score = fleet_score(best.cost)
-    gap = max(0.0, float(target_score) - float(current_score))
+    gap = max(0.0, float(score_gap))
     needed = math.ceil(gap / score) if gap > 0 and score > 0 else 0
     total_cost = (
         {int(rid): float(amount) * needed for rid, amount in best.cost.items()}
@@ -238,6 +315,8 @@ def compute_expedition_report(
         current_score += count * fleet_score(cost)
 
     target = _target_coordinates(planet)
+    required_score = float(target_score) * free_slots
+    score_gap = max(0.0, required_score - current_score)
     available_ids = {int(ship_id) for ship_id in available_ships}
     ship_names = {
         int(item.id): str(item.name)
@@ -259,14 +338,28 @@ def compute_expedition_report(
         notes.append("无法从概览确定当前星球坐标")
     if float(resources.get(903, 0.0)) <= 0:
         notes.append("重氢为 0，发送前需确认燃料")
+    if free_slots > 0 and score_gap > 0:
+        notes.append(
+            f"每队目标 {float(target_score):,.0f}，{free_slots} 个空闲航道需要 "
+            f"{required_score:,.0f}；当前 {current_score:,.0f}，还差 {score_gap:,.0f}"
+        )
 
-    recommendation = _recommend(
+    fleet_groups = _group_fleets(
+        available_ships,
         shipyard_list,
-        resources,
-        current_score,
-        target_score,
-        ship,
+        free_slots,
         notes,
+    )
+    short_groups = [
+        group.index for group in fleet_groups if group.score < float(target_score)
+    ]
+    if short_groups:
+        notes.append(f"{len(short_groups)} 支编队低于每队目标")
+
+    recommendation = (
+        _recommend(shipyard_list, resources, score_gap, ship, notes)
+        if free_slots > 0
+        else None
     )
     if recommendation is not None and recommendation.needed:
         notes.append(
@@ -280,10 +373,13 @@ def compute_expedition_report(
         free_slots=free_slots,
         current_score=current_score,
         target_score=float(target_score),
+        required_score=required_score,
+        score_gap=score_gap,
         target=target,
         available_ships={int(key): int(value) for key, value in available_ships.items()},
         ship_names=ship_names,
         active_fleets=[_fleet_summary(fleet) for fleet in active],
+        fleet_groups=fleet_groups,
         recommendation=recommendation,
         can_send=free_slots > 0 and current_score > 0 and target is not None,
         notes=notes,

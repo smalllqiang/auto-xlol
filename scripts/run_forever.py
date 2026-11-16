@@ -30,6 +30,7 @@ from local_config import load_config
 
 from autoplay.battles import collect_battles, write_battles
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
+from autoplay.daily import CLAIMED, run_daily_bonus
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
@@ -162,6 +163,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default="state/records.json",
         help="universe records snapshot for the TUI (default: state/records.json)",
     )
+    parser.add_argument(
+        "--no-bonus",
+        dest="bonus",
+        action="store_false",
+        help="skip the daily sign-in check (每日签到); in --execute mode it is claimed",
+    )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
     parser.add_argument("--once", action="store_true", help="run exactly one cycle")
@@ -289,6 +296,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "allow": list(allowed_ids or []),
         "max_cost": args.max_cost,
         "pause_on_alert": bool(args.pause_on_alert),
+        "bonus": bool(args.bonus),
         "expedition": bool(args.expedition),
         "expedition_allow": expedition_allowed,
         "expedition_every": args.expedition_every,
@@ -354,6 +362,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     records_path = Path(args.records_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
+    previous_bonus: Optional[str] = None
     failures = 0
     cycles = 0
     max_cycles = 1 if args.once else args.max_cycles
@@ -371,6 +380,56 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             try:
                 if failures == 0:
                     client.ensure_login()
+                if args.bonus:
+                    try:
+                        bonus_outcome = run_daily_bonus(
+                            client, dry_run=not args.execute
+                        )
+                    except NewStarError as exc:
+                        # Keep a persistent sign-in failure from flooding the
+                        # journal: log the first one, then stay quiet until the
+                        # state changes.
+                        if previous_bonus != "error":
+                            append_jsonl(
+                                journal_path,
+                                {
+                                    "at": now,
+                                    "kind": "bonus_error",
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                },
+                                max_bytes=rotate_bytes,
+                            )
+                            print(
+                                f"[{now}] bonus error: {exc}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        previous_bonus = "error"
+                    else:
+                        # Cooldown is the steady state; journal only changes and
+                        # every successful claim.
+                        if (
+                            bonus_outcome.status != previous_bonus
+                            or bonus_outcome.status == CLAIMED
+                        ):
+                            append_jsonl(
+                                journal_path,
+                                {
+                                    "at": now,
+                                    "kind": "bonus",
+                                    "mode": (
+                                        "execute" if args.execute else "dry_run"
+                                    ),
+                                    **bonus_outcome.as_dict(),
+                                },
+                                max_bytes=rotate_bytes,
+                            )
+                            print(
+                                f"    bonus {bonus_outcome.status}: "
+                                f"{bonus_outcome.reason}",
+                                flush=True,
+                            )
+                        previous_bonus = bonus_outcome.status
                 result = run_cycle(
                     client, daemon_config, previous_counters=previous_counters
                 )

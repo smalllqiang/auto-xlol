@@ -99,6 +99,7 @@ def _overview_section(overview: Overview) -> Dict[str, Any]:
             "research": overview.status.research,
             "shipyard": overview.status.shipyard,
         },
+        "daily_bonus": overview.daily_bonus.as_dict(),
     }
 
 

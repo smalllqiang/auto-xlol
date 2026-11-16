@@ -9,6 +9,7 @@
 - 登录、会话保存/恢复、会话过期后自动重登（需提供密码）
 - 读取账号、资源、产能、星球、活动状态
 - 读取消息（分类/分页/未读计数）、加成总表、生产控制明细、排行榜、战役名人堂与宇宙记录
+- 每日签到（先读概览导航，可领取才访问 `page=bonus`；冷却期不消耗机会）
 - 全量状态快照、快照 diff 事件、趋势统计
 - 建筑升级、拆除、建造队列取消
 - 科技研究、研究队列取消
@@ -124,6 +125,17 @@ for message in page:
 # 加成总表：所有成本/产能计算的乘数来源
 bonuses = client.get_bonuses()
 print(bonuses.percent("全资源生产加成"), bonuses.multiplier("合金采集加成"))
+```
+
+### 每日签到
+
+`page=bonus` 访问即领取（24 小时冷却）。先看概览导航再决定是否访问该页，避免把
+唯一一次机会花在「预览」上：
+
+```python
+status = client.get_daily_bonus_status()   # 只读：available / available_at
+bonus = client.claim_daily_bonus()         # 冷却中返回 claimed=False，不报错
+bonus.amounts                              # {921: 160.0, 922: 95.0, 924: 3.0}
 ```
 
 ### 建筑
@@ -333,6 +345,7 @@ newstar galaxy --galaxy 3 --system 505
 newstar fleets
 newstar messages --category expedition
 newstar bonuses
+newstar bonus --claim
 newstar queue build
 newstar --json overview
 
@@ -420,6 +433,7 @@ autoplay/         # 策略层（易变）
   phases.py       # 阶段识别
   economy.py      # 等价换算 / 增产估算 / 回本
   planner.py      # 依赖展开 + ROI 排序
+  daily.py        # 每日签到（先查导航，可领取才访问 page=bonus）
   expedition.py   # 探险航道 / 积分 / 建船建议（只读）
   expedition_executor.py  # 单队探险预览 / 发送
   ship_build.py   # 推荐舰船建造（默认 dry-run）
@@ -451,7 +465,7 @@ AGENTS.md         # 协作与代理规则
 ## 当前范围
 
 当前版本覆盖登录/会话、账号与资源读取、建筑、研究、船坞、星图、舰队发送/召回、队列、
-消息、加成、生产控制、状态快照/事件与原始请求。
+消息、加成、每日签到、生产控制、状态快照/事件与原始请求。
 
 当前不提供：战斗报告详情、市场/交易、联盟、生产比例写入、殖民/月球管理、聊天、军官/商店等页面级封装。这些页面仍可通过 `get_page()` / `request()` 访问。
 

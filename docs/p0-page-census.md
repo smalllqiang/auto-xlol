@@ -79,6 +79,10 @@ shipyard / galaxy / fleet）。在补 `messages`、`resources`、`infobonus` 之
 `techtree` 单页 630 KB，是前置依赖图的可视化，适合"按需抓一次、离线建图"，
 不适合轮询。
 
+> `bonus`（每日签到）不在普查白名单里：它的 GET 本身就是「领取」，抓样本会消耗当天
+> 唯一的机会，所以被列为动作页。可用性从概览导航读取，见 `docs/usage.md` 的
+> 「每日签到」与 ADR-023。
+
 ## 5. 关键发现
 
 ### 5.1 消息列表是 AJAX 渲染的

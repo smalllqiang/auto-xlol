@@ -198,6 +198,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("bonuses", help="show the bonus summary (multiplicative modifiers)")
     p.set_defaults(func=_cmd_bonuses)
 
+    p = sub.add_parser("bonus", help="show or claim the daily sign-in bonus (每日签到)")
+    p.add_argument(
+        "--claim",
+        action="store_true",
+        help="claim it now when available (the page grants on GET; cooldown is harmless)",
+    )
+    p.set_defaults(func=_cmd_bonus)
+
     p = sub.add_parser("page", help="print raw HTML of an ingame page")
     p.add_argument("name", help="page name, e.g. messages or overview")
     p.add_argument("--param", action="append", default=[], metavar="KEY=VALUE")
@@ -369,6 +377,12 @@ def _cmd_overview(client: NewStarClient, args: argparse.Namespace) -> None:
         f"Activity: research={overview.status.research or '-'} | "
         f"building={overview.status.building or '-'} | shipyard={overview.status.shipyard or '-'}"
     )
+    bonus = overview.daily_bonus
+    if bonus.available is True:
+        print("Daily bonus: available")
+    elif bonus.available is False:
+        when = bonus.available_at.isoformat(sep=" ") if bonus.available_at else "-"
+        print(f"Daily bonus: cooldown until {when}")
     if overview.server_time:
         print(f"Server time: {overview.server_time.isoformat(sep=' ')}")
 
@@ -574,6 +588,35 @@ def _cmd_bonuses(client: NewStarClient, args: argparse.Namespace) -> None:
         print(f"{item.name}: {item.percent:g}% (x{item.multiplier:g})")
 
 
+def _cmd_bonus(client: NewStarClient, args: argparse.Namespace) -> None:
+    if args.claim:
+        result = client.claim_daily_bonus()
+        if args.json:
+            _print_json(result)
+            return
+        if result.claimed:
+            print("每日签到已领取:")
+            for item in result.items:
+                print(f"  {item.name}: {_format_number(item.amount)}")
+        else:
+            print("每日签到冷却中，今天已经领取过了。")
+        if result.status.available_at:
+            print(f"下次可领取: {result.status.available_at.isoformat(sep=' ')}")
+        return
+
+    status = client.get_daily_bonus_status()
+    if args.json:
+        _print_json(status)
+        return
+    if status.available is True:
+        print("每日签到可领取（运行 newstar bonus --claim 领取）")
+    elif status.available is False:
+        when = status.available_at.isoformat(sep=" ") if status.available_at else "-"
+        print(f"每日签到冷却中，下次可领取: {when}")
+    else:
+        print("未能从导航判断签到状态（页面结构可能已变化）")
+
+
 def _cmd_available_ships(client: NewStarClient, args: argparse.Namespace) -> None:
     ships = client.get_available_ships()
     if args.json:
@@ -768,6 +811,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "fleets": _cmd_fleets,
         "messages": _cmd_messages,
         "bonuses": _cmd_bonuses,
+        "bonus": _cmd_bonus,
         "available-ships": _cmd_available_ships,
         "send-fleet": _cmd_send_fleet,
         "recall": _cmd_recall,

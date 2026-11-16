@@ -177,6 +177,81 @@ class OverviewStatus:
 
 
 @dataclass
+class DailyBonusItem:
+    """One reward line of the daily sign-in page (``page=bonus``).
+
+    ``element_id`` is the resource element id (921=暗物质, 922=反幽能,
+    924=宝箱, ...), ``name`` the label the page renders and ``amount`` the
+    granted amount.
+    """
+
+    element_id: int = 0
+    name: str = ""
+    amount: float = 0.0
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "element_id": self.element_id,
+            "name": self.name,
+            "amount": self.amount,
+        }
+
+
+@dataclass
+class DailyBonusStatus:
+    """Whether the daily sign-in bonus can be claimed right now.
+
+    The left navigation shows ``每日签到`` as a link while the bonus is
+    available and as a plain label with the moment the 24h cooldown ends
+    (``d.m.Y H:i:s``, the viewer's wall clock) while it runs.  ``available`` is
+    ``None`` when the navigation block could not be recognised at all -- that
+    means "unknown", not "unavailable".
+    """
+
+    available: Optional[bool] = None
+    available_at: Optional[datetime] = None
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "available": self.available,
+            "available_at": (
+                self.available_at.isoformat(sep=" ") if self.available_at else None
+            ),
+        }
+
+
+@dataclass
+class DailyBonus:
+    """Result of :meth:`NewStarClient.claim_daily_bonus`.
+
+    ``claimed`` is true only when the response actually listed rewards; the
+    game's cooldown is a normal outcome (``claimed=False`` plus
+    :attr:`status`), not an error.  ``status`` is read from a fresh overview
+    after the claim, because the bonus page itself renders the *stale* user row
+    it loaded before the database update.
+    """
+
+    claimed: bool = False
+    items: List[DailyBonusItem] = field(default_factory=list)
+    status: DailyBonusStatus = field(default_factory=DailyBonusStatus)
+    server_time: Optional[datetime] = None
+
+    @property
+    def amounts(self) -> Dict[int, float]:
+        return {item.element_id: item.amount for item in self.items}
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "claimed": self.claimed,
+            "items": [item.as_dict() for item in self.items],
+            "status": self.status.as_dict(),
+            "server_time": (
+                self.server_time.isoformat(sep=" ") if self.server_time else None
+            ),
+        }
+
+
+@dataclass
 class Overview:
     username: Optional[str] = None
     universe: Optional[str] = None
@@ -188,6 +263,7 @@ class Overview:
     planet: PlanetInfo = field(default_factory=PlanetInfo)
     planets: List[PlanetSummary] = field(default_factory=list)
     status: OverviewStatus = field(default_factory=OverviewStatus)
+    daily_bonus: DailyBonusStatus = field(default_factory=DailyBonusStatus)
 
 
 @dataclass

@@ -43,6 +43,7 @@ def _snapshot():
             "production": {"901": 3600, "902": 2400, "903": 0},
         },
         "energy": {"available": 500, "production": 120},
+        "daily_bonus": {"available": False, "available_at": "2026-11-14 09:00:00"},
         "research": {"expedition_tech": 2, "expedition_slots": 2},
         "queues": {
             "building": [
@@ -247,6 +248,50 @@ def test_render_contains_key_panels(tmp_path):
     assert "新消息 战斗报告" in text
     assert "预览  能源技术" in text
     assert "所有消息" not in text
+
+
+def test_bonus_panel_shows_last_claim(tmp_path):
+    journal = [
+        _cycle(),
+        {
+            "at": "2026-11-13T09:00:10+00:00",
+            "kind": "bonus",
+            "mode": "execute",
+            "status": "claimed",
+            "reason": "已领取每日签到",
+            "items": [
+                {"element_id": 921, "name": "暗物质", "amount": 160.0},
+                {"element_id": 922, "name": "反幽能", "amount": 95.0},
+            ],
+            "available_at": "2026-11-14 09:00:10",
+            "evidence": {"amounts": {"921": 160.0, "922": 95.0}},
+        },
+    ]
+    state = load_state(_state_dir(tmp_path, journal=journal), now=NOW)
+    text = "\n".join(render_text(state, width=100))
+
+    assert state.last_bonus["status"] == "claimed"
+    assert "签到" in text
+    assert "冷却至 2026-11-14 09:00:00" in text
+    assert "上次  已领取  暗物质 160 · 反幽能 95" in text
+    assert "签到 已领取" in text
+
+
+def test_bonus_error_keeps_failure_count(tmp_path):
+    journal = [
+        {"at": "2026-11-13T08:58:00+00:00", "kind": "error", "error": "boom"},
+        {
+            "at": "2026-11-13T08:59:00+00:00",
+            "kind": "bonus",
+            "status": "cooldown",
+            "reason": "签到冷却中",
+        },
+        {"at": "2026-11-13T09:00:00+00:00", "kind": "error", "error": "boom"},
+    ]
+    state = load_state(_state_dir(tmp_path, journal=journal), now=NOW)
+
+    # A bonus entry between two failures must not reset the counter.
+    assert state.consecutive_failures == 2
 
 
 def test_heartbeat_wins_over_invisible_pid(tmp_path):

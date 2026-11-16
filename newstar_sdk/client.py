@@ -42,6 +42,8 @@ from .models import (
     Bonuses,
     BuildingInfo,
     Coordinates,
+    DailyBonus,
+    DailyBonusStatus,
     FleetDispatch,
     FleetInfo,
     FleetPreview,
@@ -67,6 +69,7 @@ from .parsers import (
     parse_bonuses,
     parse_building_queue,
     parse_buildings,
+    parse_daily_bonus,
     parse_fleet_dispatch_result,
     parse_fleet_selection,
     parse_fleet_step1,
@@ -251,13 +254,19 @@ class NewStarClient:
         allow_redirects: bool = True,
         check_error: bool = True,
         retry_auth: bool = True,
+        max_retries: Optional[int] = None,
     ) -> requests.Response:
         query: Dict[str, Any] = dict(params or {})
         if path.startswith("game.php") and self._current_planet_id is not None:
             query.setdefault("cp", str(self._current_planet_id))
 
         response = self._raw_request(
-            method, path, params=query, data=data, allow_redirects=allow_redirects
+            method,
+            path,
+            params=query,
+            data=data,
+            allow_redirects=allow_redirects,
+            max_retries=max_retries,
         )
 
         if self._is_login_page(response):
@@ -273,6 +282,7 @@ class NewStarClient:
                     allow_redirects=allow_redirects,
                     check_error=check_error,
                     retry_auth=False,
+                    max_retries=max_retries,
                 )
             raise SessionExpired(
                 "the game session is no longer valid; call login() with valid credentials"
@@ -596,6 +606,63 @@ class NewStarClient:
         """
 
         return parse_bonuses(self.get_page("infobonus"))
+
+    def get_daily_bonus_status(self) -> DailyBonusStatus:
+        """Whether the daily sign-in bonus (每日签到) can be claimed now.
+
+        The answer comes from the left navigation of the overview, so this is a
+        read-only request that does not touch ``page=bonus`` (visiting that page
+        consumes the claim).  ``available`` is ``None`` when the navigation
+        cannot be recognised, which means "unknown" rather than "unavailable".
+        """
+
+        return self.get_overview().daily_bonus
+
+    def claim_daily_bonus(self) -> DailyBonus:
+        """Claim the daily sign-in bonus (``GET game.php?page=bonus``).
+
+        The page grants random rewards as a side effect of the GET and
+        redirects to the overview while the 24h cooldown runs, so this first
+        reads the overview navigation and only requests ``page=bonus`` when the
+        navigation says the bonus is claimable.  A cooldown is a normal
+        outcome: it returns ``claimed=False`` with the next availability time
+        instead of raising.  An unrecognised navigation (``available is None``)
+        also returns ``claimed=False`` without touching the page: a parser
+        regression must not gamble the day's only visit.
+
+        The claim request is sent with ``max_retries=0`` -- retrying cannot grant
+        twice, but the page is the only evidence of *what* was granted.  Success
+        requires the reward cards to be present and the overview to have moved
+        to the cooldown state afterwards.
+        """
+
+        overview = self.get_overview()
+        status = overview.daily_bonus
+        if status.available is not True:
+            return DailyBonus(
+                claimed=False, status=status, server_time=overview.server_time
+            )
+
+        response = self._game_page("bonus", max_retries=0)
+        items = parse_daily_bonus(response.text)
+        if not items:
+            raise ActionRejected(
+                "签到页没有返回奖励（今天可能已领取，或页面结构已变化）",
+                url=response.url,
+            )
+
+        after = self.get_overview()
+        if after.daily_bonus.available is True:
+            raise ActionRejected(
+                "签到页返回了奖励，但账号仍显示可领取（签到时间未写入？）",
+                url=response.url,
+            )
+        return DailyBonus(
+            claimed=True,
+            items=items,
+            status=after.daily_bonus,
+            server_time=after.server_time,
+        )
 
     def select_planet(self, planet_id: int) -> PlanetInfo:
         """Switch the active planet (the game session stores it server-side)."""

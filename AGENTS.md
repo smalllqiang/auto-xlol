@@ -48,6 +48,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl  # 探险预览（--execute --allow 才发送）
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
+.venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
@@ -118,6 +119,11 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   `div.record_made[data-tooltip-content]` 的转义 HTML 中（`Dialog.Playercard` 链接），
   行内没有独立节点；没有保持者/数值的行使表示该项暂无记录，解析时跳过。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
+- **签到页访问即领取**：`page=bonus` 的 GET 会直接发放奖励并写入 24h 冷却，冷却期
+  再访问只 302 回概览，没有只读预览。可用性写在左侧导航：可领取是 `每日签到` 链接，
+  冷却中是同一位置的时间戳（`d.m.Y H:i:s`，墙上时间）。判断状态用
+  `get_daily_bonus_status()` / `scripts/daily_bonus.py`，**不要**用
+  `page_census.py --only bonus` 抓样本——那会消耗当天唯一的机会。
 - **研究进行中不能升级科研实验室**：会被 `ActionRejected` 拒绝（实测），执行器已
   在 `research_queue` 非空时跳过该动作。
 - **幽能概览不是净可用**：概览的 `current_energy` / `energy.available` 是毛产能；

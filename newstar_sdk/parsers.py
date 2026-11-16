@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from bs4 import BeautifulSoup, Tag
 
@@ -36,6 +36,8 @@ from .models import (
     Bonuses,
     BuildingInfo,
     Coordinates,
+    DailyBonusItem,
+    DailyBonusStatus,
     FleetDispatch,
     FleetInfo,
     FleetShips,
@@ -147,6 +149,7 @@ def parse_overview(html: str) -> Overview:
     overview.planets = parse_planets(soup)
     overview.planet = parse_planet_info(soup, overview.planets)
     overview.status = parse_overview_status(soup)
+    overview.daily_bonus = parse_daily_bonus_status(soup)
     return overview
 
 
@@ -326,6 +329,95 @@ def parse_overview_status(soup: BeautifulSoup) -> OverviewStatus:
         building=_text(soup.select_one(".costruzioni a")),
         shipyard=_text(soup.select_one(".flotte a")),
     )
+
+
+# ---------------------------------------------------------------------------
+# Daily sign-in (每日签到, page=bonus)
+# ---------------------------------------------------------------------------
+
+#: The nav renders the cooldown as ``d.m.Y H:i:s`` in the viewer's timezone.
+_BONUS_COOLDOWN_RE = re.compile(
+    r"^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?$"
+)
+
+
+def _as_soup(html: Union[str, BeautifulSoup]) -> BeautifulSoup:
+    return html if isinstance(html, BeautifulSoup) else _soup(html)
+
+
+def _parse_wall_datetime(text: str) -> Optional[datetime]:
+    for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def parse_daily_bonus_status(
+    html: Union[str, BeautifulSoup],
+) -> DailyBonusStatus:
+    """Read the sign-in availability from the left navigation.
+
+    The theme swaps one anchor between two states: a link to
+    ``game.php?page=bonus`` while the bonus is claimable, and a plain label
+    holding the end of the 24h cooldown (a local wall-clock stamp) while it is
+    not.  Any page carrying the navigation can answer the question, which keeps
+    the check free -- ``page=bonus`` itself consumes the daily claim.
+    """
+
+    soup = _as_soup(html)
+    nav = soup.select_one("#left_menu") or soup
+
+    for anchor in nav.find_all("a"):
+        if "page=bonus" in (anchor.get("href") or ""):
+            return DailyBonusStatus(available=True)
+
+    for anchor in nav.find_all("a"):
+        text = _text(anchor)
+        if _BONUS_COOLDOWN_RE.match(text):
+            return DailyBonusStatus(
+                available=False, available_at=_parse_wall_datetime(text)
+            )
+    return DailyBonusStatus()
+
+
+def parse_daily_bonus(html: Union[str, BeautifulSoup]) -> List[DailyBonusItem]:
+    """Parse the reward cards of ``page=bonus``.
+
+    The template renders one card per resource: an ``gebaeude/<id>.gif`` image,
+    the amount in ``.card-title`` and the resource label in ``.card-text``.
+    The outer card contains both nested cards, so ignore duplicates by element
+    id instead of trusting the template nesting.
+    """
+
+    soup = _as_soup(html)
+    items: List[DailyBonusItem] = []
+    seen: set = set()
+
+    for card in soup.select("div.card"):
+        image = card.select_one("img[src*='gebaeude/']")
+        if image is None:
+            continue
+        match = re.search(r"gebaeude/(\d+)\.", image.get("src", ""))
+        if not match:
+            continue
+        element_id = int(match.group(1))
+        if element_id in seen:
+            continue
+        amount_node = card.select_one(".card-title")
+        name_node = card.select_one(".card-text")
+        if amount_node is None or name_node is None:
+            continue
+        seen.add(element_id)
+        items.append(
+            DailyBonusItem(
+                element_id=element_id,
+                name=_text(name_node),
+                amount=parse_number(_text(amount_node)),
+            )
+        )
+    return items
 
 
 # ---------------------------------------------------------------------------

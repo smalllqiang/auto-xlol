@@ -7,6 +7,7 @@ strategy here is opinionated and expected to change often.
 
 from __future__ import annotations
 
+from .daily import DailyBonusOutcome, run_daily_bonus
 from .economy import equivalent_cost, payback_hours, production_delta
 from .executor import ExecutionResult, execute_plan
 from .expedition import (
@@ -24,6 +25,7 @@ from .ship_build import ShipBuildResult, build_recommended_ships
 
 __all__ = [
     "Action",
+    "DailyBonusOutcome",
     "ExecutionResult",
     "ExpeditionCycleResult",
     "ExpeditionDispatchResult",
@@ -41,6 +43,7 @@ __all__ = [
     "compute_plan",
     "detect_phase",
     "dispatch_expedition",
+    "run_daily_bonus",
     "run_expedition_cycle",
     "equivalent_cost",
     "execute_plan",

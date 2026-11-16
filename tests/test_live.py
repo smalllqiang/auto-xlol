@@ -51,6 +51,15 @@ def test_live_overview(live_client):
     assert overview.planet.coordinates is not None
 
 
+def test_live_daily_bonus_status_is_read_only(live_client):
+    # The status comes from the overview navigation; it must never need a visit
+    # to page=bonus (which would spend the day's claim).
+    status = live_client.get_daily_bonus_status()
+    assert status.available in {True, False, None}
+    if status.available is False:
+        assert status.available_at is not None
+
+
 def test_live_element_lists(live_client):
     buildings = live_client.get_buildings()
     research = live_client.get_research()

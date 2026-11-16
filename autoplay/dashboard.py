@@ -57,6 +57,10 @@ STATUS_NAMES = {
     "error": "失败",
     "dispatched": "已派出",
     "partial": "部分派出",
+    "claimed": "已领取",
+    "available": "可领取",
+    "cooldown": "冷却中",
+    "unknown": "未知",
 }
 
 EVENT_NAMES = {
@@ -110,6 +114,13 @@ class DashboardState:
         return None
 
     @property
+    def last_bonus(self) -> Optional[Dict[str, Any]]:
+        for entry in reversed(self.journal):
+            if entry.get("kind") in {"bonus", "bonus_error"}:
+                return entry
+        return None
+
+    @property
     def last_error(self) -> Optional[Dict[str, Any]]:
         for entry in reversed(self.journal):
             if entry.get("kind") == "error":
@@ -123,7 +134,12 @@ class DashboardState:
             kind = entry.get("kind")
             if kind == "error":
                 count += 1
-            elif kind in {"expedition", "expedition_error"}:
+            elif kind in {
+                "expedition",
+                "expedition_error",
+                "bonus",
+                "bonus_error",
+            }:
                 continue
             else:
                 break
@@ -716,6 +732,15 @@ def _action_line(action: Dict[str, Any], width: int) -> str:
     return truncate(text, width)
 
 
+def _bonus_items(entry: Dict[str, Any]) -> str:
+    parts: List[str] = []
+    for item in entry.get("items") or []:
+        name = item.get("name") or f"#{item.get('element_id')}"
+        amount = item.get("amount")
+        parts.append(f"{name} {amount:,.0f}" if isinstance(amount, (int, float)) else name)
+    return " · ".join(parts)
+
+
 def _event_text(event: Dict[str, Any]) -> str:
     kind = event.get("kind") or "?"
     label = EVENT_NAMES.get(kind, kind)
@@ -737,8 +762,10 @@ def _event_text(event: Dict[str, Any]) -> str:
 def _log_style(entry: Dict[str, Any]) -> str:
     kind = entry.get("kind")
     status = entry.get("status")
-    if kind in {"error", "expedition_error"}:
+    if kind in {"error", "expedition_error", "bonus_error"}:
         return "error"
+    if kind == "bonus" and status == "claimed":
+        return "ok"
     if status == "error":
         return "error"
     if status == "paused":
@@ -756,6 +783,13 @@ def _log_text(entry: Dict[str, Any]) -> str:
         return f"error  {entry.get('error') or ''}"
     if kind == "expedition_error":
         return f"探险 error  {entry.get('error') or ''}"
+    if kind in {"bonus", "bonus_error"}:
+        if kind == "bonus_error":
+            return f"签到 error  {entry.get('error') or ''}"
+        status = STATUS_NAMES.get(str(entry.get("status")), entry.get("status") or "?")
+        detail = _bonus_items(entry)
+        text = f"签到 {status}  {entry.get('reason') or ''}".rstrip()
+        return f"{text}  {detail}" if detail else text
     if kind == "expedition":
         status = STATUS_NAMES.get(str(entry.get("status")), entry.get("status") or "?")
         return f"探险 {status}  {entry.get('reason') or ''}"
@@ -884,6 +918,31 @@ def render_lines(
         add(f"  上次调度 {status}  {expedition.get('reason') or ''}")
     else:
         add("  上次调度  无（需 --expedition --execute）", "muted")
+
+    add("签到", "section")
+    bonus_snapshot = (snapshot or {}).get("daily_bonus") or {}
+    available = bonus_snapshot.get("available")
+    bonus_status = ""
+    if available is True:
+        bonus_status = "可领取"
+    elif available is False:
+        bonus_status = f"冷却至 {bonus_snapshot.get('available_at') or '-'}"
+    elif bonus_snapshot:
+        bonus_status = "未知"
+    if bonus_status:
+        add(f"  状态  {bonus_status}")
+    last_bonus = state.last_bonus
+    if last_bonus is not None:
+        if last_bonus.get("kind") == "bonus_error":
+            add(f"  上次  读取失败 {last_bonus.get('error') or ''}", "warn")
+        else:
+            status = STATUS_NAMES.get(
+                str(last_bonus.get("status")), last_bonus.get("status") or "?"
+            )
+            detail = _bonus_items(last_bonus)
+            add(f"  上次  {status}" + (f"  {detail}" if detail else ""))
+    elif not bonus_status:
+        add("  暂无签到数据（签到默认开启，--no-bonus 可关）", "muted")
 
     messages = state.messages
     if messages:

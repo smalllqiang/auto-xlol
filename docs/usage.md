@@ -200,6 +200,44 @@ bonuses.as_dict()                     # {名称: 倍率}
 
 找不到时 `percent()` 返回 `0.0`、`multiplier()` 返回 `1.0`。
 
+### 每日签到（page=bonus）
+
+`page=bonus` 是「访问即领取」：GET 一下就把当天的奖励（本实例是暗物质 / 反幽能 /
+宝箱）直接发到账号，并把 `bonus_time` 推到 24 小时之后。冷却期内再访问只会 302
+回概览，所以**不要为了「看看」而请求这个页面**——一次访问就消耗掉当天唯一的机会。
+
+可领取状态写在任意页面的左侧导航里：可领取时是 `每日签到` 链接，冷却中变成同位置的
+纯文本时间戳（`d.m.Y H:i:s`，查看者墙上时间）。SDK 从概览读这一行：
+
+```python
+status = client.get_daily_bonus_status()   # 只读，不碰 page=bonus
+status.available                            # True / False / None(未知)
+status.available_at                         # 冷却结束时间（naive 墙上时间）
+
+bonus = client.claim_daily_bonus()         # 先查导航，可领取才访问 page=bonus
+if bonus.claimed:
+    bonus.amounts                           # {921: 160.0, 922: 95.0, 924: 3.0}
+    bonus.status.available_at               # 下次可领取
+```
+
+- 冷却中 `claim_daily_bonus()` 不抛异常，返回 `claimed=False` + 下次可领取时间；
+  这是正常结果，不是失败的写操作。导航无法识别（`available=None`）时同样不访问
+  该页，宁可漏一天也不拿当天唯一的机会去赌页面。
+- 领取请求带 `max_retries=0`：重试不会重复发放，但签到页是「发了什么」的唯一证据。
+- 成功后 SDK 再读一次概览，确认导航已经进入冷却；否则抛 `ActionRejected`。
+- 元素 id：921 暗物质、922 反幽能、924 宝箱（见 `RESOURCE_NAMES_ZH`）；
+  `bonus.status` 与 `DailyBonusItem.name` 都保留页面原文。
+
+命令行 / 脚本：
+
+```bash
+newstar bonus               # 只读：能否领取、冷却到什么时候
+newstar bonus --claim       # 可领取时领取
+
+.venv/bin/python scripts/daily_bonus.py           # 只读
+.venv/bin/python scripts/daily_bonus.py --claim   # 领取（适合 cron）
+```
+
 ## 3. 写操作与验证
 
 建筑、研究、船坞方法的共同约定：
@@ -422,8 +460,8 @@ snapshot["messages"]["unread"]
 ```
 
 `build_snapshot()` 只读，包含 `account` / `planet` / `planets` / `resources` /
-`energy` / `activity` / `research` / `bonuses` / `queues` / `fleets` / `messages`
-各节。某一节失败时错误写进 `errors`，其余章节照常返回；可以用 `include_*`
+`energy` / `activity` / `daily_bonus` / `research` / `bonuses` / `queues` / `fleets` /
+`messages` 各节。某一节失败时错误写进 `errors`，其余章节照常返回；可以用 `include_*`
 参数跳过不需要的页面。
 
 命令行采集器把每次快照追加成一行 JSON：
@@ -632,6 +670,10 @@ touch state/STOP
   「单位积分」和「日期」两种排序（两次 GET），写 `state/battles.json`；首轮会先采
   一次。不抓战报正文；单榜失败写入 `errors`，不增加连续失败计数；路径可用
   `--battles-file` 覆盖。
+- **每日签到**：每轮先查一次概览导航（1 个 GET）；`--execute` 下可领取就直接领取，
+  dry-run 只记录「可领取」。领取/可领取会写一条 `kind=bonus` 的 journal，冷却不重复
+  记录；`--no-bonus` 关闭。签到不占 `--allow`（没有资源支出），因此不受 allow-list
+  限制。
 - **宇宙记录采集**：`--records-every N`（默认 120，0 关闭）每 N 轮抓一次
   `page=records`（一次 GET），写 `state/records.json`；首轮会先采一次。页面失败写入
   `errors`（`section=all`），不增加连续失败计数；路径可用 `--records-file` 覆盖。
@@ -703,6 +745,8 @@ journal 条目展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w`
 - **阶段与候选**：阶段、目标、当前计划的前 5 条候选；`▸` 是选中项，`✔/✖` 是
   可负担性，缺资源会显示「缺幽能 289.46K」这类缺口。
 - **探险 / 舰队 / 消息**：航道与在途舰队、上次探险调度结果、未读分类和收件箱。
+- **签到**：概览导航的可用性（可领取 / 冷却至某时刻）与最近一次 journal
+  `kind=bonus` 的结果（领取到的资源明细）；快照里没有该字段时退回最小布局。
 - **告警 / 事件 / 日志**：告警不会被折叠；连续相同的 cycle 会合并成 `×N`
   并标出时间范围，避免稳定计划刷屏。日志行可按 `d` 查看完整 JSON。
 - **排行榜 tab**：读 `state/statistics.json`，显示玩家/联盟积分榜（排名、名称、

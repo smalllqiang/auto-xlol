@@ -97,7 +97,6 @@ READ_ONLY_PAGES: Tuple[str, ...] = (
     "auction",
     "artifact",
     "blueprints",
-    "bonus",
     "bon",
     "control",
     "details",
@@ -115,8 +114,14 @@ READ_ONLY_PAGES: Tuple[str, ...] = (
 
 #: Routes that are only reachable through a POST form or that change state.
 #: ``--all`` deliberately keeps them out of the crawl.
+#:
+#: ``bonus`` belongs here even though it is a plain GET: visiting it *grants*
+#: the daily sign-in reward and starts a 24h cooldown, so a census capture would
+#: spend the account's only chance that day.  Read the availability from the
+#: overview navigation instead (``newstar_sdk`` / ``scripts/daily_bonus.py``).
 ACTION_PAGES = frozenset(
     {
+        "bonus",
         "buyBuild",
         "buyDefense",
         "buyFleet",

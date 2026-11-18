@@ -90,6 +90,7 @@ class DashboardState:
     message_log: Dict[str, Any] = field(default_factory=dict)
     battle_log: Dict[str, Any] = field(default_factory=dict)
     record_log: Dict[str, Any] = field(default_factory=dict)
+    empire: Dict[str, Any] = field(default_factory=dict)
     daemon: Dict[str, Any] = field(default_factory=dict)
     daemon_pid: Optional[int] = None
     daemon_lock_age: Optional[float] = None
@@ -376,6 +377,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
     message_log = _read_json(state_dir / "messages.json")
     battle_log = _read_json(state_dir / "battles.json")
     record_log = _read_json(state_dir / "records.json")
+    empire = _read_json(state_dir / "empire.json")
 
     pid: Optional[int] = None
     lock_age: Optional[float] = None
@@ -404,6 +406,7 @@ def load_state(state_dir: Path, *, now: Optional[datetime] = None) -> DashboardS
         message_log=message_log,
         battle_log=battle_log,
         record_log=record_log,
+        empire=empire,
         daemon=daemon,
         daemon_pid=pid,
         daemon_lock_age=lock_age,
@@ -889,6 +892,61 @@ def _log_groups(
     return [(items[-1], items) for _, items in groups]
 
 
+def _empire_lines(state: DashboardState, width: int) -> List[FrameLine]:
+    """Empire overview block (``state/empire.json``); empty for old state dirs."""
+
+    payload = state.empire
+    planets = payload.get("planets") or []
+    if not planets:
+        return []
+    lines: List[FrameLine] = []
+
+    def add(text: str, style: str = "normal") -> None:
+        lines.append(FrameLine(truncate(text, width), style))
+
+    captured = _parse_time(payload.get("captured_at"))
+    age = (
+        fmt_age(max(0.0, (state.now - captured).total_seconds()))
+        if captured is not None
+        else "-"
+    )
+    slots = payload.get("colony_slots")
+    header = "帝国"
+    if isinstance(slots, (list, tuple)) and len(slots) == 2:
+        header += f"  殖民位 {slots[0]}/{slots[1]}"
+    header += f" · {len(planets)} 颗星 · 采集 {age}"
+    add(header, "section")
+
+    for planet in planets[:4]:
+        coordinates = planet.get("coordinates") or {}
+        where = (
+            f"[{coordinates.get('galaxy')}:{coordinates.get('system')}:{coordinates.get('planet')}]"
+            if coordinates
+            else ""
+        )
+        fields = f"{planet.get('fields_used', 0)}/{planet.get('fields_max', 0)}"
+        resources = planet.get("resources") or {}
+        amounts = "  ".join(
+            f"{label}{fmt_number(resources.get(str(rid)))}"
+            for rid, label in ((901, "金"), (902, "晶"), (903, "油"))
+        )
+        ships = sum(int(value or 0) for value in (planet.get("ships") or {}).values())
+        defenses = sum(
+            int(value or 0) for value in (planet.get("defenses") or {}).values()
+        )
+        add(
+            f"  {planet.get('name') or '?'} {where} {fields} · {amounts}"
+            f" · 舰 {ships:,} 防 {defenses:,}"
+        )
+    if len(planets) > 4:
+        add(f"  … 还有 {len(planets) - 4} 颗", "muted")
+
+    errors = payload.get("errors") or []
+    if errors:
+        add(f"  采集错误 {errors[0].get('error')}", "warn")
+    return lines
+
+
 def render_lines(
     state: DashboardState, *, width: int = 110, log_lines: int = 8, event_lines: int = 4
 ) -> List[FrameLine]:
@@ -928,6 +986,12 @@ def render_lines(
     else:
         add("尚无快照：先运行 scripts/collect_state.py 或 scripts/run_forever.py", "warn")
     add(_rule(width), "muted")
+
+    empire_lines = _empire_lines(state, width)
+    if empire_lines:
+        for line in empire_lines:
+            lines.append(line)
+        add(_rule(width), "muted")
 
     add("队列", "section")
     items = state.queue_items

@@ -172,6 +172,7 @@ def _state_dir(
     messages_log=None,
     battles=None,
     records=None,
+    empire=None,
     stop=False,
 ):
     if snapshot:
@@ -210,6 +211,10 @@ def _state_dir(
     if records is not None:
         (tmp_path / "records.json").write_text(
             json.dumps(records, ensure_ascii=False), encoding="utf-8"
+        )
+    if empire is not None:
+        (tmp_path / "empire.json").write_text(
+            json.dumps(empire, ensure_ascii=False), encoding="utf-8"
         )
     if stop:
         (tmp_path / "STOP").write_text("", encoding="utf-8")
@@ -959,3 +964,44 @@ def test_threat_level_is_shown_in_the_health_line(tmp_path):
     )
 
     assert "威胁 危险" in text
+
+
+def _empire_payload():
+    return {
+        "schema": 1,
+        "captured_at": "2026-11-13T09:01:00+00:00",
+        "source": "game.php?page=control",
+        "colony_slots": [1, 11],
+        "planets": [
+            {
+                "name": "母星",
+                "coordinates": {"galaxy": 1, "system": 1, "planet": 8},
+                "fields_used": 109,
+                "fields_max": 273,
+                "resources": {"901": 1_000, "902": 2_000, "903": 3_000},
+                "ships": {"202": 5},
+                "defenses": {"401": 10},
+            }
+        ],
+        "total": None,
+        "unresolved": {},
+        "errors": [],
+    }
+
+
+def test_empire_block_shows_colony_slots_and_planets(tmp_path):
+    state = load_state(
+        _state_dir(tmp_path, empire=_empire_payload()), now=NOW
+    )
+    text = "\n".join(render_text(state, width=130))
+
+    assert "帝国  殖民位 1/11 · 1 颗星" in text
+    assert "母星 [1:1:8] 109/273" in text
+    assert "舰 5 防 10" in text
+
+
+def test_no_empire_file_keeps_the_old_layout(tmp_path):
+    state = load_state(_state_dir(tmp_path), now=NOW)
+    text = "\n".join(render_text(state, width=130))
+
+    assert "帝国" not in text

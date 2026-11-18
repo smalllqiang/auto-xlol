@@ -33,6 +33,7 @@ from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
 from autoplay.daily import CLAIMED, run_daily_bonus
 from autoplay.directive import DEFAULT_PATH as DEFAULT_DIRECTIVE_PATH
 from autoplay.directive import load_directive
+from autoplay.empire import collect_empire, write_empire
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
@@ -178,6 +179,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="strategy directive file (missing/invalid falls back to the default)",
     )
     parser.add_argument(
+        "--empire-every",
+        type=int,
+        default=120,
+        help="collect the empire overview every N cycles (0 disables, default: 120)",
+    )
+    parser.add_argument(
+        "--empire-file", default="state/empire.json", help="empire overview file"
+    )
+    parser.add_argument(
         "--threat-every",
         type=int,
         default=0,
@@ -317,6 +327,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "pause_on_alert": bool(args.pause_on_alert),
         "pause_on_threat": bool(args.pause_on_threat),
         "threat_every": args.threat_every,
+        "empire_every": args.empire_every,
         "bonus": bool(args.bonus),
         "directive": args.directive,
         "expedition": bool(args.expedition),
@@ -383,6 +394,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     messages_path = Path(args.messages_file)
     battles_path = Path(args.battles_file)
     records_path = Path(args.records_file)
+    empire_path = Path(args.empire_file)
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     previous_bonus: Optional[str] = None
@@ -602,6 +614,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         )
                     previous_snapshot = snapshot
                     print(f"    snapshot written ({len(events)} events)", flush=True)
+
+                if args.empire_every and (
+                    cycles == 1 or cycles % args.empire_every == 0
+                ):
+                    empire_payload = collect_empire(client)
+                    try:
+                        write_empire(empire_path, empire_payload)
+                        planets = len(empire_payload.get("planets") or [])
+                        print(
+                            f"    empire written ({planets} planets, "
+                            f"{len(empire_payload.get('errors') or [])} errors)",
+                            flush=True,
+                        )
+                    except OSError as exc:
+                        print(f"    empire write failed: {exc}", file=sys.stderr, flush=True)
 
                 if args.statistics_every and (
                     cycles == 1 or cycles % args.statistics_every == 0

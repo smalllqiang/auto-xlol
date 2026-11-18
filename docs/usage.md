@@ -710,6 +710,10 @@ touch state/STOP
 .venv/bin/python scripts/run_forever.py --no-verify-ssl --once
 ```
 
+allow-list 写法：重复参数（`--allow 1 --allow 2`）或逗号（`--allow 1,2`）都行；
+`--allow` 还接受中英文名称（如 `--allow 自律工厂`）。`--expedition-allow` /
+`--balance-allow` 只收元素 id，同样支持逗号。
+
 守护特性：
 
 - **单实例**：`state/daemon.lock` 记录 pid，重复启动会被拒绝；进程被杀后留下的

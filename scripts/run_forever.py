@@ -55,17 +55,39 @@ for _element_id, _element in TECHNOLOGIES.items():
     _NAME_INDEX.setdefault(_element.name_zh, int(_element_id))
 
 
+def split_tokens(values: Sequence[str]) -> List[str]:
+    """Flatten repeated flags, accepting ``a,b`` as well as ``a --flag b``."""
+
+    tokens: List[str] = []
+    for value in values:
+        for part in str(value).replace("，", ",").split(","):
+            part = part.strip()
+            if part:
+                tokens.append(part)
+    return tokens
+
+
 def resolve_allow(values: Sequence[str]) -> List[int]:
     resolved: List[int] = []
-    for value in values:
-        text = str(value).strip()
-        if text.isdigit():
-            resolved.append(int(text))
-        elif text in _NAME_INDEX:
-            resolved.append(_NAME_INDEX[text])
+    for token in split_tokens(values):
+        if token.isdigit():
+            resolved.append(int(token))
+        elif token in _NAME_INDEX:
+            resolved.append(_NAME_INDEX[token])
         else:
-            raise SystemExit(f"unknown element in --allow: {value!r}")
+            raise SystemExit(f"unknown element in --allow: {token!r}")
     return resolved
+
+
+def resolve_ids(values: Sequence[str]) -> List[int]:
+    """Element ids for ``--expedition-allow`` / ``--balance-allow``."""
+
+    ids: List[int] = []
+    for token in split_tokens(values):
+        if not token.isdigit():
+            raise ValueError(f"not an element id: {token!r}")
+        ids.append(int(token))
+    return ids
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -310,12 +332,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("--expedition requires at least one --expedition-allow ship id", file=sys.stderr)
         return 2
     try:
-        expedition_allowed = [int(item) for item in args.expedition_allow] if args.expedition else []
+        expedition_allowed = (
+            resolve_ids(args.expedition_allow) if args.expedition else []
+        )
     except ValueError:
         print("--expedition-allow values must be ship element ids", file=sys.stderr)
         return 2
     try:
-        balance_allowed = [int(item) for item in args.balance_allow]
+        balance_allowed = resolve_ids(args.balance_allow)
     except ValueError:
         print("--balance-allow values must be element ids", file=sys.stderr)
         return 2
@@ -349,7 +373,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "threat_every": args.threat_every,
         "empire_every": args.empire_every,
         "balance_power": bool(args.balance_power),
-        "balance_allow": [int(item) for item in args.balance_allow],
+        "balance_allow": resolve_ids(args.balance_allow),
         "bonus": bool(args.bonus),
         "directive": args.directive,
         "expedition": bool(args.expedition),

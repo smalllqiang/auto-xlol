@@ -39,6 +39,7 @@ from autoplay.journal import append_jsonl
 from autoplay.messages import collect_messages, write_messages
 from autoplay.records import collect_records, write_records
 from autoplay.statistics import collect_statistics, write_statistics
+from autoplay.threat import assess_client
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
@@ -176,6 +177,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=DEFAULT_DIRECTIVE_PATH,
         help="strategy directive file (missing/invalid falls back to the default)",
     )
+    parser.add_argument(
+        "--threat-every",
+        type=int,
+        default=0,
+        help="assess espionage/battle threats every N cycles (0 disables)",
+    )
+    parser.add_argument(
+        "--pause-on-threat",
+        action="store_true",
+        help="skip execution for a cycle when the threat level is danger",
+    )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
     parser.add_argument("--once", action="store_true", help="run exactly one cycle")
@@ -303,6 +315,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "allow": list(allowed_ids or []),
         "max_cost": args.max_cost,
         "pause_on_alert": bool(args.pause_on_alert),
+        "pause_on_threat": bool(args.pause_on_threat),
+        "threat_every": args.threat_every,
         "bonus": bool(args.bonus),
         "directive": args.directive,
         "expedition": bool(args.expedition),
@@ -341,6 +355,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         backoff_max=args.backoff_max,
         max_failures=args.max_failures,
         pause_on_alert=args.pause_on_alert,
+        pause_on_threat=args.pause_on_threat,
     )
     rotate_bytes = int(max(0.0, args.rotate_mb) * 1024 * 1024)
 
@@ -372,6 +387,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     previous_bonus: Optional[str] = None
     previous_directive: Optional[tuple] = None
+    current_threat = None
+    previous_threat: Optional[str] = None
     failures = 0
     cycles = 0
     max_cycles = 1 if args.once else args.max_cycles
@@ -439,6 +456,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                 flush=True,
                             )
                         previous_bonus = bonus_outcome.status
+                if args.threat_every and (cycles == 0 or cycles % args.threat_every == 0):
+                    try:
+                        current_threat = assess_client(client)
+                    except NewStarError as exc:
+                        append_jsonl(
+                            journal_path,
+                            {
+                                "at": now,
+                                "kind": "threat_error",
+                                "error": f"{type(exc).__name__}: {exc}",
+                            },
+                            max_bytes=rotate_bytes,
+                        )
+                    else:
+                        if current_threat.level != previous_threat:
+                            append_jsonl(
+                                journal_path,
+                                {
+                                    "at": now,
+                                    "kind": "threat",
+                                    **current_threat.as_dict(),
+                                },
+                                max_bytes=rotate_bytes,
+                            )
+                            print(
+                                f"    threat {current_threat.level}: "
+                                f"{current_threat.reasons[0] if current_threat.reasons else '-'}",
+                                flush=True,
+                            )
+                            previous_threat = current_threat.level
                 directive = load_directive(args.directive)
                 signature = (
                     directive.source,
@@ -463,6 +510,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     daemon_config,
                     previous_counters=previous_counters,
                     directive=directive,
+                    threat=current_threat,
                 )
                 if result.counters:
                     previous_counters = result.counters

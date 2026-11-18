@@ -21,6 +21,7 @@ from .directive import Directive, default_directive
 from .executor import ExecutionResult, execute_plan
 from .planner import build_plan
 from .reactions import Reaction, has_alert, react
+from .threat import ThreatAssessment
 
 
 @dataclass
@@ -34,6 +35,7 @@ class DaemonConfig:
     max_failures: int = 10
     track_messages: bool = True
     pause_on_alert: bool = False
+    pause_on_threat: bool = False
 
 
 @dataclass
@@ -53,6 +55,7 @@ class CycleResult:
     messages: Dict[str, Any] = field(default_factory=dict)
     evidence: Dict[str, Any] = field(default_factory=dict)
     directive: Dict[str, Any] = field(default_factory=dict)
+    threat: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -70,6 +73,7 @@ class CycleResult:
             "messages": dict(self.messages),
             "evidence": dict(self.evidence),
             "directive": dict(self.directive),
+            "threat": dict(self.threat),
         }
 
 
@@ -191,10 +195,13 @@ def run_cycle(
     *,
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None,
     directive: Optional[Directive] = None,
+    threat: Optional[ThreatAssessment] = None,
 ) -> CycleResult:
     """Observe, plan and execute at most one action.  Raises if planning fails.
 
     ``directive`` injects the phase goals; without it the built-in default runs.
+    ``threat`` is the latest assessment (if the caller runs one); it can pause
+    execution when ``--pause-on-threat`` is on.
     """
 
     events, reactions, counters = _observe(client, config, previous_counters)
@@ -202,10 +209,16 @@ def run_cycle(
 
     plan = build_plan(client, directive)
 
+    paused_reason = ""
     if config.pause_on_alert and has_alert(reactions):
+        paused_reason = "存在告警，已暂停执行（--pause-on-alert）"
+    elif config.pause_on_threat and threat is not None and threat.danger:
+        paused_reason = "威胁等级为 danger，已暂停执行（--pause-on-threat）"
+
+    if paused_reason:
         result = ExecutionResult(
             status="paused",
-            reason="存在告警，已暂停执行（--pause-on-alert）",
+            reason=paused_reason,
             queues={},
         )
     else:
@@ -238,4 +251,5 @@ def run_cycle(
         messages=_messages_summary(counters),
         evidence=dict(result.evidence),
         directive=(directive or default_directive()).as_dict(),
+        threat=threat.as_dict() if threat is not None else {},
     )

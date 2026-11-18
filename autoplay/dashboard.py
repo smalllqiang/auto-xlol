@@ -236,6 +236,14 @@ class DashboardState:
         return value if isinstance(value, dict) else {}
 
     @property
+    def threat(self) -> Dict[str, Any]:
+        """Latest threat assessment recorded in the cycle journal (P2-2)."""
+
+        cycle = self.last_cycle or {}
+        value = cycle.get("threat")
+        return value if isinstance(value, dict) else {}
+
+    @property
     def plan_top(self) -> List[Dict[str, Any]]:
         cycle = self.last_cycle or {}
         plan = cycle.get("plan_top")
@@ -590,6 +598,22 @@ def _directive_part(state: DashboardState) -> Tuple[Optional[str], Optional[str]
     return None, "策略" if age is None else f"策略 {fmt_age(_as_float(age))}"
 
 
+def _threat_part(state: DashboardState) -> Tuple[Optional[str], Optional[str]]:
+    """Health-line fragment for the latest threat assessment (P2-2)."""
+
+    threat = state.threat
+    if not threat:
+        return None, None
+    level = str(threat.get("level") or "")
+    if level == "danger":
+        return "error", "威胁 危险"
+    if level == "watch":
+        return "warn", "威胁 关注"
+    if level == "calm":
+        return None, "威胁 平静"
+    return None, None
+
+
 def _health(state: DashboardState) -> Tuple[str, str]:
     status = state.daemon or {}
     pid = state.daemon_pid
@@ -610,9 +634,12 @@ def _health(state: DashboardState) -> Tuple[str, str]:
     if status.get("state") == "stopped":
         suffix = " · state/STOP 仍在" if state.stop_requested else ""
         directive_level, directive_text = _directive_part(state)
-        tail = f" · {directive_text}" if directive_text else ""
+        threat_level, threat_text = _threat_part(state)
+        tail = "".join(
+            f" · {text}" for text in (directive_text, threat_text) if text
+        )
         return (
-            directive_level or "muted",
+            threat_level or directive_level or "muted",
             f"● 守护已停止 · 数据 {fmt_age(data_age)}{suffix}{tail}",
         )
     if state.stop_requested:
@@ -679,6 +706,11 @@ def _health(state: DashboardState) -> Tuple[str, str]:
     if directive_text:
         level = directive_level or level
         parts.append(directive_text)
+
+    threat_level, threat_text = _threat_part(state)
+    if threat_text:
+        level = threat_level or level
+        parts.append(threat_text)
 
     if failures:
         parts.append(f"连续失败 {failures}/{max_failures}")

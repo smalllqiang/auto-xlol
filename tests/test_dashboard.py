@@ -942,3 +942,20 @@ def test_directive_is_shown_even_after_the_daemon_stopped(tmp_path):
 
     assert "守护已停止" in text
     assert "策略 2 分前" in text
+
+
+def test_threat_level_is_shown_in_the_health_line(tmp_path):
+    text = _render_with_journal(
+        tmp_path,
+        [
+            _cycle(
+                threat={
+                    "level": "danger",
+                    "reasons": ["5 分钟内被侦察"],
+                    "recallable": [12],
+                }
+            )
+        ],
+    )
+
+    assert "威胁 危险" in text

@@ -33,6 +33,8 @@ from .expedition_executor import ExpeditionDispatchResult, dispatch_expedition
 from .phases import PHASES, Phase, detect_phase
 from .planner import Action, Plan, build_plan, compute_plan, expand_requirement_actions
 from .ship_build import ShipBuildResult, build_recommended_ships
+from .threat import EspionageEvent, ThreatAssessment, assess_threat
+from .threat_executor import RecallResult, recall_candidates, recall_fleets
 
 __all__ = [
     "Action",
@@ -40,6 +42,7 @@ __all__ = [
     "DailyBonusOutcome",
     "Directive",
     "DirectiveError",
+    "EspionageEvent",
     "ExecutionResult",
     "ExpeditionCycleResult",
     "ExpeditionDispatchResult",
@@ -48,8 +51,11 @@ __all__ = [
     "PHASES",
     "Phase",
     "Plan",
+    "RecallResult",
     "ShipBuildResult",
     "ShipRecommendation",
+    "ThreatAssessment",
+    "assess_threat",
     "build_expedition_report",
     "build_recommended_ships",
     "build_plan",
@@ -67,5 +73,7 @@ __all__ = [
     "parse_directive",
     "payback_hours",
     "production_delta",
+    "recall_candidates",
+    "recall_fleets",
     "save_directive",
 ]

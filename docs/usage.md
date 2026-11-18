@@ -508,7 +508,7 @@ for event in diff_snapshots(previous_snapshot, current_snapshot):
 | `queue_item_finished` | 队列里某项消失（非整体清空） | `info` |
 | `queue_item_added` | 队列里出现新项 | `info` |
 | `energy_deficit` / `energy_recovered` | 可用幽能跨过 0 | `warning` / `info` |
-| `storage_full` | 某资源占用率跨过阈值（默认 95%） | `notice` |
+| `storage_full` | 某资源占用率从阈值下跨到阈值上（默认 95%；爆仓后 >100% 属正常，只在跨过时触发一次） | `notice` |
 | `planet_added` / `planet_lost` | 星球列表变化 | `notice` / `warning` |
 | `planet_switched` | 当前星球切换 | `info` |
 | `research_completed` | 科技等级上升 | `info` |
@@ -740,7 +740,8 @@ journal 条目展开成 JSON（再按 `d` 或 `Esc` 返回）；排行榜里 `w`
 - **健康栏**：守护心跳、数据年龄、本轮是否进行中、下一轮倒计时、连续失败数；
   `state/STOP` 存在时直接标黄。存活判断以 `state/daemon.json` 的心跳为准，而不是
   只看 pid（容器/PID 命名空间里 `os.kill(pid, 0)` 可能看不到活着的守护）。
-- **资源**：数量、页面产能、容量；容量带 `*`，因为本实例的仓容语义仍待核实。
+- **资源**：数量、页面产能、容量；资源超过容量时产量不再累积（当前账号因赠送
+  资源长期爆仓），capacity 是页面真实值。
 - **队列**：建造/研究/船坞的当前项、目标等级和剩余时间；没有明细时退回显示计数。
 - **阶段与候选**：阶段、目标、当前计划的前 5 条候选；`▸` 是选中项，`✔/✖` 是
   可负担性，缺资源会显示「缺幽能 289.46K」这类缺口。

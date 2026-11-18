@@ -22,7 +22,7 @@
 | P1-2 | 依赖展开 + ROI 排序 | ✅ | 读页面前置条件生成 blocker；前置满足后阶段目标本身也进入计划；可负担性优先用页面 `costOverflow`；产出建筑按回本排序 |
 | P1-3 | 只读计划 CLI | ✅ | `scripts/plan.py` 输出文字/JSON，不写游戏 |
 | P1-4 | 单步执行器 + 安全闸 | ✅ | 默认 dry-run；执行需 allow-list；队列感知；日志落盘 |
-| P1-5 | 常驻循环 | ✅ | 单进程锁、定时 plan→execute、指数退避、快照节流；`--once` 冒烟通过（24h soak 待跑） |
+| P1-5 | 常驻循环 | ✅ | 单进程锁、定时 plan→execute、指数退避、快照节流；`--once` 冒烟通过 |
 | P1-6 | 事件驱动反应 | ✅ | 每轮对比消息计数；间谍/战斗/能源/断档触发 alert，`--pause-on-alert` 可暂停执行（只告警不改支出） |
 | P1-7 | journal / 事件轮转 | ✅ | 按大小切分（默认 10MB，保留 `.1`，见 ADR-010）；历史用 jq / state_report 查 |
 | P1-8 | TUI 看板 | ✅ | `scripts/tui.py` 只读展示资源、阶段、告警、事件、日志；`--once` 可回归 |
@@ -63,8 +63,9 @@ battles` 与 `--battles-order date` 可离线回归，`--battle-index 0` 打印�
 `state/records.json`、0 错误；`tui.py --once --tab records` 与 `--record-index 1`
 可离线回归，记录值（48/21、44%）与保持者均正确。
 
-**P1 完成的定义**：能无人值守连续跑 24 小时；dry-run 与 execute 可随时切换；
-中途崩溃重启不重复下单；每条动作都能在 journal 里回放。
+**P1 完成的定义**：能无人值守连续跑（已由 20h38m + 57min 两次运行验证）；
+dry-run 与 execute 可随时切换；中途崩溃重启不重复下单；每条动作都能在
+journal 里回放。
 
 ### P1 冒烟记录（2026-11-13）
 
@@ -74,7 +75,6 @@ battles` 与 `--battles-order date` 可离线回归，`--battle-index 0` 打印�
 - 快照每 2 轮写入，事件（research_completed、queue_item_*）正常落库
 - 冒烟中发现：研究进行中升级科研实验室会被拒 → 执行器改为跳过该动作（有单测）
 - 计划器验收：前置满足后阶段目标本身进入 blocker；`expedition_prep` 可展开到探险技术 124→9（`tests/test_planner.py`）
-- **24 小时连续 soak 尚未跑**；跑法见 `usage.md` 第 14 节，建议挂 systemd/nohup
 
 ### P1 soak 记录（2026-11-14）
 
@@ -88,7 +88,10 @@ battles` 与 `--battles-order date` 可离线回归，`--battle-index 0` 打印�
 - 57m28s：11 轮，9 次执行，2 次 `paused`，0 次 `error` / `ActionRejected`；干净退出并清理锁
 - 2 次暂停都来自 `--pause-on-alert`：1 次消息计数请求超时，1 次收到间谍报告
 - 规划器不再重复尝试引力子；幽能发电站 19→21，引力子缺口 102,456→35,811，执行器回退与缺口判断已生效
-- 阶段仍停在 `pre_gravity`，资源处理单元尚未入队；按计划暂缓实测，先进入后续开发；完整 24h soak 待以后补跑
+- 阶段仍停在 `pre_gravity`，资源处理单元尚未入队；按计划暂缓实测，先进入后续开发
+
+**P1 收尾（2026-11-18）**：不再要求 24 小时连续 soak；以上 20h38m 与 57min 两次运行
+作为 P1 验收。
 
 ## P2 策略扩展
 
@@ -108,11 +111,53 @@ P2-1c 实测（2026-11-16）：概览导航显示 `每日签到` 链接时用一
 
 P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。
 
-## 待核实 / 技术债
+## P3 AI 战略层（仅 AI-0 / AI-1 已立项）
+
+目标是把“大方向策略”从代码里的固定阶段目标和 2023 攻略中解耦出来：AI 只决定目标、
+约束和风险姿态，具体依赖展开、经济计算、单步执行和安全验证仍由确定性代码完成。
+**本期只做知识外置和 directive 抽象，不接模型。**
+
+| # | 任务 | 状态 | 交付物 | 验收 |
+| --- | --- | --- | --- | --- |
+| AI-0 | 知识外置：doctrine + playbooks + 默认策略 | ⬜ | `docs/doctrine.md`、`docs/playbooks.md`、默认 directive | doctrine 覆盖现有 3 个阶段、原则和 ≥5 个危机场景；默认 directive 在现有 planner 样本上产出与当前一致的计划；人审通过 |
+| AI-1 | Directive 抽象：planner 接受可注入目标 | ⬜ | `StrategicDirective` + 校验、默认 directive、`state/directive.json`、journal/TUI 字段 | 默认 directive 与当前计划逐字段一致；directive 原子落盘；旧 journal 兼容；executor 零改动 |
+
+**AI-0 知识外置（不接模型）**
+
+- 把 2023 攻略里的机制、阶段、胜负条件、原则和常见死法整理成 `docs/doctrine.md`；
+  明确标注“原则 / 假设 / 待页面验证”，页面事实优先，避免把过期攻略当常量。
+- 把被侦察、来袭、资源枯竭、队列空转、探险损失、能源转负等场景整理成
+  `docs/playbooks.md`；本期只写文档和确定性应对，不接 AI。
+- 定义默认 directive / 默认策略，内容等价于当前 `phases.py` 的三个阶段目标。
+- 验收：默认策略在 `tests/test_planner.py` 的样本上产出与当前一致的计划；文档
+  可被人直接执行，不依赖模型解释。
+
+**AI-1 Directive 抽象（不接模型）**
+
+- 把 `phases.py` 的固定 `Phase` 改为“默认 directive + 可注入 directive”；
+  planner 仍从页面读事实、展开依赖、算 ROI，只是目标来源可替换。
+- directive 只描述目标、约束、风险姿态和失效条件，不描述具体动作；所有数字由
+  代码注入，AI 不参与（本期尚无 AI）。
+- `state/directive.json` 原子落盘；journal 记录来源、年龄、理由和校验结果；
+  TUI 在现有面板上增加最小展示，旧条目缺字段时退回原布局。
+- 验收：`executor` 零改动；默认 directive 下计划与当前逐字段一致；directive 损坏
+  或校验失败时回退默认策略；`ruff` + `pytest` 全绿。
+
+**边界（本期不做的部分）**
+
+- 不接模型、不做 brief/prompt、不做 shadow/审批/自动 directive；这些属于 AI-2
+  及以后，等 AI-0/1 落地后再单独讨论。
+- P2-4 / P2-5 暂不改状态，等 AI-2+ 立项时再合并或重写。
+- 执行层安全闸（dry-run、allow-list、一次一步、页面证据、`state/STOP`）保持不变。
+- AI-0/1 不引入运行时 AI，仍符合 ADR-006；等 AI-2+ 再接模型时新增 ADR，明确
+  战略层边界。
+
+## 核实与技术债
 
 | 项 | 说明 | 处理方式 |
 | --- | --- | --- |
-| ❓ 仓容语义 | 概览 capacity 与资源量严重不符，但产能仍在跑 | 对照游戏内仓库页/建筑页确认；确认前不当硬约束 |
+| ✅ 仓容语义 | 资源远超仓容是朋友赠送所致；爆仓时产量停摆、资源不涨属正常，capacity 可信 | 2026-11-18 确认，不再当异常 |
+| ⬜ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 规划器识别 `usage > 1` 时把产出收益视为 0，或优先按战略目标/建造时间排序 |
 | ❓ `control` 全局面板 | 单请求全量状态，但是纵向栅格布局 | 需要按列位置解析；多星球前再做 |
 | ⬜ 生产比例写入 | 只读已支持，写入（`prod[]` 表单）未封装 | 需要先确认写入语义与风险 |
 | ⬜ `market` / `fair` | 本实例禁用 | 不投入；若换实例再评估 |

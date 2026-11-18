@@ -67,7 +67,7 @@ def _reaction(event: Event) -> Reaction | None:
         return Reaction(
             "info",
             f"资源 {event.data.get('resource')} 占用 {event.data.get('usage', 0):.0%}"
-            "（仓容语义待核实）",
+            "（已爆仓，产量不再累积）",
             event,
         )
     if event.kind == "research_completed":

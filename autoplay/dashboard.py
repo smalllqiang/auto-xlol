@@ -655,7 +655,7 @@ def _resource_rows(snapshot: Dict[str, Any], width: int) -> List[str]:
     production = resources.get("production") or {}
     energy = snapshot.get("energy") or {}
 
-    rows = [f"{pad('资源', 8)}{pad('数量', 14)}{pad('产能/h', 12)}{pad('容量*', 12)}"]
+    rows = [f"{pad('资源', 8)}{pad('数量', 14)}{pad('产能/h', 12)}{pad('容量', 12)}"]
     for key, label in (("901", "金属"), ("902", "水晶"), ("903", "重氢"), ("911", "幽能")):
         amount = amounts.get(key)
         capacity = capacities.get(key)
@@ -853,7 +853,7 @@ def render_lines(
             else "-"
         )
         add(
-            f"* 仓容字段与资源量不一致，仅供参考；产能为页面值；快照 {snapshot_age}",
+            f"爆仓时产量不再累积；产能为页面值；快照 {snapshot_age}",
             "muted",
         )
     else:

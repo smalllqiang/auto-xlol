@@ -99,8 +99,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   `mode=view&messcat=..&site=..&ajax=1`。
 - **错误页判定**：只认带「信息」标题的容器；`.ally_contents` 在正常页面也会出现，
   不要退回旧逻辑。
-- **仓容字段不可信**：概览里的 capacity 与资源量严重不符（资源远超容量但产能仍在跑），
-  不要把 capacity 当硬约束，语义待核实。
+- **爆仓是正常状态**：当前账号被朋友赠送了远超仓容的资源，概览里资源量 > capacity
+  属于正常；爆仓时产量不再累积（资源不涨），不要把「资源不涨」当成采集断档或解析
+  错误。capacity 本身可信，但仍不要把「资源不超容量」当作硬约束。
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。
 - **看板存活看心跳**：`state/daemon.json` 的 `updated_at` 是权威依据；容器/PID

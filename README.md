@@ -1,10 +1,69 @@
-# New-Star Python SDK
+# New-Star 自动化
 
-`newstar-sdk` 是一个用于 [New-Star](https://github.com/Yaro2709/New-Star)（2Moons 系）网页游戏的 Python SDK。它直接使用游戏自身的 HTTP 页面和表单，把登录、资源读取、建筑、研究、船坞、星图、舰队等基础操作封装为可复用的 Python 接口，供自动化脚本、工具或后续服务调用。
+本项目的目标是**自动游玩 [New-Star](https://github.com/Yaro2709/New-Star)（2Moons 系）网页游戏**：
+让一个账号在无人值守下持续发展，从读状态、定计划到执行动作全部由代码完成，AI 不参与
+运行时决策。当前运行实例是魔改服「战争宇宙：猛犸」（New-Star 2.8.1）。
+
+`newstar_sdk` 只是这个目标的一个组成部分——与游戏通信的客户端，不是项目本身。除它之外，
+项目还包括确定性策略层、执行器、常驻守护和只读看板。
 
 > 非官方项目，与 New-Star 上游及游戏运营方无隶属关系。使用前请确认游戏规则允许自动化操作，并控制请求频率。
 
-## 特性
+## 组成
+
+| 层 | 位置 | 职责 |
+| --- | --- | --- |
+| 客户端 | `newstar_sdk/` | HTTP 会话、页面解析、数据模型、异常、`newstar` 命令行。稳定契约，不写策略。 |
+| 策略层 | `autoplay/` | 阶段识别、经济估算、依赖展开 + ROI 排序、执行编排、探险/造船/签到。可以频繁改。 |
+| 入口 | `scripts/` | 面向人的命令：计划、执行、常驻循环、探险、采集、看板。 |
+| 本地状态 | `state/` | 快照、事件、日志、心跳与急停开关；不入库。 |
+
+## 自动化能力
+
+- 只读规划：识别当前阶段，展开阶段目标的依赖链，按回本时间排序产出建筑
+- 单步执行：默认 dry-run；需 `--execute` + allow-list；队列感知、单步预算、结果验证
+- 常驻循环：单实例锁、指数退避、`state/STOP` 急停、日志/快照轮转、告警暂停
+- 探险：只读航道报告、建船建议、单队预览/发送、多航道循环（独立舰船 allow-list）
+- 每日签到：先读概览导航判断可领取，冷却期不消耗当天机会
+- 观测：全量状态快照、diff 事件、趋势报表、只读 TUI 看板（概览/排行榜/消息/战役/宇宙记录）
+
+## 快速开始
+
+需要 Python 3.9 或更高版本。凭据按 命令行 > 环境变量 > `.env` > `passwd.txt` 解析；
+本实例证书过期，脚本通常要加 `--no-verify-ssl`。
+
+```bash
+uv venv
+uv pip install -e ".[dev]"
+source .venv/bin/activate
+
+# 1. 先看计划，不碰游戏
+.venv/bin/python scripts/plan.py --no-verify-ssl
+.venv/bin/python scripts/run_once.py --no-verify-ssl        # 影子模式
+
+# 2. 小步授权执行（一轮）
+.venv/bin/python scripts/run_forever.py --no-verify-ssl --once \
+    --execute --allow 自律工厂
+
+# 3. 无人值守
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --execute --allow 自律工厂
+
+# 4. 看板只读展示 state/，不连游戏
+.venv/bin/python scripts/tui.py
+```
+
+每轮会检查队列、资源和单步预算，一次只做一个动作；`state/STOP` 存在即拒绝运行；被拒
+不会自动重试。探险相关脚本默认只预览，真实发送需 `--execute` + 舰船 allow-list。
+
+全部命令与参数见 [使用说明](docs/usage.md)；策略为什么这样定见
+[架构与设计](docs/architecture.md) 和 [设计决策](docs/decisions.md)。
+
+## SDK 组件
+
+`newstar_sdk` 可以脱离本项目的策略层单独使用：它直接走游戏自身的 HTTP 页面和表单，把
+登录、资源读取、建筑、研究、船坞、星图、舰队等基础操作封装为可复用的 Python 接口，供
+自动化脚本、工具或后续服务调用。它提供但不限于：
 
 - 登录、会话保存/恢复、会话过期后自动重登（需提供密码）
 - 读取账号、资源、产能、星球、活动状态
@@ -20,30 +79,7 @@
 - 原始页面/HTTP 请求逃生通道
 - 命令行工具 `newstar`
 
-## 安装
-
-需要 Python 3.9 或更高版本。
-
-```bash
-uv venv
-uv pip install -e .
-source .venv/bin/activate
-# 或者：uv run newstar ...
-
-# 不使用 uv 时：
-python3 -m venv .venv
-.venv/bin/pip install -e .
-```
-
-验证安装：
-
-```bash
-newstar version
-# 未激活虚拟环境时：
-.venv/bin/newstar version
-```
-
-## 快速开始
+安装方式与上面相同。最小用法：
 
 ```python
 import os
@@ -67,20 +103,16 @@ print(
     overview.resources.crystal,
     overview.resources.deuterium,
 )
-
-for building in client.get_buildings():
-    print(building.id, building.name, building.level, building.cost)
+print(client.get_planets())
 
 client.close()
 ```
 
-也可以使用上下文管理器（`with` 不会自动登录，需显式调用 `login()` 或依赖各方法内部的 `ensure_login()`）：
+`with NewStarClient(...) as client:` 也可用，但 `with` 不会自动登录，仍需显式调用
+`login()`（或依赖各方法内部的 `ensure_login()`）。
 
-```python
-with NewStarClient(base_url, username, password, verify_ssl=False) as client:
-    client.login()
-    print(client.get_resources().metal)
-```
+SDK 只负责单步操作，不做策略：写操作是否成功以页面证据判断（队列出现目标项或等级变化），
+失败抛 `ActionRejected`；同一账号不要并发写，SDK 只保证单实例内串行。
 
 ### 私有实例的注意事项
 
@@ -92,228 +124,7 @@ New-Star 私有实例常见的适配点是：
 
 不要把账号、密码或 `.session.json` 提交到版本库。
 
-## 常用任务
-
-### 读取资源与星球
-
-```python
-overview = client.get_overview()
-resources = overview.resources
-
-print(resources.metal, resources.metal_per_hour)
-print(resources.crystal, resources.deuterium)
-print(resources.dark_matter)
-
-print(overview.status.research, overview.status.building, overview.status.shipyard)
-print(client.get_planets())
-
-# 切换当前星球（多星球账号）
-# client.select_planet(planet_id)
-```
-
-### 消息与加成
-
-```python
-# 消息列表是 AJAX 渲染的，SDK 已经封装好
-counters = client.get_message_counters()
-print(counters[15].unread, counters[15].total)   # 探险报告
-
-page = client.get_messages("expedition")         # 也支持 all/system/battle/outbox...
-for message in page:
-    print(message.time, message.sender, message.body, message.coordinates)
-
-# 加成总表：所有成本/产能计算的乘数来源
-bonuses = client.get_bonuses()
-print(bonuses.percent("全资源生产加成"), bonuses.multiplier("合金采集加成"))
-```
-
-### 每日签到
-
-`page=bonus` 访问即领取（24 小时冷却）。先看概览导航再决定是否访问该页，避免把
-唯一一次机会花在「预览」上：
-
-```python
-status = client.get_daily_bonus_status()   # 只读：available / available_at
-bonus = client.claim_daily_bonus()         # 冷却中返回 claimed=False，不报错
-bonus.amounts                              # {921: 160.0, 922: 95.0, 924: 3.0}
-```
-
-### 建筑
-
-```python
-buildings = {item.id: item for item in client.get_buildings()}
-metal_mine = buildings[1]
-print(metal_mine.level, metal_mine.cost, metal_mine.requirements_met)
-
-# 升 1 级；也可以指定目标等级 target_level=5
-queue = client.upgrade_building("metal", levels=1)
-print(queue)
-
-# 取消当前正在建造的项目（0 表示第一项）
-client.cancel_building_queue(0)
-
-# 拆除一级（危险操作）
-# client.destroy_building("metal")
-```
-
-### 研究
-
-```python
-techs = {item.id: item for item in client.get_research()}
-print(techs[108].name, techs[108].cost, techs[108].requirements_met)
-
-queue = client.research("computer", levels=1)
-print(queue)
-client.cancel_research_queue(0)
-```
-
-### 船坞
-
-```python
-ships = {item.id: item for item in client.get_ships()}
-print(ships[202].name, ships[202].max_buildable)
-
-queue = client.build_ships({"small_cargo": 1})
-print(queue)
-
-# 防御
-client.build_ships({"light_laser": 2}, mode="defense")
-client.cancel_ship_queue(0, mode="defense")
-```
-
-`build_ships` 会在本地先检查前置条件和 `max_buildable`，避免明显无效的请求；资源不足或前置条件缺失时抛出 `ActionRejected`。
-
-### 星图
-
-```python
-view = client.get_galaxy(3, 505)
-for slot in view.slots:
-    print(
-        slot.position,
-        slot.planet_name,
-        slot.player_name,
-        slot.is_own,
-        slot.has_moon,
-        slot.actions,
-    )
-```
-
-### 舰队
-
-```python
-available = client.get_available_ships()
-print(available)
-
-result = client.send_fleet(
-    "3:505:9",                    # 目标坐标；也支持 Coordinates 或 (g, s, p)
-    {"small_cargo": 1},           # 舰船 ID/名称 -> 数量
-    mission="transport",          # 任务 ID 或名称
-    speed=10,
-    resources={"metal": 100},     # 运输任务至少需要一种资源
-)
-print(result.mission_name, result.target_coordinates, result.arrival_time)
-
-for fleet in client.get_fleets():
-    print(fleet.id, fleet.mission, fleet.returning)
-
-# 召回
-# client.recall_fleet(fleet_id)
-```
-
-### 队列
-
-```python
-print(client.get_building_queue())
-print(client.get_research_queue())
-print(client.get_ship_queue(mode="fleet"))
-
-# 阻塞等待队列清空
-client.wait_for_building_queue(timeout=600)
-```
-
-### 会话
-
-```python
-client.save_session("my.session.json")
-
-# 之后：
-client = NewStarClient(base_url, username, password, verify_ssl=False)
-if not client.load_session("my.session.json"):
-    # 会话已失效，用构造时提供的账号密码重新登录
-    client.login()
-```
-
-会话文件只保存 Cookie 和非敏感状态，不保存密码；在支持的平台上权限会设置为 `0600`。
-
-### 原始访问
-
-SDK 未覆盖的页面可以直接取 HTML，或者发原始请求：
-
-```python
-html = client.get_page("messages")
-response = client.request("GET", "game.php?page=overview")
-response = client.request("POST", "game.php?page=...", data={"key": "value"})
-```
-
-## 策略层（规划器）
-
-`autoplay` 包在 SDK 之上做只读规划：识别当前阶段、展开阶段目标及其依赖链、按回本时间
-排序产出建筑。探险准备另有只读报告（航道、舰队积分、建船建议、前置链）：`scripts/expedition.py`；
-预览/发送、造船和多航道循环分别见 `scripts/dispatch_expedition.py`、
-`scripts/build_expedition_ships.py`、`scripts/expedition_cycle.py`（用法见
-`docs/usage.md` 第 16–19 节）。
-
-```python
-from autoplay import build_plan
-
-plan = build_plan(client)
-print(plan.phase_name, plan.goal_status)
-for action in plan.actions:
-    print(action.category, action.name, action.current_level, "→", action.target_level)
-```
-
-```bash
-.venv/bin/python scripts/plan.py --no-verify-ssl   # 文字计划
-.venv/bin/python scripts/plan.py --json            # 机器可读
-.venv/bin/python scripts/run_once.py --no-verify-ssl  # 影子模式，只说不做
-```
-
-执行需要显式授权：`--execute --allow <元素>`。执行前会检查队列、资源和单步预算，
-只做一步，并把结果写进 `state/journal.jsonl`；`state/STOP` 存在时拒绝运行。
-
-无人值守用常驻循环（默认也是 dry-run）：
-
-```bash
-.venv/bin/python scripts/run_forever.py --no-verify-ssl --once   # 跑一轮
-.venv/bin/python scripts/run_forever.py --no-verify-ssl \
-    --execute --allow 自律工厂                                     # 常驻
-```
-
-单实例锁、`state/STOP` 急停、失败指数退避都内建；默认每 12 轮写一次快照。
-加 `--expedition` 可每 N 轮调度探险，探险使用独立的舰船 allow-list。
-
-看板只读展示 `state/` 的现状与日志，不连游戏。守护每轮写 `state/daemon.json`
-心跳，看板据此显示存活、数据年龄和下一轮时间：
-
-```bash
-.venv/bin/python scripts/tui.py          # 交互式；Tab 切看板/排行榜/消息/战役/记录
-.venv/bin/python scripts/tui.py --once   # 打印一帧
-.venv/bin/python scripts/tui.py --once --tab leaderboard --stats-who 2
-.venv/bin/python scripts/tui.py --once --tab messages
-.venv/bin/python scripts/tui.py --once --tab battles
-.venv/bin/python scripts/tui.py --once --tab records
-```
-排行榜由守护每 `--statistics-every` 轮写入 `state/statistics.json`，看板只读；
-第二个 tab 可切换玩家/联盟积分榜。消息由守护每 `--messages-every` 轮写入
-`state/messages.json`，第三个 tab 列表阅读正文，不标记已读。战役由守护每
-`--battles-every` 轮写入 `state/battles.json`，第四个 tab 显示名人堂，`o` 切换
-单位积分/日期排序，`d` 看单场详情和战报链接。宇宙记录由守护每 `--records-every`
-轮写入 `state/records.json`，第五个 tab 按建筑/科研/舰只/防御分组显示宇宙最高、
-本人最高、达成度与保持者。
-每轮会比对消息计数，间谍/战斗报告触发告警（`--pause-on-alert` 可暂停执行）；
-日志与快照超过 `--rotate-mb` 自动切成 `.1`。
-
-## 元素 ID
+### 元素 ID
 
 元素 ID 来自 New-Star / 2Moons 的通用编号，实际游戏可能增加或改名。SDK 会优先读取页面上的名称，静态表只用于“名称 → ID”的便捷解析。
 
@@ -326,9 +137,10 @@ for action in plan.actions:
 
 完整映射见 [`newstar_sdk/constants.py`](newstar_sdk/constants.py)。方法中的元素参数同时接受 ID、中文名、英文名和常用缩写（如 `"metal"`、`"small_cargo"`）。
 
-## 命令行
+### 命令行
 
-以下命令假设已激活 `.venv`（或把 `.venv/bin` 加入 `PATH`）。全局参数放在子命令之前：
+`newstar` 是 SDK 自带的命令行，面向临时查询和单步操作。以下命令假设已激活 `.venv`
+（或把 `.venv/bin` 加入 `PATH`），全局参数放在子命令之前：
 
 ```bash
 export NEWSTAR_BASE_URL=https://ol.lstyxl.com/
@@ -339,20 +151,13 @@ export NEWSTAR_VERIFY_SSL=0
 
 newstar overview
 newstar buildings
-newstar research
-newstar ships
-newstar galaxy --galaxy 3 --system 505
-newstar fleets
 newstar messages --category expedition
-newstar bonuses
 newstar bonus --claim
 newstar queue build
 newstar --json overview
 
 # 写操作默认要求确认；非交互场景加 --yes
 newstar build metal --levels 1 --yes
-newstar research computer --yes
-newstar build-ship small_cargo 1 --yes
 newstar send-fleet --target 3:505:9 --mission transport --ship small_cargo=1 --metal 100 --yes
 ```
 
@@ -363,7 +168,7 @@ newstar --help
 newstar send-fleet --help
 ```
 
-## 错误处理
+### 错误处理
 
 SDK 自定义异常都继承自 `NewStarError`；参数校验错误会抛 `ValueError`，队列等待超时会抛内置 `TimeoutError`。
 
@@ -390,6 +195,15 @@ except NewStarError as exc:
     print("SDK 错误:", exc)
 ```
 
+## 当前范围
+
+自动化链路目前覆盖：登录/会话、状态读取、建筑升级、研究、造船、探险、每日签到、单步
+执行器、常驻守护与看板。策略只做单账号持续发展，不做多账号调度，也不做战斗决策。
+
+SDK 不封装：战斗报告详情、市场/交易、联盟、生产比例写入、殖民/月球管理、聊天、军官/
+商店等页面。这些页面仍可通过 `get_page()` / `request()` 访问。本实例另有部分模块被运营
+方禁用（`market`、`fair` 返回「模块已禁用」，`information` 固定 503）。
+
 ## 示例
 
 ```bash
@@ -399,12 +213,6 @@ except NewStarError as exc:
 ```
 
 ## 测试
-
-开发依赖（pytest / ruff）：
-
-```bash
-uv pip install -e ".[dev]"
-```
 
 ```bash
 .venv/bin/python -m pytest -q          # 单元测试，使用离线 HTML 固定样本
@@ -439,7 +247,7 @@ autoplay/         # 策略层（易变）
   ship_build.py   # 推荐舰船建造（默认 dry-run）
   expedition_cycle.py  # 有上限的多航道发送循环
   executor.py     # 队列感知 + 安全闸
-newstar_sdk/      # 客户端（稳定契约）
+newstar_sdk/      # 客户端组件（稳定契约）
   client.py       # HTTP 会话 + 高层操作
   parsers.py      # 页面解析（纯函数）
   models.py       # 返回的数据结构
@@ -457,17 +265,10 @@ docs/
   roadmap.md      # 任务与验收标准
   p0-page-census.md # 实例页面普查
 tests/            # 离线样本测试 + 可选 live 测试
-scripts/          # 普查、采集、报表、计划、执行
+scripts/          # 普查、采集、报表、计划、执行、看板
 examples/         # 可运行示例
 AGENTS.md         # 协作与代理规则
 ```
-
-## 当前范围
-
-当前版本覆盖登录/会话、账号与资源读取、建筑、研究、船坞、星图、舰队发送/召回、队列、
-消息、加成、每日签到、生产控制、状态快照/事件与原始请求。
-
-当前不提供：战斗报告详情、市场/交易、联盟、生产比例写入、殖民/月球管理、聊天、军官/商店等页面级封装。这些页面仍可通过 `get_page()` / `request()` 访问。
 
 ## 文档
 

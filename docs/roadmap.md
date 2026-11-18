@@ -119,6 +119,11 @@ journal 有 `kind=threat` 与 cycle 的 `threat` 字段，TUI 健康栏显示「
 allow-list，成功后必须看到舰队消失或返航标记；真实召回未执行（当前账号在途舰队为 0，
 预览返回 skipped）。敌方强度、资源转移、自动召回都不做，见 ADR-026。
 
+P2-3 前置记录（2026-11-18）：`page=control` 解析与 `scripts/empire.py` 已完成
+（见「核实与技术债」），守护按 `--empire-every` 采集 `state/empire.json`，看板主面板
+新增「帝国」块（殖民位 + 每星面积/资源/舰防，无文件时隐藏）。**跨星调度、切星、
+分星计划仍未做**，所以 P2-3 保持 ⬜——当前账号只有 1 颗星，多星路径只能离线构造。
+
 P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。
 
 ## P3 AI 战略层（仅 AI-0 / AI-1 已立项）

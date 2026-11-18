@@ -736,6 +736,10 @@ touch state/STOP
 - **宇宙记录采集**：`--records-every N`（默认 120，0 关闭）每 N 轮抓一次
   `page=records`（一次 GET），写 `state/records.json`；首轮会先采一次。页面失败写入
   `errors`（`section=all`），不增加连续失败计数；路径可用 `--records-file` 覆盖。
+- **帝国概览采集**：`--empire-every N`（默认 120，0 关闭）每 N 轮抓一次
+  `page=control`（一次 GET），写 `state/empire.json`；首轮会先采一次。失败写入
+  `errors`，不增加连续失败计数；路径可用 `--empire-file` 覆盖。看板主面板会显示
+  殖民位与每颗星的面积/资源/舰防摘要。
 - **策略 directive**：每轮读一次 `--directive`（默认 `state/directive.json`），把
   阶段目标交给 planner；文件缺失或校验失败时回退内置默认策略，并把原因写进本轮
   journal 的 `directive.errors`，看板健康栏提示「策略文件有误，已用默认」。策略文件
@@ -1077,6 +1081,10 @@ report.unresolved                      # mod 专有、SDK 未内置的单位名
 .venv/bin/python scripts/empire.py --no-verify-ssl --json
 .venv/bin/python scripts/empire.py --no-verify-ssl --planet 3:505:8
 ```
+
+守护会按 `--empire-every`（默认 120 轮）采集并写 `state/empire.json`，看板主面板的
+「帝国」块显示殖民位、每颗星的面积/三种资源/舰只与防御总数；没有该文件时整块隐藏
+（旧状态目录不受影响）。
 
 解析要点：标签列（`div.imper_left_part` 里带「星球名称」的那一列）与数值列按
 section 顺序对齐；建筑/舰只/防御三块包在 `u000`/`u200`/`u400` 里，各有自己的

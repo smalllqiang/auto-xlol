@@ -1007,3 +1007,47 @@ allow-list、dry-run 和燃料校验。
 - 不自动召回。
 
 先预览、再小批量执行，是多航道场景的推荐用法。
+
+## 20. 威胁评估与召回（P2-2）
+
+把「被侦察/来袭」从告警升级为结构化判断：读间谍报告（分类 0）、战斗报告
+（分类 3）、舰队表和概览，给出 `calm` / `watch` / `danger` 三级，以及可召回舰队。
+
+```bash
+.venv/bin/python scripts/threat.py --no-verify-ssl           # 只读报告
+.venv/bin/python scripts/threat.py --no-verify-ssl --json
+.venv/bin/python scripts/threat.py --no-verify-ssl --recall   # 预览召回
+.venv/bin/python scripts/threat.py --no-verify-ssl --recall \
+    --execute --allow 123                                     # 真召回（舰队 id）
+```
+
+判定规则（`autoplay/threat.py`，都是可改的常量）：
+
+- `danger`：最近 60 分钟内有侦察，或最近的战斗报告正文指向我方损失
+  （`你的防御`、`遭到攻击`、`被掠夺` 等）；
+- `watch`：24 小时内有侦察或战斗报告；
+- `calm`：其余。侦察报告本身会列出来（谁、从哪、侦察了哪个殖民地），过期的也算
+  背景信息。
+
+报告里的「资源暴露」是三种资源相对仓容的最大倍数；当前账号被赠送得远超仓容，
+这个数字会很大，属已知状态。
+
+守护循环可以带参数自动做这件事：
+
+```bash
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --threat-every 12 --pause-on-threat
+```
+
+- `--threat-every N`（默认 0 关闭）每 N 轮评估一次，额外 3 个 GET（两个消息分类、
+  舰队表、概览各一次）；
+- 等级变化时写一条 `kind=threat` 的 journal，cycle 条目也带 `threat`；
+- `--pause-on-threat` 在 `danger` 时只跳过本轮执行（不改支出、不写游戏）；
+- TUI 健康栏显示「威胁 平静/关注/危险」，旧 journal 没有该字段时不显示。
+
+召回（`autoplay/threat_executor.py`）沿用其它写操作的规则：默认预览、一次一支、
+`--execute` + 舰队 id allow-list、`state/STOP` 时拒绝；成功后必须看到舰队消失或
+出现返航标记，否则抛 `ActionRejected` 且不重试。**不会自动召回**，交给人决定。
+
+注意：间谍报告的字段（攻击方名字/坐标、目标坐标）是从正文文本启发式抽出来的，
+目前只有一个真实样本；等级判断不依赖名字解析，名字只用于展示。

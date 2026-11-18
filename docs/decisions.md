@@ -308,3 +308,19 @@
   旧 journal 缺 `directive` 时要能退回原布局。
 - 判据：`executor` 零改动；默认 directive 下计划与之前逐字段一致
   （`tests/test_planner_golden.py`）；directive 损坏不阻断守护循环。
+
+## ADR-026：威胁只评估与暂停，召回必须显式授权并验证
+
+- 状态：接受（2026-11-18）
+- 决定：`autoplay/threat.py` 把间谍/战斗报告与舰队表合成 `calm`/`watch`/`danger`
+  三级威胁，只读；守护用 `--threat-every` 周期评估、`--pause-on-threat` 在 danger
+  时**只暂停当轮支出**。真正的收缩动作（召回舰队）放在 `threat_executor.py`，
+  默认预览、一次一支、需要舰队 id allow-list，并以「舰队消失或出现返航标记」为
+  成功证据；不自动召回、不自动转移资源。
+- 背景：被侦察是攻击的前兆，但「刚被扫了一下」并不等于必须停机；自动召回会把
+  在途探险/运输全部打断，代价比风险更大。分级 + 人工授权让告警有用而不吵。
+- 代价：威胁等级只用时间窗和正文关键词判断，没有敌方强度（看不到对面舰船）；
+  间谍报告字段是文本启发式（目前一个真实样本）；`--threat-every` 每 N 轮多 4 个
+  GET（两个消息分类、舰队表、概览）。
+- 判据：`--pause-on-threat` 不改支出、不写游戏；召回被拒时抛 `ActionRejected`
+  且不重试（`before_post` 区分预检查与结果不明）。

@@ -23,7 +23,8 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/directive.py`（策略目标来源）、`autoplay/executor.py`（执行）、
-`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）。
+`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、
+`autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
 
 ## 环境与命令
 
@@ -50,6 +51,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl  # 探险预览（--execute --allow 才发送）
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
+.venv/bin/python scripts/threat.py --no-verify-ssl        # 威胁报告（--recall --execute --allow 才召回）
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
@@ -127,6 +129,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **宇宙记录保持者在 tooltip 属性里**：`page=records` 的保持者列表写在
   `div.record_made[data-tooltip-content]` 的转义 HTML 中（`Dialog.Playercard` 链接），
   行内没有独立节点；没有保持者/数值的行使表示该项暂无记录，解析时跳过。
+- **间谍报告要按正文解析**：正文形如「敌对行星 母星 [3:494:3] 发射的间谍探针在您的
+  下列殖民地周围被发现 母星 [3:505:8]」，第一个坐标是攻击方，最后一个是目标；
+  `Message.coordinates` 是空的，别指望它。字段是启发式，目前只有一个真实样本。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **签到页访问即领取**：`page=bonus` 的 GET 会直接发放奖励并写入 24h 冷却，冷却期
   再访问只 302 回概览，没有只读预览。可用性写在左侧导航：可领取是 `每日签到` 链接，

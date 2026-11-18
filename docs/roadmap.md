@@ -100,7 +100,7 @@ journal 里回放。
 | P2-1 | 探险阶段规划 | ✅ | 航道/积分规划、建船建议与前置链、编队拆分、单队/多队预览与发送、自动补船闭环已支持；本机验证发送/召回 |
 | P2-1b | 探险调度接入守护循环 | ✅ | `run_forever --expedition` 按轮次节流调用 `expedition_cycle`，独立舰船 allow-list/上限；本机 `--once` 实测发送并召回 |
 | P2-1c | 每日签到 | ✅ | 概览导航判断可用性（不碰 `page=bonus`），`--execute` 下守护循环自动领取；本机 2026-11-16 实测领取 +24h 冷却 |
-| P2-2 | 舰队与威胁响应 | ⬜ | 被侦察/来袭时收缩或转移；需要消息与舰队状态联动 |
+| P2-2 | 舰队与威胁响应 | ✅ | 间谍/战斗报告 + 舰队表 → `calm`/`watch`/`danger`；`--threat-every` / `--pause-on-threat`；召回支持预览 + 舰队 id allow-list + 页面验证（资源转移/多星球仍属 P2-3） |
 | P2-3 | 多星球调度 | ⬜ | 依赖 `control` 全局面板解析（见待核实） |
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
 | P2-5 | 影子模式评估 | ⬜ | 记录「AI 建议 vs 实际执行」，用数据决定是否采纳 |
@@ -108,6 +108,16 @@ journal 里回放。
 P2-1b 实测（2026-11-14）：`run_forever --once --execute --allow 4 --expedition --expedition-allow 202 --expedition-every 1` 在同一轮执行资源动作并派出探险队，随后立即召回成功。
 
 P2-1c 实测（2026-11-16）：概览导航显示 `每日签到` 链接时用一次 GET 领取，获得暗物质 160 / 反幽能 95 / 宝箱 3（资源条 921 +160、922 +95、924 +3 对照一致）；随后导航变为 `17.11.2026 22:20:25`，冷却期内 `claim_daily_bonus()` 返回 `claimed=False` 且不访问签到页。解析样本 `tests/fixtures/bonus_claim.html`，测试 `tests/test_daily_bonus.py`；脚本 `scripts/daily_bonus.py`，守护循环 `--no-bonus` 可关，journal `kind=bonus`。
+
+P2-2 记录（2026-11-18）：`autoplay/threat.py` 从间谍报告（分类 0）与战斗报告
+（分类 3）合成威胁等级：60 分钟内有侦察、或战斗正文指向我方损失 → `danger`；
+24 小时内 → `watch`；其余 `calm`。真实实例上 `scripts/threat.py` 读到了 2026-11-14
+那次侦察（`母星[3:494:3] → 母星[3:505:8]`），当前判为 `calm`（已过期）。守护用
+`--threat-every N`（默认关闭）周期评估、`--pause-on-threat` 在 danger 时只暂停当轮；
+journal 有 `kind=threat` 与 cycle 的 `threat` 字段，TUI 健康栏显示「威胁 平静/关注/危险」。
+召回走 `autoplay/threat_executor.py`：默认预览、一次一支、需要 `--execute` + 舰队 id
+allow-list，成功后必须看到舰队消失或返航标记；真实召回未执行（当前账号在途舰队为 0，
+预览返回 skipped）。敌方强度、资源转移、自动召回都不做，见 ADR-026。
 
 P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。
 

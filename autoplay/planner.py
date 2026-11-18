@@ -7,7 +7,9 @@ Two kinds of candidates are produced:
   goal itself is emitted once its prerequisites are satisfied, so it is the
   terminal blocker instead of being silently skipped.
 * **roi** -- production buildings ranked by payback time (cost in metal
-  equivalents divided by the estimated hourly gain of one more level).
+  equivalents divided by the estimated hourly gain of one more level).  The
+  energy plant is the exception: power is a rate, so it is ranked by whether it
+  is short rather than by a resource payback.
 
 Nothing here talks to the game except :func:`build_plan`; the computation
 itself is pure, so it can be replayed over old snapshots.
@@ -30,6 +32,12 @@ REQUIREMENT_RE = re.compile(
 
 #: Which resource each production building produces.
 PRODUCER_RESOURCE: Dict[int, int] = {1: 901, 2: 902, 3: 903, 4: 911}
+
+#: 幽能发电站 / Energy Plant.  It sells a *rate* (power), not a resource: the
+#: production page reports its net rate per hour, the overview's 911 number is
+#: capacity + rate rather than a stock, and the game only spends from the
+#: capacity pool.  Treating its output as a resource would invent a payback.
+ENERGY_PLANT_ID = 4
 
 _NAME_INDEX: Dict[str, Tuple[str, int]] = {}
 for _element_id, _element in BUILDINGS.items():
@@ -72,6 +80,9 @@ class Action:
     total_cost: Dict[int, float] = field(default_factory=dict)
     total_cost_equivalent: float = 0.0
     affordable_total: bool = True
+    #: ROI ordering hint: 1 puts an action ahead of payback-ranked peers (used
+    #: when power is short and mining is already being debuffed).
+    priority: int = 0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -97,6 +108,7 @@ class Action:
             "total_cost": {str(key): value for key, value in self.total_cost.items()},
             "total_cost_equivalent": round(self.total_cost_equivalent, 1),
             "affordable_total": self.affordable_total,
+            "priority": self.priority,
         }
 
 
@@ -400,6 +412,39 @@ def _roi_actions(
         missing = _missing_resources(building, cost, resources)
 
         item = produced.get(resource_id)
+        if element_id == ENERGY_PLANT_ID:
+            # Power is a rate: its value is keeping the mines off the shortage
+            # debuff, not accumulating a resource.  Payback in metal
+            # equivalents would compare two different units, so report the
+            # power state instead and only jump the queue when it is negative.
+            net = float(getattr(item, "total", 0.0) or 0.0) if item is not None else 0.0
+            short = net < 0
+            reason = (
+                f"电力不足（净产 {net:+,.0f}/h），会拖低采矿效率"
+                if short
+                else f"电力充足（净产 {net:+,.0f}/h），暂不需要扩容"
+            )
+            if short:
+                notes.append(f"电力净产为负（{net:+,.0f}/h），采矿会被减产，优先补电")
+            actions.append(
+                Action(
+                    category="roi",
+                    kind="building",
+                    element_id=element_id,
+                    name=str(getattr(building, "name", "")),
+                    current_level=level,
+                    target_level=level + 1,
+                    cost=cost,
+                    cost_equivalent=cost_equivalent,
+                    affordable=not missing,
+                    missing_resources=missing,
+                    reason=reason,
+                    payback_hours=None,
+                    priority=1 if short else 0,
+                )
+            )
+            continue
+
         observed = abs(float(item.buildings.get(element_id, 0.0))) if item else 0.0
         usage = _storage_usage(item, resource_id, resources)
         # At or over capacity the game drops the extra output, so the usual
@@ -457,6 +502,7 @@ def _sort_actions(actions: List[Action]) -> List[Action]:
     roi = sorted(
         (action for action in actions if action.category == "roi"),
         key=lambda action: (
+            -action.priority,
             action.payback_hours is None,
             action.payback_hours if action.payback_hours is not None else 0.0,
         ),

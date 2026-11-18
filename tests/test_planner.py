@@ -112,9 +112,12 @@ def test_plan_roi_sorted_by_payback(fixture_html):
 
     roi = [action for action in plan.actions if action.category == "roi"]
     assert roi
-    assert roi[0].name == "幽能发电站"
     paybacks = [action.payback_hours for action in roi if action.payback_hours is not None]
     assert paybacks == sorted(paybacks)
+    plant = next(action for action in roi if action.name == "幽能发电站")
+    # Power is a rate, so it has no resource payback to rank by.
+    assert plant.payback_hours is None
+    assert "电力" in plant.reason
     deut = next(action for action in roi if action.name == "重氢精炼厂")
     assert deut.payback_hours is None
 
@@ -122,16 +125,16 @@ def test_plan_roi_sorted_by_payback(fixture_html):
 def test_roi_demotes_overflowing_resource():
     """Over storage capacity output is discarded, so payback is meaningless."""
 
-    mine = _item(1, "金属矿", level=5, cost={901: 10})
-    plant = _item(4, "幽能发电站", level=5)
+    metal = _item(1, "金属矿", level=5, cost={901: 10})
+    crystal = _item(2, "水晶矿", level=5, cost={901: 10})
     production = _production(
         {
             901: SimpleNamespace(capacity=1_000.0, buildings={1: 500.0}),
-            911: SimpleNamespace(capacity=None, buildings={4: 800.0}),
+            902: SimpleNamespace(capacity=1_000.0, buildings={2: 500.0}),
         }
     )
 
-    plan = compute_plan([mine, plant], [], production, {901: 1_500.0})
+    plan = compute_plan([metal, crystal], [], production, {901: 1_500.0, 902: 100.0})
 
     roi = [action for action in plan.actions if action.category == "roi"]
     by_name = {action.name: action for action in roi}
@@ -140,9 +143,46 @@ def test_roi_demotes_overflowing_resource():
     # 150% is shown as a percentage; wildly over capacity is summarised.
     assert "占用 150%" in by_name["金属矿"].reason
     # The cheaper mine would win on the old estimate; overflow pushes it last.
-    assert by_name["幽能发电站"].payback_hours is not None
-    assert roi[0].name == "幽能发电站"
+    assert by_name["水晶矿"].payback_hours is not None
+    assert roi[0].name == "水晶矿"
     assert any("超仓容" in note for note in plan.notes)
+
+
+def test_energy_plant_reports_power_instead_of_payback():
+    plant = _item(4, "幽能发电站", level=5, cost={901: 100})
+    production = _production(
+        {911: SimpleNamespace(capacity=None, buildings={4: 800.0}, total=2_500.0)}
+    )
+
+    plan = compute_plan([plant], [], production, {901: 1_000_000})
+
+    action = plan.actions[0]
+    assert action.payback_hours is None
+    assert action.priority == 0
+    assert "电力充足" in action.reason
+    assert "+2,500/h" in action.reason
+    assert not any("电力净产为负" in note for note in plan.notes)
+
+
+def test_energy_plant_jumps_queue_when_power_is_short():
+    mine = _item(1, "金属矿", level=5, cost={901: 100})
+    plant = _item(4, "幽能发电站", level=5, cost={901: 100})
+    production = _production(
+        {
+            901: SimpleNamespace(capacity=1_000.0, buildings={1: 500.0}),
+            911: SimpleNamespace(capacity=None, buildings={4: 800.0}, total=-120.0),
+        }
+    )
+
+    plan = compute_plan([mine, plant], [], production, {901: 100})
+
+    roi = [action for action in plan.actions if action.category == "roi"]
+    assert roi[0].name == "幽能发电站"
+    assert roi[0].priority == 1
+    assert "电力不足" in roi[0].reason
+    # The mine still has a normal payback; the shortage outranks it.
+    assert any(action.payback_hours is not None for action in roi[1:])
+    assert any("电力净产为负" in note for note in plan.notes)
 
 
 def test_roi_summarises_extreme_overflow():

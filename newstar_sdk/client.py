@@ -599,6 +599,66 @@ class NewStarClient:
 
         return parse_production(self.get_page("resources"))
 
+    def set_production_ratios(
+        self,
+        ratios: Mapping[Any, int],
+        *,
+        verify: bool = True,
+    ) -> ProductionReport:
+        """Set production percentages (``prod[]``), keeping the other values.
+
+        ``ratios`` maps an element id to a percentage ``0..100`` in steps of 10
+        (the same scale :attr:`ProductionReport.ratios` uses).  The form must be
+        posted whole: a missing ``prod[]`` field would be read as 0, so the
+        current values are read first and merged.  Success is judged by
+        re-reading the page, not by HTTP 200.
+        """
+
+        wanted: Dict[int, int] = {}
+        for key, value in (ratios or {}).items():
+            element_id = int(key)
+            level = int(value)
+            if not 0 <= level <= 100 or level % 10:
+                raise ValueError(
+                    f"production ratio must be 0..100 in steps of 10, got {level!r}"
+                )
+            wanted[element_id] = level
+        if not wanted:
+            raise ValueError("no production ratios to change")
+
+        current = self.get_production()
+        merged = dict(current.ratios)
+        unknown = sorted(set(wanted) - set(merged))
+        if unknown:
+            raise ActionRejected(
+                "页面没有这些生产比例项："
+                + ", ".join(str(item) for item in unknown),
+                before_post=True,
+            )
+        if all(merged[element_id] == level for element_id, level in wanted.items()):
+            return current
+
+        merged.update(wanted)
+        data: Dict[str, str] = {"mode": "send"}
+        data.update(
+            {
+                # The form value is the game's 0..10 tenth scale.
+                f"prod[{element_id}]": str(level // 10)
+                for element_id, level in sorted(merged.items())
+            }
+        )
+        response = self._game_page("resources", method="POST", data=data)
+        report = parse_production(response.text)
+        if verify:
+            for element_id, level in wanted.items():
+                actual = report.ratios.get(element_id)
+                if actual != level:
+                    raise ActionRejected(
+                        f"生产比例未生效：{element_id} 期望 {level}，"
+                        f"页面读回 {actual!r}"
+                    )
+        return report
+
     def get_bonuses(self) -> Bonuses:
         """Read the bonus summary (``page=infobonus``).
 

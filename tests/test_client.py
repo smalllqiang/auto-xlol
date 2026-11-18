@@ -322,3 +322,73 @@ def test_send_fleet_rejects_invalid_expedition_stay_time(fixture_html, monkeypat
             stay_time=0,
         )
     assert pages == ["fleetStep1", "fleetStep2"]
+
+
+
+def _ratio_html(html: str, element_id: int, picked: int) -> str:
+    """Return ``html`` with the selected option of ``prod[element_id]`` changed."""
+
+    marker = f'name="prod[{element_id}]"'
+    start = html.index(marker)
+    select_end = html.index("</select>", start)
+    block = html[start:select_end]
+    block = block.replace(' selected="selected"', "")
+    target = f'value="{picked}"'
+    index = block.index(target)
+    block = block[:index] + 'selected="selected" ' + block[index:]
+    return html[:start] + block + html[select_end:]
+
+
+def test_set_production_ratios_posts_the_whole_form(fixture_html, monkeypatch):
+    client = _make_client()
+    html = fixture_html("production.html")
+    calls = []
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        calls.append((method, dict(params or {}), dict(data or {})))
+        if method == "POST":
+            return FakeResponse(_ratio_html(html, 1, 9))
+        return FakeResponse(html)
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    report = client.set_production_ratios({1: 90})
+
+    assert len(calls) == 2
+    method, params, data = calls[-1]
+    assert method == "POST"
+    assert params["page"] == "resources"
+    assert data["mode"] == "send"
+    assert data["prod[1]"] == "9"      # 90% -> tenth scale
+    assert data["prod[2]"] == "10"     # untouched values are still posted
+    assert data["prod[31]"] == "10"
+    assert report.ratios[1] == 90
+
+
+def test_set_production_ratios_verifies_the_readback(fixture_html, monkeypatch):
+    client = _make_client()
+    html = fixture_html("production.html")
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        return FakeResponse(html)  # unchanged page: the change did not stick
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    with pytest.raises(ActionRejected) as info:
+        client.set_production_ratios({1: 90})
+    assert info.value.before_post is False
+
+
+def test_set_production_ratios_rejects_bad_input(fixture_html, monkeypatch):
+    client = _make_client()
+    monkeypatch.setattr(
+        client, "_request", lambda *a, **k: FakeResponse(fixture_html("production.html"))
+    )
+
+    with pytest.raises(ValueError):
+        client.set_production_ratios({1: 95})
+    with pytest.raises(ValueError):
+        client.set_production_ratios({1: 110})
+    with pytest.raises(ValueError):
+        client.set_production_ratios({})
+    with pytest.raises(ActionRejected) as info:
+        client.set_production_ratios({999: 90})
+    assert info.value.before_post is True

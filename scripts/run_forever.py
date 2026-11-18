@@ -38,13 +38,14 @@ from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
 from autoplay.messages import collect_messages, write_messages
+from autoplay.power import apply_ratio_plan, plan_power_response
 from autoplay.records import collect_records, write_records
 from autoplay.statistics import collect_statistics, write_statistics
 from autoplay.threat import assess_client
 from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
-from newstar_sdk.exceptions import NewStarError
+from newstar_sdk.exceptions import ActionRejected, NewStarError
 from newstar_sdk.snapshot import build_snapshot
 
 _NAME_INDEX: Dict[str, int] = {}
@@ -179,6 +180,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="strategy directive file (missing/invalid falls back to the default)",
     )
     parser.add_argument(
+        "--balance-power",
+        action="store_true",
+        help="lower the largest consumer when the net power rate is negative",
+    )
+    parser.add_argument(
+        "--balance-allow",
+        action="append",
+        default=[],
+        help="element id whose production ratio may be lowered (repeatable)",
+    )
+    parser.add_argument(
         "--empire-every",
         type=int,
         default=120,
@@ -302,6 +314,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ValueError:
         print("--expedition-allow values must be ship element ids", file=sys.stderr)
         return 2
+    try:
+        balance_allowed = [int(item) for item in args.balance_allow]
+    except ValueError:
+        print("--balance-allow values must be element ids", file=sys.stderr)
+        return 2
+    if args.execute and args.balance_power and not balance_allowed:
+        print("--balance-power --execute requires --balance-allow", file=sys.stderr)
+        return 2
 
     stop_file = Path(args.stop_file)
     lock_path = Path(args.lock_file)
@@ -328,6 +348,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "pause_on_threat": bool(args.pause_on_threat),
         "threat_every": args.threat_every,
         "empire_every": args.empire_every,
+        "balance_power": bool(args.balance_power),
+        "balance_allow": [int(item) for item in args.balance_allow],
         "bonus": bool(args.bonus),
         "directive": args.directive,
         "expedition": bool(args.expedition),
@@ -614,6 +636,54 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         )
                     previous_snapshot = snapshot
                     print(f"    snapshot written ({len(events)} events)", flush=True)
+
+                if args.balance_power:
+                    try:
+                        plan = plan_power_response(client.get_production())
+                    except NewStarError as exc:
+                        append_jsonl(
+                            journal_path,
+                            {
+                                "at": now,
+                                "kind": "balance_error",
+                                "error": f"{type(exc).__name__}: {exc}",
+                            },
+                            max_bytes=rotate_bytes,
+                        )
+                    else:
+                        if plan.changes:
+                            try:
+                                balance = apply_ratio_plan(
+                                    client,
+                                    plan,
+                                    dry_run=not args.execute,
+                                    allowed=balance_allowed,
+                                )
+                            except ActionRejected as exc:
+                                append_jsonl(
+                                    journal_path,
+                                    {
+                                        "at": now,
+                                        "kind": "balance_error",
+                                        "error": str(exc),
+                                    },
+                                    max_bytes=rotate_bytes,
+                                )
+                            else:
+                                append_jsonl(
+                                    journal_path,
+                                    {
+                                        "at": now,
+                                        "kind": "balance",
+                                        "mode": "execute" if args.execute else "dry_run",
+                                        **balance.as_dict(),
+                                    },
+                                    max_bytes=rotate_bytes,
+                                )
+                                print(
+                                    f"    balance {balance.status}: {balance.reason}",
+                                    flush=True,
+                                )
 
                 if args.empire_every and (
                     cycles == 1 or cycles % args.empire_every == 0

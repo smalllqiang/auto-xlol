@@ -1051,3 +1051,42 @@ allow-list、dry-run 和燃料校验。
 
 注意：间谍报告的字段（攻击方名字/坐标、目标坐标）是从正文文本启发式抽出来的，
 目前只有一个真实样本；等级判断不依赖名字解析，名字只用于展示。
+
+## 21. 全局面板（page=control）
+
+一次 GET 拿到所有行星：资源与点数池、每小时产能、建筑等级、舰只、防御，外加 Σ 汇总
+和殖民位占用。
+
+```python
+from newstar_sdk import NewStarClient
+
+report = client.get_control()          # 只读，一次请求
+report.colony_slots                    # (已用, 上限)，来自「行星空位(殖民): 1 / 11」
+planet = report.planets[0]
+planet.name, planet.coordinates, (planet.fields_used, planet.fields_max)
+planet.resources                       # 901-903 + 911-916（建造点/研发点/船坞点/防御点/导弹点）
+planet.production                      # 901-903 每小时
+planet.buildings                       # 建筑 id → 等级
+planet.ships, planet.defenses          # 舰只 / 防御 id → 数量
+report.total                           # Σ 列（单星时与那颗星相同）
+report.unresolved                      # mod 专有、SDK 未内置的单位名
+```
+
+```bash
+.venv/bin/python scripts/empire.py --no-verify-ssl
+.venv/bin/python scripts/empire.py --no-verify-ssl --json
+.venv/bin/python scripts/empire.py --no-verify-ssl --planet 3:505:8
+```
+
+解析要点：标签列（`div.imper_left_part` 里带「星球名称」的那一列）与数值列按
+section 顺序对齐；建筑/舰只/防御三块包在 `u000`/`u200`/`u400` 里，各有自己的
+小标题。找不到中文表头时会退回「单元格最多的那一列」，换主题/语言仍可用。
+
+实测（2026-11-18，1 颗星）：面积 109/273、殖民位 1/11、资源与概览一致、每小时产能
+与生产控制页一致（235,788 / 125,652 / 19,423）、建筑 13 项非零、舰只 5 种 16,052 件、
+防御 2 种 81,000 件。页面上 82 种 mod 舰只和 82 种 mod 防御没有元素 id，列在
+`unresolved` 里，不影响已知项。
+
+**幽能交叉验证**：全局面板的 911 是 600,017，而概览的 `amounts[911]` 是 992,294。
+前者是**毛产**（也是引力子门槛比较的值），后者是「毛产 + 净产」的合成值——与
+`docs/doctrine.md` 的幽能结论一致。

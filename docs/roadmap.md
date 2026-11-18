@@ -101,7 +101,7 @@ journal 里回放。
 | P2-1b | 探险调度接入守护循环 | ✅ | `run_forever --expedition` 按轮次节流调用 `expedition_cycle`，独立舰船 allow-list/上限；本机 `--once` 实测发送并召回 |
 | P2-1c | 每日签到 | ✅ | 概览导航判断可用性（不碰 `page=bonus`），`--execute` 下守护循环自动领取；本机 2026-11-16 实测领取 +24h 冷却 |
 | P2-2 | 舰队与威胁响应 | ✅ | 间谍/战斗报告 + 舰队表 → `calm`/`watch`/`danger`；`--threat-every` / `--pause-on-threat`；召回支持预览 + 舰队 id allow-list + 页面验证（资源转移/多星球仍属 P2-3） |
-| P2-3 | 多星球调度 | ⬜ | 依赖 `control` 全局面板解析（见待核实） |
+| P2-3 | 多星球调度 | ⬜ | 只读解析已就绪（`control` 全局面板 + `scripts/empire.py`）；跨星调度、切星、分星计划未做 |
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
 | P2-5 | 影子模式评估 | ⬜ | 记录「AI 建议 vs 实际执行」，用数据决定是否采纳 |
 
@@ -189,7 +189,7 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 | ✅ 仓容语义 | 资源远超仓容是朋友赠送所致；爆仓时产量停摆、资源不涨属正常，capacity 可信 | 2026-11-18 确认，不再当异常 |
 | ✅ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 2026-11-18 修复：用产量表容量与概览资源量判断爆仓，回本置 `null` 并排到末尾（`autoplay/planner.py` 的 `_storage_usage`，`tests/test_planner.py`） |
 | ✅ 幽能语义 | 产量表 911 的 `total` 是净产；概览 `capacity` 是毛产（= 净产 + 三厂消耗），页面显示 `净产/毛产`（实测 `392 K/600 K`、65%）；概览 `amounts[911]` 是「毛产 + 净产」的合成值，两天不变而净产 +392,000/h，证明它不是库存。引力子这类科技的幽能需求是门槛、不消耗，游戏用毛产比（实测 765,000 对 600,017） | 2026-11-18 核实：不把概览容量传给规划器做爆仓判断；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |
-| ❓ `control` 全局面板 | 单请求全量状态，但是纵向栅格布局 | 需要按列位置解析；多星球前再做 |
+| ✅ `control` 全局面板 | 单请求全量状态：每星资源/点数池/每小时产能/建筑/舰只/防御 + Σ + 殖民位；按标签列与 section 顺序对齐 | 2026-11-18 完成：`parse_control` / `client.get_control()` / `scripts/empire.py`，`tests/test_control.py`（10 个用例，含脱敏 fixture）；mod 专有单位列进 `unresolved` |
 | ⬜ 生产比例写入 | 只读已支持，写入（`prod[]` 表单）未封装 | 需要先确认写入语义与风险 |
 | ⬜ `market` / `fair` | 本实例禁用 | 不投入；若换实例再评估 |
 | ⬜ SQLite | 当前 JSONL 够用 | 触发条件见 ADR-002 |

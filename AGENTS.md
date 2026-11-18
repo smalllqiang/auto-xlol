@@ -52,6 +52,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
 .venv/bin/python scripts/threat.py --no-verify-ssl        # 威胁报告（--recall --execute --allow 才召回）
+.venv/bin/python scripts/empire.py --no-verify-ssl        # 全局面板（每星资源/建筑/舰只）
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
@@ -110,7 +111,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   （= 净产 + 三厂消耗，页面显示为 `净产/毛产`，实测 `392 K/600 K`、65%），
   `amounts[911]`（`data-real`）则是「毛产 + 净产」的合成值，不是库存。所以不要把
   概览容量传给规划器做爆仓判断，也不要用资源回本衡量幽能发电站
-  （`autoplay/planner.py` 按净产报告与排序）。引力子这类科技的幽能需求是**门槛**、
+  （`autoplay/planner.py` 按净产报告与排序）。全局面板（`page=control`）的 911 就是
+  毛产（实测 600,017），可用来交叉核对。引力子这类科技的幽能需求是**门槛**、
   不消耗，游戏用毛产去比（实测 765,000 对 600,017），缺口靠提高毛产而不是攒资源。
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。

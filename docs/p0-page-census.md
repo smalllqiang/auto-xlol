@@ -118,9 +118,10 @@ game.php?page=messages&mode=view&messcat=<分类>&site=<页码>&ajax=1
 `page=control` 一次返回：行星空位、每颗行星的资源/建造点/研发点/船坞点/防御点/
 导弹点/每小时产能、全部建筑等级、全部舰船与防御数量、以及 Σ 汇总。
 
-布局是**纵向表**：左列是标签（`.imper_block_td` 顺序固定），右侧每颗行星是一列
-数值，靠位置对齐。解析要按标签顺序映射，比普通 `<table>` 麻烦，但一次请求就够。
-当前只有 1 颗星，价值还不明显；殖民之后它就是唯一实用的多星状态源。
+布局是**纵向栅格**：标签列（`div.imper_left_part`，首格是「星球名称」）与数值列
+按 section 顺序对齐；建筑/舰只/防御包在 `u000`/`u200`/`u400` 里。2026-11-18 已实现：
+`newstar_sdk.parsers.parse_control` / `client.get_control()`，脚本
+`scripts/empire.py`，见 `docs/usage.md` 第 21 节。
 
 ### 5.3 `infobonus`（加成总计）给出所有乘数
 

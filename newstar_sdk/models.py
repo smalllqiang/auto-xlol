@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from .constants import ResourceId
 
@@ -613,6 +613,70 @@ class ProductionReport:
             return self.ratios.get(resolve_element(element, "building"), default)
         except (KeyError, ValueError):
             return default
+
+
+@dataclass
+class PlanetSnapshot:
+    """One planet column of the empire overview (``page=control``).
+
+    Point pools (912-916) live in ``resources`` because the page lists them in
+    the same section; ``production`` is the hourly output of 901-903.
+    """
+
+    name: str = ""
+    coordinates: Optional[Coordinates] = None
+    fields_used: int = 0
+    fields_max: int = 0
+    resources: Dict[int, float] = field(default_factory=dict)
+    production: Dict[int, float] = field(default_factory=dict)
+    buildings: Dict[int, int] = field(default_factory=dict)
+    ships: Dict[int, int] = field(default_factory=dict)
+    defenses: Dict[int, int] = field(default_factory=dict)
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "name": self.name,
+            "coordinates": (
+                self.coordinates.as_dict() if self.coordinates is not None else None
+            ),
+            "fields_used": self.fields_used,
+            "fields_max": self.fields_max,
+            "resources": {str(key): value for key, value in self.resources.items()},
+            "production": {str(key): value for key, value in self.production.items()},
+            "buildings": {str(key): value for key, value in self.buildings.items()},
+            "ships": {str(key): value for key, value in self.ships.items()},
+            "defenses": {str(key): value for key, value in self.defenses.items()},
+        }
+
+
+@dataclass
+class ControlReport:
+    """The whole empire from one request (``page=control``)."""
+
+    planets: List[PlanetSnapshot] = field(default_factory=list)
+    total: Optional[PlanetSnapshot] = None
+    #: ``(used, max)`` colony slots from "行星空位(殖民): 1 / 9".
+    colony_slots: Optional[Tuple[int, int]] = None
+    #: Labels the SDK has no element id for (mod-specific ships/defenses).
+    unresolved: Dict[str, List[str]] = field(default_factory=dict)
+
+    def planet(self, coordinates: object = None) -> Optional[PlanetSnapshot]:
+        """Find a planet by :class:`Coordinates`; ``None`` returns the first."""
+
+        if coordinates is None:
+            return self.planets[0] if self.planets else None
+        for planet in self.planets:
+            if planet.coordinates == coordinates:
+                return planet
+        return None
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "planets": [planet.as_dict() for planet in self.planets],
+            "total": self.total.as_dict() if self.total is not None else None,
+            "colony_slots": list(self.colony_slots) if self.colony_slots else None,
+            "unresolved": {key: list(value) for key, value in self.unresolved.items()},
+        }
 
 
 @dataclass

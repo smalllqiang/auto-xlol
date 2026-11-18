@@ -41,6 +41,7 @@ from .models import (
     BattleHall,
     Bonuses,
     BuildingInfo,
+    ControlReport,
     Coordinates,
     DailyBonus,
     DailyBonusStatus,
@@ -69,6 +70,7 @@ from .parsers import (
     parse_bonuses,
     parse_building_queue,
     parse_buildings,
+    parse_control,
     parse_daily_bonus,
     parse_fleet_dispatch_result,
     parse_fleet_selection,
@@ -1119,6 +1121,17 @@ class NewStarClient:
     # ------------------------------------------------------------------
     # Fleets
     # ------------------------------------------------------------------
+
+    def get_control(self) -> ControlReport:
+        """Whole-empire overview: every colony in one request.
+
+        Cheaper than per-page reads for multi-planet checks; the same page also
+        carries the Σ column and the colony-slot counter.
+        """
+
+        self.ensure_login()
+        response = self._game_page("control")
+        return parse_control(response.text)
 
     def get_fleets(self) -> List[FleetInfo]:
         self.ensure_login()

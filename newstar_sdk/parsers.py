@@ -23,6 +23,7 @@ from .constants import (
     MISSION_NAME_TO_ID,
     MISSION_NAMES_ZH,
     RESOURCE_ELEMENT_IDS,
+    RESOURCE_NAMES_ZH,
     SHIPS,
     TECHNOLOGIES,
     element_name,
@@ -35,6 +36,7 @@ from .models import (
     Bonus,
     Bonuses,
     BuildingInfo,
+    ControlReport,
     Coordinates,
     DailyBonusItem,
     DailyBonusStatus,
@@ -50,6 +52,7 @@ from .models import (
     Overview,
     OverviewStatus,
     PlanetInfo,
+    PlanetSnapshot,
     PlanetSummary,
     ProductionReport,
     QueueEntry,
@@ -1846,3 +1849,191 @@ def parse_universe_records(html: str) -> UniverseRecords:
         updated_text=updated_text,
         sections=sections,
     )
+
+
+# ---------------------------------------------------------------------------
+# Empire overview (page=control)
+# ---------------------------------------------------------------------------
+
+#: The page lists these sections in a fixed order; titles are localised.
+_CONTROL_SECTIONS = ("resources", "production", "buildings", "ships", "defenses")
+
+_CONTROL_TITLES = {
+    "资源": "resources",
+    "每小时资源": "production",
+    "建筑": "buildings",
+    "舰只": "ships",
+    "行星防御": "defenses",
+}
+
+_RESOURCE_NAME_TO_ID = {name: rid for rid, name in RESOURCE_NAMES_ZH.items()}
+
+_COLONY_SLOTS_RE = re.compile(r"行星空位\(殖民\)\s*[:：]\s*(\d+)\s*/\s*(\d+)")
+_FIELDS_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+
+
+def _control_sections(container: Tag) -> List[Tuple[str, List[str]]]:
+    """Split an empire column into ``(title, texts)`` sections.
+
+    The layout is a flat stack of ``.imper_block_th`` separators and
+    ``.imper_block_td`` cells; the building/ship/defense blocks are wrapped in
+    ``.u000``/``.u200``/``.u400`` and repeat their own header.
+    """
+
+    sections: List[Tuple[str, List[str]]] = []
+    title = ""
+    values: List[str] = []
+
+    def flush() -> None:
+        if values:
+            sections.append((title, list(values)))
+            values.clear()
+
+    for child in container.find_all(recursive=False):
+        classes = set(child.get("class") or [])
+        if "imper_block_image" in classes:
+            continue
+        if "imper_block_th" in classes:
+            flush()
+            title = clean_text(child.get_text(" "))
+            continue
+        if "imper_block_td" in classes:
+            values.append(clean_text(child.get_text(" ")))
+            continue
+        if classes & {"u000", "u200", "u400"}:
+            flush()
+            sub_title = ""
+            sub_values: List[str] = []
+            for node in child.find_all(recursive=False):
+                node_classes = set(node.get("class") or [])
+                if "imper_block_th" in node_classes:
+                    sub_title = clean_text(node.get_text(" "))
+                elif "imper_block_td" in node_classes:
+                    sub_values.append(clean_text(node.get_text(" ")))
+            if sub_values or sub_title:
+                sections.append((sub_title, sub_values))
+    flush()
+    return sections
+
+
+def _control_labels(soup: BeautifulSoup) -> List[Tuple[str, List[str]]]:
+    candidates = soup.select("div.imper_left_part")
+    for part in candidates:
+        image = part.find("div", class_="imper_block_image", recursive=False)
+        if image is not None and "星球名称" in image.get_text(" "):
+            return _control_sections(part)
+    # Other languages/themes rename the header; the label column is still the
+    # one with the most cells.
+    best = max(
+        candidates,
+        key=lambda part: len(part.find_all("div", class_="imper_block_td")),
+        default=None,
+    )
+    if best is None or not best.find_all("div", class_="imper_block_td"):
+        return []
+    return _control_sections(best)
+
+
+def _section_kind(title: str, index: int) -> Optional[str]:
+    folded = (title or "").strip()
+    if folded in _CONTROL_TITLES:
+        return _CONTROL_TITLES[folded]
+    if 0 <= index < len(_CONTROL_SECTIONS):
+        return _CONTROL_SECTIONS[index]
+    return None
+
+
+def _control_snapshot(
+    block: Tag,
+    labels: List[Tuple[str, List[str]]],
+    unresolved: Dict[str, List[str]],
+) -> PlanetSnapshot:
+    snapshot = PlanetSnapshot()
+    image = block.find("div", class_="imper_block_image", recursive=False)
+    if image is not None:
+        texts = [clean_text(node.get_text(" ")) for node in image.select(".imper_block_info_text")]
+        if texts:
+            snapshot.name = texts[0]
+        for text in texts[1:]:
+            if snapshot.coordinates is None:
+                try:
+                    snapshot.coordinates = parse_coordinates(text)
+                    continue
+                except (ValueError, TypeError):
+                    pass
+            match = _FIELDS_RE.search(text)
+            if match and snapshot.fields_max == 0:
+                snapshot.fields_used = int(match.group(1))
+                snapshot.fields_max = int(match.group(2))
+
+    values = _control_sections(block)
+    for index, ((label_title, names), (_value_title, cells)) in enumerate(
+        zip(labels, values)
+    ):
+        kind = _section_kind(label_title, index)
+        if kind is None:
+            continue
+        for name, raw in zip(names, cells):
+            if kind == "production":
+                # The hourly block names resources, not buildings.
+                rid = _RESOURCE_NAME_TO_ID.get(name)
+                if rid is None:
+                    continue
+                snapshot.production[rid] = parse_number(raw)
+                continue
+            if kind == "resources":
+                rid = _RESOURCE_NAME_TO_ID.get(name)
+                if rid is None:
+                    unresolved.setdefault("resource", []).append(name)
+                    continue
+                snapshot.resources[rid] = parse_number(raw)
+                continue
+            category = {
+                "buildings": CATEGORY_BUILDING,
+                "ships": CATEGORY_SHIP,
+                "defenses": CATEGORY_DEFENSE,
+            }[kind]
+            try:
+                element_id = resolve_element(name, category)
+            except (KeyError, ValueError):
+                unresolved.setdefault(kind, []).append(name)
+                continue
+            value = int(parse_number(raw))
+            target = {
+                "buildings": snapshot.buildings,
+                "ships": snapshot.ships,
+                "defenses": snapshot.defenses,
+            }[kind]
+            target[int(element_id)] = value
+    return snapshot
+
+
+def parse_control(html: str) -> ControlReport:
+    """Parse the empire overview (``page=control``).
+
+    One request returns every colony: resources and point pools, hourly output,
+    building levels, ships and defenses, plus the Σ column and the colony-slot
+    counter.  Cells are aligned by section order, not by table headers.
+    """
+
+    soup = _soup(html)
+    report = ControlReport()
+    labels = _control_labels(soup)
+    table = soup.select_one("table.imper_table")
+    if table is None or not labels:
+        return report
+
+    for cell in table.select("td.imper_f"):
+        block = cell.find("div", class_="imper_block_vertical", recursive=False)
+        if block is None:
+            continue
+        snapshot = _control_snapshot(block, labels, report.unresolved)
+        if "imper_planet" in (cell.get("class") or []):
+            report.planets.append(snapshot)
+        else:
+            report.total = snapshot
+
+    match = _COLONY_SLOTS_RE.search(soup.get_text(" "))
+    if match:
+        report.colony_slots = (int(match.group(1)), int(match.group(2)))
+    return report

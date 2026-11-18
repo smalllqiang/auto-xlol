@@ -419,11 +419,12 @@ def _roi_actions(
             # power state instead and only jump the queue when it is negative.
             net = float(getattr(item, "total", 0.0) or 0.0) if item is not None else 0.0
             short = net < 0
-            reason = (
-                f"电力不足（净产 {net:+,.0f}/h），会拖低采矿效率"
-                if short
-                else f"电力充足（净产 {net:+,.0f}/h），暂不需要扩容"
-            )
+            if short:
+                reason = f"电力不足（净产 {net:+,.0f}/h），会拖低采矿效率"
+            elif net == 0:
+                reason = "电力持平（净产 +0/h），暂不需要扩容"
+            else:
+                reason = f"电力充足（净产 {net:+,.0f}/h），暂不需要扩容"
             if short:
                 notes.append(f"电力净产为负（{net:+,.0f}/h），采矿会被减产，优先补电")
             actions.append(

@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
+from newstar_sdk.constants import BUILDINGS, RESOURCE_NAMES_ZH, TECHNOLOGIES
 
 from .economy import equivalent_cost, payback_hours, production_delta, scale_cost
 from .phases import Phase, detect_phase
@@ -361,6 +361,25 @@ def _blocker_actions(
     return actions
 
 
+def _storage_usage(
+    production_item: Any, resource_id: int, resources: Dict[int, float]
+) -> Optional[float]:
+    """How full the storage for a produced resource is, if the page reports it.
+
+    The production page carries one capacity per resource; the amount comes from
+    the overview.  ``None`` means we cannot tell (missing item or capacity), and
+    callers should keep the old payback estimate.
+    """
+
+    capacity = getattr(production_item, "capacity", None)
+    if not capacity:
+        return None
+    amount = resources.get(resource_id)
+    if amount is None:
+        return None
+    return float(amount) / float(capacity)
+
+
 def _roi_actions(
     buildings: Dict[int, Any],
     production: Any,
@@ -369,6 +388,7 @@ def _roi_actions(
 ) -> List[Action]:
     actions: List[Action] = []
     produced = getattr(production, "resources", {}) or {}
+    overflowed: List[str] = []
 
     for element_id, resource_id in PRODUCER_RESOURCE.items():
         building = buildings.get(element_id)
@@ -381,10 +401,25 @@ def _roi_actions(
 
         item = produced.get(resource_id)
         observed = abs(float(item.buildings.get(element_id, 0.0))) if item else 0.0
-        delta = production_delta(observed, level)
-        payback = payback_hours(cost_equivalent, delta)
+        usage = _storage_usage(item, resource_id, resources)
+        # At or over capacity the game drops the extra output, so the usual
+        # payback estimate would be fictional.  Rank these after everything
+        # else instead of pretending they pay back.
+        is_overflowing = usage is not None and usage >= 1.0
+        if is_overflowing:
+            delta = None
+            payback = None
+        else:
+            delta = production_delta(observed, level)
+            payback = payback_hours(cost_equivalent, delta)
 
-        if level <= 0:
+        if is_overflowing:
+            if usage >= 10:
+                reason = "已爆仓（远超仓容），产量不再累积"
+            else:
+                reason = f"已爆仓（占用 {usage:.0%}），产量不再累积"
+            overflowed.append(RESOURCE_NAMES_ZH.get(resource_id, str(resource_id)))
+        elif level <= 0:
             reason = "尚未建造，补齐该资源产出"
         elif delta is not None:
             reason = f"每升一级约 +{delta:,.0f}/h"
@@ -406,6 +441,10 @@ def _roi_actions(
                 reason=reason,
                 payback_hours=payback,
             )
+        )
+    if overflowed:
+        notes.append(
+            f"{'、'.join(overflowed)} 已超仓容，产量不再累积，回本时间不可用"
         )
     return actions
 

@@ -119,6 +119,60 @@ def test_plan_roi_sorted_by_payback(fixture_html):
     assert deut.payback_hours is None
 
 
+def test_roi_demotes_overflowing_resource():
+    """Over storage capacity output is discarded, so payback is meaningless."""
+
+    mine = _item(1, "金属矿", level=5, cost={901: 10})
+    plant = _item(4, "幽能发电站", level=5)
+    production = _production(
+        {
+            901: SimpleNamespace(capacity=1_000.0, buildings={1: 500.0}),
+            911: SimpleNamespace(capacity=None, buildings={4: 800.0}),
+        }
+    )
+
+    plan = compute_plan([mine, plant], [], production, {901: 1_500.0})
+
+    roi = [action for action in plan.actions if action.category == "roi"]
+    by_name = {action.name: action for action in roi}
+    assert by_name["金属矿"].payback_hours is None
+    assert "爆仓" in by_name["金属矿"].reason
+    # 150% is shown as a percentage; wildly over capacity is summarised.
+    assert "占用 150%" in by_name["金属矿"].reason
+    # The cheaper mine would win on the old estimate; overflow pushes it last.
+    assert by_name["幽能发电站"].payback_hours is not None
+    assert roi[0].name == "幽能发电站"
+    assert any("超仓容" in note for note in plan.notes)
+
+
+def test_roi_summarises_extreme_overflow():
+    mine = _item(1, "金属矿", level=5)
+    production = _production(
+        {901: SimpleNamespace(capacity=1_000.0, buildings={1: 500.0})}
+    )
+
+    plan = compute_plan([mine], [], production, {901: 1_000_000.0})
+
+    action = next(action for action in plan.actions if action.category == "roi")
+    assert action.payback_hours is None
+    assert "远超仓容" in action.reason
+
+
+def test_roi_keeps_payback_below_capacity():
+    mine = _item(1, "金属矿", level=5)
+    production = _production(
+        {901: SimpleNamespace(capacity=1_000.0, buildings={1: 500.0})}
+    )
+
+    plan = compute_plan([mine], [], production, {901: 200.0})
+
+    action = next(action for action in plan.actions if action.category == "roi")
+    assert action.payback_hours is not None
+    assert "爆仓" not in action.reason
+    assert not any("超仓容" in note for note in plan.notes)
+
+
+
 def test_plan_is_json_serialisable(fixture_html):
     plan = compute_plan(*_state(fixture_html))
     payload = json.dumps(plan.as_dict(), ensure_ascii=False)
@@ -155,8 +209,8 @@ def _item(
     )
 
 
-def _production():
-    return SimpleNamespace(resources={})
+def _production(resources=None):
+    return SimpleNamespace(resources=dict(resources or {}))
 
 
 def test_plan_includes_goal_after_requirements_met():

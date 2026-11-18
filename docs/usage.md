@@ -597,6 +597,57 @@ v1 的限制，用之前需要知道：
 - 阶段规划覆盖种田初起与探险准备；探险纪元（milestone）只输出产能候选；
 - 不执行任何操作。
 
+### 策略 directive（AI-1）
+
+阶段目标不再是写死的常量：`autoplay.directive` 把「打什么」抽成 directive，
+planner 仍从页面读事实、展开依赖、算 ROI。directive **只写目标、约束、风险姿态和
+失效条件**，不写具体动作，也不写任何本可以从页面读到的数字（ADR-006）。
+
+```python
+from autoplay import build_plan, default_directive, load_directive, save_directive
+
+plan = build_plan(client)                       # 内置默认策略
+plan = build_plan(client, load_directive())     # 读 state/directive.json，坏文件自动回退
+
+d = default_directive()                         # 与 phases.py 完全一致
+save_directive("state/directive.json", d)       # 原子写入，可直接编辑
+```
+
+```bash
+.venv/bin/python scripts/directive.py                 # 当前生效来源/年龄/阶段/校验错误
+.venv/bin/python scripts/directive.py --json
+.venv/bin/python scripts/directive.py --write-default  # 生成可编辑的默认策略
+.venv/bin/python scripts/directive.py --validate my.json
+```
+
+文件格式（`version` 目前只认 1；`phases` 按顺序检测，第一个目标未满足的就是当前阶段）：
+
+```json
+{
+  "version": 1,
+  "phases": [
+    {"key": "pre_gravity", "name": "种田初起", "goal": "建成资源处理单元",
+     "goal_kind": "building", "goal_element": 81, "goal_level": 1},
+    {"key": "expedition_prep", "name": "探险准备", "goal": "探险技术升到 9",
+     "goal_kind": "research", "goal_element": 124, "goal_level": 9},
+    {"key": "expedition", "name": "探险纪元", "goal": "维持探险",
+     "goal_kind": "milestone", "goal_element": 0, "goal_level": 0}
+  ],
+  "constraints": {"one_action_per_round": true},
+  "risk_posture": "conservative",
+  "expires_when": "阶段目标达成"
+}
+```
+
+校验规则：版本必须是 1；`phases` 非空；`key` 非空且唯一；`goal_kind` 只能是
+`building` / `research` / `milestone`；`building`/`research` 的 `goal_element` 必须
+为正、`goal_level` ≥ 1；`milestone` 必须在最后一段（否则它后面的阶段永远到不了）。
+任何一条不满足、JSON 坏了、文件读不了，都会**回退默认策略**并在
+`Directive.errors` 里留下原因，不会中断守护循环。
+
+验收基线是 `tests/test_planner_golden.py`：默认 directive 下的计划与 AI-1 之前
+逐字段一致；`executor` 没有为此改动。
+
 ## 13. 执行器与安全闸
 
 `autoplay.execute_plan()` 把计划落成**最多一个**动作，默认只做 dry run：
@@ -685,6 +736,10 @@ touch state/STOP
 - **宇宙记录采集**：`--records-every N`（默认 120，0 关闭）每 N 轮抓一次
   `page=records`（一次 GET），写 `state/records.json`；首轮会先采一次。页面失败写入
   `errors`（`section=all`），不增加连续失败计数；路径可用 `--records-file` 覆盖。
+- **策略 directive**：每轮读一次 `--directive`（默认 `state/directive.json`），把
+  阶段目标交给 planner；文件缺失或校验失败时回退内置默认策略，并把原因写进本轮
+  journal 的 `directive.errors`，看板健康栏提示「策略文件有误，已用默认」。策略文件
+  改动会在下一轮生效（打印一次来源、写入距今时间与阶段列表）。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
 `--allow`）。

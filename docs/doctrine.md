@@ -95,7 +95,8 @@ AI-0 的交付物：把「大方向」从代码里抽出来，写成可读、可
 前三段，且把「引力纷争」并入 `pre_gravity` 的依赖链（资源处理单元 → 引力子技术
 → 科研实验室）。
 
-**默认 directive v1（草案，AI-1 落地时校验）**：
+**默认 directive v1（AI-1 已落地：`autoplay/directive.py`，文件在
+`state/directive.json`，校验失败自动回退）**：
 
 ```json
 {

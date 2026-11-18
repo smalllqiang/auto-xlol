@@ -120,7 +120,7 @@ P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标�
 | # | 任务 | 状态 | 交付物 | 验收 |
 | --- | --- | --- | --- | --- |
 | AI-0 | 知识外置：doctrine + playbooks + 默认策略 | ✅ | `docs/doctrine.md`、`docs/playbooks.md`、默认 directive（doctrine 里 v1 草案） | doctrine 覆盖现有 3 个阶段、2 条核心机制事实和 8 条原则；playbooks 覆盖 9 个危机场景；默认策略由 `tests/test_planner_golden.py` 逐字段冻结 |
-| AI-1 | Directive 抽象：planner 接受可注入目标 | ⬜ | `StrategicDirective` + 校验、默认 directive、`state/directive.json`、journal/TUI 字段 | 默认 directive 与当前计划逐字段一致；directive 原子落盘；旧 journal 兼容；executor 零改动 |
+| AI-1 | Directive 抽象：planner 接受可注入目标 | ✅ | `autoplay/directive.py`（`Directive` + 校验 + 原子落盘）、`state/directive.json`、journal/TUI `directive` 字段 | 默认 directive 由 golden 测试证明逐字段一致；原子写入（temp + fsync + rename）；旧 journal 缺字段时看板退回原布局；executor 零改动 |
 
 **AI-0 知识外置（不接模型）**
 
@@ -150,6 +150,18 @@ AI-1 直接用它证明「默认 directive 下计划逐字段一致」。
   TUI 在现有面板上增加最小展示，旧条目缺字段时退回原布局。
 - 验收：`executor` 零改动；默认 directive 下计划与当前逐字段一致；directive 损坏
   或校验失败时回退默认策略；`ruff` + `pytest` 全绿。
+
+**AI-1 记录（2026-11-18）**：`autoplay/directive.py` 提供 `Directive`、
+`parse_directive` / `load_directive` / `save_directive` / `default_directive`；
+`detect_phase` 改为「按 directive 顺序找第一个未满足的阶段」，默认 `PHASES` 下与旧
+逻辑等价。`run_forever --directive`（默认 `state/directive.json`）每轮读一次，
+journal 的 cycle 条目新增 `directive{source,version,path,age_seconds,risk_posture,
+expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分前 / 策略文件有误，
+已用默认」。校验覆盖版本、空列表、重复 key、goal_kind、element/level、milestone
+必须最后；任何错误都回退默认并写 `errors`，不中断循环。新增
+`scripts/directive.py`（查看 / `--json` / `--write-default` / `--validate`）与
+`tests/test_directive.py`（24 个用例，含注入后 planner 换目标、坏文件回退、原子写）；
+`executor` 未改动。
 
 **边界（本期不做的部分）**
 

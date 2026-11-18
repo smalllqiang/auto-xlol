@@ -7,7 +7,7 @@ name = "newstar-sdk"
 dynamic = ["version"]
 description = "Python SDK for New-Star / 2Moons browser games"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.15"
 license = { text = "MIT" }
 authors = [{ name = "auto-xlol contributors" }]
 keywords = ["newstar", "2moons", "ogame", "browser-game", "sdk"]
@@ -17,6 +17,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Games/Entertainment :: Simulation",
     "Typing :: Typed",
 ]

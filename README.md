@@ -29,11 +29,13 @@
 
 ## 快速开始
 
-需要 Python 3.9 或更高版本。凭据按 命令行 > 环境变量 > `.env` > `passwd.txt` 解析；
-本实例证书过期，脚本通常要加 `--no-verify-ssl`。
+支持 Python 3.9–3.14，推荐 3.14（仓库的 `.python-version` 已固定为 3.14，
+`uv venv` 会据此选解释器；3.15 及以上未验证、不在支持范围内）。凭据按
+命令行 > 环境变量 > `.env` > `passwd.txt` 解析；本实例证书过期，脚本通常要加
+`--no-verify-ssl`。
 
 ```bash
-uv venv
+uv venv --python 3.14
 uv pip install -e ".[dev]"
 source .venv/bin/activate
 

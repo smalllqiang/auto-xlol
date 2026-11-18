@@ -736,6 +736,9 @@ touch state/STOP
 - **宇宙记录采集**：`--records-every N`（默认 120，0 关闭）每 N 轮抓一次
   `page=records`（一次 GET），写 `state/records.json`；首轮会先采一次。页面失败写入
   `errors`（`section=all`），不增加连续失败计数；路径可用 `--records-file` 覆盖。
+- **电力平衡**：`--balance-power`（默认关闭）每轮读一次生产控制页，净产为负时把
+  消耗最大的厂下调 10%，`--balance-allow` 给出允许改动的元素 id；没有 allow-list
+  或元素不在其中时会被拒，不写游戏。dry-run 只预览，journal 记 `kind=balance`。
 - **帝国概览采集**：`--empire-every N`（默认 120，0 关闭）每 N 轮抓一次
   `page=control`（一次 GET），写 `state/empire.json`；首轮会先采一次。失败写入
   `errors`，不增加连续失败计数；路径可用 `--empire-file` 覆盖。看板主面板会显示
@@ -1098,3 +1101,52 @@ section 顺序对齐；建筑/舰只/防御三块包在 `u000`/`u200`/`u400` 里
 **幽能交叉验证**：全局面板的 911 是 600,017，而概览的 `amounts[911]` 是 992,294。
 前者是**毛产**（也是引力子门槛比较的值），后者是「毛产 + 净产」的合成值——与
 `docs/doctrine.md` 的幽能结论一致。
+
+
+## 22. 生产比例与电力平衡
+
+生产控制页（`page=resources`）的 `prod[]` 决定每个厂按几成产能运行，**单位是
+百分数 0–100、步长 10**（`ProductionReport.ratios` 就是这个刻度）。
+
+```python
+report = client.get_production()
+report.ratios                 # {1: 100, 2: 100, 4: 100, ...}
+client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionRejected
+```
+
+写入规则（和别的写操作一致）：
+
+- **整表提交**：表单里缺一个 `prod[N]`，服务端会当成 0，所以 SDK 先读当前值，
+  合并改动后一次 POST 全部字段；
+- **按页面回读验证**：POST 后再解析一次生产页，比例对不上就抛 `ActionRejected`
+  （`before_post=False`，不重试）；
+- 元素不在页面上 / 比例不是 10 的倍数 / 空改动 → `ValueError` 或预检查拒绝。
+
+命令行：
+
+```bash
+.venv/bin/python scripts/production.py --no-verify-ssl            # 当前比例 + 电力判断
+.venv/bin/python scripts/production.py --no-verify-ssl --json
+.venv/bin/python scripts/production.py --no-verify-ssl --set 1=90  # 预览
+.venv/bin/python scripts/production.py --no-verify-ssl \
+    --set 1=90 --execute --allow 1                                 # 真写入
+```
+
+缺电时的确定性策略（`autoplay/power.py`）：净产为负 → 找 911 列里消耗最大的厂，
+下调一档（10%），预估补偿 = 消耗 × 10%；下轮再评估。都已经是 0% 时不再动。
+
+守护循环里用 `--balance-power` 打开、`--balance-allow` 授权：
+
+```bash
+.venv/bin/python scripts/run_forever.py --no-verify-ssl \
+    --execute --allow 4 --balance-power --balance-allow 1,2
+```
+
+**实测（2026-11-18，真实实例）**：
+
+- `--set 1=90 --execute --allow 1` → 页面读回 90%，合金消耗 118,000→106,000/h，
+  净产 +392,000→+404,000；随后 `--set 1=100` 恢复；
+- 临时把幽能发电站降到 0% 制造缺电 → 净产 −68,200/h，守护 dry-run 打出
+  「把合金冶炼厂 100% 降到 90%（约补 11,800/h）」并写 `kind=balance`；恢复发电站后
+  净产回到 +392,000。
+- 预估补偿（11,800）与实测（12,000）差在页面取整，只用于排序，不作为精确值。

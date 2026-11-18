@@ -53,6 +53,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
 .venv/bin/python scripts/threat.py --no-verify-ssl        # 威胁报告（--recall --execute --allow 才召回）
 .venv/bin/python scripts/empire.py --no-verify-ssl        # 全局面板（每星资源/建筑/舰只）
+.venv/bin/python scripts/production.py --no-verify-ssl    # 生产比例（--set + --execute --allow 才写入）
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
@@ -134,6 +135,9 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **间谍报告要按正文解析**：正文形如「敌对行星 母星 [3:494:3] 发射的间谍探针在您的
   下列殖民地周围被发现 母星 [3:505:8]」，第一个坐标是攻击方，最后一个是目标；
   `Message.coordinates` 是空的，别指望它。字段是启发式，目前只有一个真实样本。
+- **生产比例必须整表提交**：`page=resources` 的 `prod[]` 缺字段会被当 0，SDK 先读
+  当前值再合并；刻度是百分数 0–100、步长 10，写成十分数会全错。成功后要按页面回读
+  比例才算成功（`set_production_ratios` 已内置）。
 - **风格**：页面是 CSS 栅格（`rexx1/rexx2`），不是 `<table>`；定位靠 class 与位置。
 - **签到页访问即领取**：`page=bonus` 的 GET 会直接发放奖励并写入 24h 冷却，冷却期
   再访问只 302 回概览，没有只读预览。可用性写在左侧导航：可领取是 `每日签到` 链接，

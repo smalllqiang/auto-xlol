@@ -195,7 +195,7 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 | ✅ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 2026-11-18 修复：用产量表容量与概览资源量判断爆仓，回本置 `null` 并排到末尾（`autoplay/planner.py` 的 `_storage_usage`，`tests/test_planner.py`） |
 | ✅ 幽能语义 | 产量表 911 的 `total` 是净产；概览 `capacity` 是毛产（= 净产 + 三厂消耗），页面显示 `净产/毛产`（实测 `392 K/600 K`、65%）；概览 `amounts[911]` 是「毛产 + 净产」的合成值，两天不变而净产 +392,000/h，证明它不是库存。引力子这类科技的幽能需求是门槛、不消耗，游戏用毛产比（实测 765,000 对 600,017） | 2026-11-18 核实：不把概览容量传给规划器做爆仓判断；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |
 | ✅ `control` 全局面板 | 单请求全量状态：每星资源/点数池/每小时产能/建筑/舰只/防御 + Σ + 殖民位；按标签列与 section 顺序对齐 | 2026-11-18 完成：`parse_control` / `client.get_control()` / `scripts/empire.py`，`tests/test_control.py`（10 个用例，含脱敏 fixture）；mod 专有单位列进 `unresolved` |
-| ⬜ 生产比例写入 | 只读已支持，写入（`prod[]` 表单）未封装 | 需要先确认写入语义与风险 |
+| ✅ 生产比例写入 | 只读与写入都已支持：`client.set_production_ratios`（整表提交 + 页面回读验证）、`scripts/production.py`、`autoplay/power.py` 缺电降耗、守护 `--balance-power`/`--balance-allow` | 2026-11-18 实机验证 100%→90%→100% 与缺电预览，见 `docs/usage.md` 第 22 节 |
 | ⬜ `market` / `fair` | 本实例禁用 | 不投入；若换实例再评估 |
 | ⬜ SQLite | 当前 JSONL 够用 | 触发条件见 ADR-002 |
 | ❓ 攻略时效 | 攻略为 2023 年纪元 | 以页面数据为准；机制疑点靠页面普查确认 |

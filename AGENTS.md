@@ -18,6 +18,8 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 3. `docs/usage.md` — 每个 API 怎么用。
 4. `docs/decisions.md` — 为什么这样选（改架构前必读）。
 5. `docs/roadmap.md` — 做到哪了、下一步是什么、验收标准。
+6. `docs/doctrine.md` — 默认战略：机制事实、阶段目标、原则、假设；改策略先读。
+7. `docs/playbooks.md` — 危机场景（被侦察、来袭、爆仓、缺电、断档…）的确定性应对。
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/executor.py`（执行）、
@@ -102,10 +104,12 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 - **爆仓是正常状态**：当前账号被朋友赠送了远超仓容的资源，概览里资源量 > capacity
   属于正常；爆仓时产量不再累积（资源不涨），不要把「资源不涨」当成采集断档或解析
   错误。capacity 本身可信，但仍不要把「资源不超容量」当作硬约束。
-- **幽能是速率资源**：概览 911 的 `data-real` 是「容量 + 净产」，页面上显示的是
-  「净产 / 容量」（实测 `392 K/600 K`、65%），不是库存；可用额度是容量。产量表
-  911 的容量列是 `-`，所以不要把概览容量传给规划器做爆仓判断，也不要用资源回本
-  衡量幽能发电站（`autoplay/planner.py` 按净产报告与排序）。
+- **幽能是速率资源**：产量表 911 的 `total` 是净产，概览 911 的 `capacity` 是毛产
+  （= 净产 + 三厂消耗，页面显示为 `净产/毛产`，实测 `392 K/600 K`、65%），
+  `amounts[911]`（`data-real`）则是「毛产 + 净产」的合成值，不是库存。所以不要把
+  概览容量传给规划器做爆仓判断，也不要用资源回本衡量幽能发电站
+  （`autoplay/planner.py` 按净产报告与排序）。引力子这类科技的幽能需求是**门槛**、
+  不消耗，游戏用毛产去比（实测 765,000 对 600,017），缺口靠提高毛产而不是攒资源。
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。
 - **看板存活看心跳**：`state/daemon.json` 的 `updated_at` 是权威依据；容器/PID

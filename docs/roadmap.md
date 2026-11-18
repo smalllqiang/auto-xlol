@@ -119,7 +119,7 @@ P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标�
 
 | # | 任务 | 状态 | 交付物 | 验收 |
 | --- | --- | --- | --- | --- |
-| AI-0 | 知识外置：doctrine + playbooks + 默认策略 | ⬜ | `docs/doctrine.md`、`docs/playbooks.md`、默认 directive | doctrine 覆盖现有 3 个阶段、原则和 ≥5 个危机场景；默认 directive 在现有 planner 样本上产出与当前一致的计划；人审通过 |
+| AI-0 | 知识外置：doctrine + playbooks + 默认策略 | ✅ | `docs/doctrine.md`、`docs/playbooks.md`、默认 directive（doctrine 里 v1 草案） | doctrine 覆盖现有 3 个阶段、2 条核心机制事实和 8 条原则；playbooks 覆盖 9 个危机场景；默认策略由 `tests/test_planner_golden.py` 逐字段冻结 |
 | AI-1 | Directive 抽象：planner 接受可注入目标 | ⬜ | `StrategicDirective` + 校验、默认 directive、`state/directive.json`、journal/TUI 字段 | 默认 directive 与当前计划逐字段一致；directive 原子落盘；旧 journal 兼容；executor 零改动 |
 
 **AI-0 知识外置（不接模型）**
@@ -131,6 +131,14 @@ P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标�
 - 定义默认 directive / 默认策略，内容等价于当前 `phases.py` 的三个阶段目标。
 - 验收：默认策略在 `tests/test_planner.py` 的样本上产出与当前一致的计划；文档
   可被人直接执行，不依赖模型解释。
+
+**AI-0 记录（2026-11-18）**：`docs/doctrine.md` 标注了 ✅/📘/❓ 三种事实来源，
+覆盖三个阶段的进入/完成条件、8 条原则和「假设与待验证」表；幽能语义按 2026-11-18
+的核实结果写（速率资源、毛产是门槛比较值）；`docs/playbooks.md` 写了 9 个危机场景，
+每个都给了触发信号、代码当前行为、人工动作和缺口。默认 directive 以 JSON 草案形式
+放在 doctrine 第二节，字段与 `phases.py` 一一对应；`tests/test_planner_golden.py`
+冻结了 fixture 上的阶段、目标、8 条候选（顺序/等级/回本有无/优先级）与 notes，
+AI-1 直接用它证明「默认 directive 下计划逐字段一致」。
 
 **AI-1 Directive 抽象（不接模型）**
 
@@ -158,7 +166,7 @@ P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标�
 | --- | --- | --- |
 | ✅ 仓容语义 | 资源远超仓容是朋友赠送所致；爆仓时产量停摆、资源不涨属正常，capacity 可信 | 2026-11-18 确认，不再当异常 |
 | ✅ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 2026-11-18 修复：用产量表容量与概览资源量判断爆仓，回本置 `null` 并排到末尾（`autoplay/planner.py` 的 `_storage_usage`，`tests/test_planner.py`） |
-| ✅ 幽能语义 | 概览 911 的 `data-real` 是「容量 + 净产」，页面上显示的是「净产 / 容量」（实测 `392 K/600 K`、65%）；两天不变而净产 +392,000/h，说明它不是库存。可支付额度是容量（引力子缺口按 600,017 算）。产量表 911 的容量列是 `-` | 2026-11-18 核实：不把概览容量传给规划器；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |
+| ✅ 幽能语义 | 产量表 911 的 `total` 是净产；概览 `capacity` 是毛产（= 净产 + 三厂消耗），页面显示 `净产/毛产`（实测 `392 K/600 K`、65%）；概览 `amounts[911]` 是「毛产 + 净产」的合成值，两天不变而净产 +392,000/h，证明它不是库存。引力子这类科技的幽能需求是门槛、不消耗，游戏用毛产比（实测 765,000 对 600,017） | 2026-11-18 核实：不把概览容量传给规划器做爆仓判断；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |
 | ❓ `control` 全局面板 | 单请求全量状态，但是纵向栅格布局 | 需要按列位置解析；多星球前再做 |
 | ⬜ 生产比例写入 | 只读已支持，写入（`prod[]` 表单）未封装 | 需要先确认写入语义与风险 |
 | ⬜ `market` / `fair` | 本实例禁用 | 不投入；若换实例再评估 |

@@ -516,10 +516,11 @@ def compute_plan(
     research: Iterable[Any],
     production: Any,
     resources: Dict[int, float],
+    directive: Any = None,
 ) -> Plan:
     building_map = {int(item.id): item for item in buildings}
     research_map = {int(item.id): item for item in research}
-    phase = detect_phase(buildings, research)
+    phase = detect_phase(buildings, research, directive)
 
     notes: List[str] = []
     actions: List[Action] = []
@@ -576,11 +577,15 @@ def compute_plan(
     )
 
 
-def build_plan(client: Any) -> Plan:
-    """Fetch the required pages and compute a plan.  Read-only."""
+def build_plan(client: Any, directive: Any = None) -> Plan:
+    """Fetch the required pages and compute a plan.  Read-only.
+
+    ``directive`` is optional: without it the built-in default strategy runs,
+    exactly as before AI-1.
+    """
 
     buildings = client.get_buildings()
     research = client.get_research()
     production = client.get_production()
     resources = client.get_overview().resources.amounts
-    return compute_plan(buildings, research, production, resources)
+    return compute_plan(buildings, research, production, resources, directive)

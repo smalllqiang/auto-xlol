@@ -228,6 +228,14 @@ class DashboardState:
         return items
 
     @property
+    def directive(self) -> Dict[str, Any]:
+        """Journal summary of the strategy directive (AI-1); {} on old entries."""
+
+        cycle = self.last_cycle or {}
+        value = cycle.get("directive")
+        return value if isinstance(value, dict) else {}
+
+    @property
     def plan_top(self) -> List[Dict[str, Any]]:
         cycle = self.last_cycle or {}
         plan = cycle.get("plan_top")
@@ -563,6 +571,25 @@ def _account_line(snapshot: Dict[str, Any], width: int) -> str:
     return left + " " * gap + right
 
 
+def _directive_part(state: DashboardState) -> Tuple[Optional[str], Optional[str]]:
+    """Health-line fragment for the injected directive; ``(level, text)``.
+
+    Old journals have no ``directive`` field at all, so the caller keeps its
+    original layout instead of showing a placeholder.
+    """
+
+    directive = state.directive
+    if not directive:
+        return None, None
+    if directive.get("errors"):
+        return "warn", "策略文件有误，已用默认"
+    source = str(directive.get("source") or "?")
+    if source == "default":
+        return None, "默认策略"
+    age = directive.get("age_seconds")
+    return None, "策略" if age is None else f"策略 {fmt_age(_as_float(age))}"
+
+
 def _health(state: DashboardState) -> Tuple[str, str]:
     status = state.daemon or {}
     pid = state.daemon_pid
@@ -582,7 +609,12 @@ def _health(state: DashboardState) -> Tuple[str, str]:
 
     if status.get("state") == "stopped":
         suffix = " · state/STOP 仍在" if state.stop_requested else ""
-        return "muted", f"● 守护已停止 · 数据 {fmt_age(data_age)}{suffix}"
+        directive_level, directive_text = _directive_part(state)
+        tail = f" · {directive_text}" if directive_text else ""
+        return (
+            directive_level or "muted",
+            f"● 守护已停止 · 数据 {fmt_age(data_age)}{suffix}{tail}",
+        )
     if state.stop_requested:
         return "warn", "● 停止请求已存在（state/STOP），守护将在下一轮退出"
 
@@ -642,6 +674,11 @@ def _health(state: DashboardState) -> Tuple[str, str]:
         if next_at is not None:
             remaining = (next_at - state.now).total_seconds()
             parts.append("即将开始" if remaining <= 1 else f"下轮 {fmt_seconds(remaining)}")
+
+    directive_level, directive_text = _directive_part(state)
+    if directive_text:
+        level = directive_level or level
+        parts.append(directive_text)
 
     if failures:
         parts.append(f"连续失败 {failures}/{max_failures}")

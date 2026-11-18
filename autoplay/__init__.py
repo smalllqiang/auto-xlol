@@ -8,6 +8,17 @@ strategy here is opinionated and expected to change often.
 from __future__ import annotations
 
 from .daily import DailyBonusOutcome, run_daily_bonus
+from .directive import (
+    DEFAULT_PATH as DEFAULT_DIRECTIVE_PATH,
+)
+from .directive import (
+    Directive,
+    DirectiveError,
+    default_directive,
+    load_directive,
+    parse_directive,
+    save_directive,
+)
 from .economy import equivalent_cost, payback_hours, production_delta
 from .executor import ExecutionResult, execute_plan
 from .expedition import (
@@ -25,7 +36,10 @@ from .ship_build import ShipBuildResult, build_recommended_ships
 
 __all__ = [
     "Action",
+    "DEFAULT_DIRECTIVE_PATH",
     "DailyBonusOutcome",
+    "Directive",
+    "DirectiveError",
     "ExecutionResult",
     "ExpeditionCycleResult",
     "ExpeditionDispatchResult",
@@ -41,6 +55,7 @@ __all__ = [
     "build_plan",
     "compute_expedition_report",
     "compute_plan",
+    "default_directive",
     "detect_phase",
     "dispatch_expedition",
     "run_daily_bonus",
@@ -48,6 +63,9 @@ __all__ = [
     "equivalent_cost",
     "execute_plan",
     "expand_requirement_actions",
+    "load_directive",
+    "parse_directive",
     "payback_hours",
     "production_delta",
+    "save_directive",
 ]

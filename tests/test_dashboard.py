@@ -863,3 +863,82 @@ def test_record_detail_shows_holders_and_gap(tmp_path):
 
     multi = "\n".join(render_record_text(state, index=1, width=100))
     assert "TestUser" in multi and "玩家二" in multi
+
+
+def _render_with_journal(tmp_path, journal, width=120):
+    state = load_state(_state_dir(tmp_path, journal=journal), now=NOW)
+    return "\n".join(render_text(state, width=width))
+
+
+def test_directive_state_is_shown_when_recorded(tmp_path):
+    text = _render_with_journal(
+        tmp_path,
+        [
+            _cycle(
+                directive={
+                    "source": "file",
+                    "version": 1,
+                    "path": "state/directive.json",
+                    "age_seconds": 120.0,
+                    "phases": ["pre_gravity"],
+                    "errors": [],
+                }
+            )
+        ],
+    )
+
+    assert "策略 2 分前" in text
+
+
+def test_directive_errors_are_warned_about(tmp_path):
+    text = _render_with_journal(
+        tmp_path,
+        [
+            _cycle(
+                directive={
+                    "source": "default",
+                    "version": 1,
+                    "path": "state/directive.json",
+                    "age_seconds": None,
+                    "phases": ["pre_gravity", "expedition_prep", "expedition"],
+                    "errors": ["directive 校验失败，已回退默认：goal_kind 必须是 ..."],
+                }
+            )
+        ],
+    )
+
+    assert "策略文件有误，已用默认" in text
+
+
+def test_old_cycle_without_directive_still_renders(tmp_path):
+    text = _render_with_journal(tmp_path, [_cycle()])
+
+    assert "种田初起" in text
+    assert "策略" not in text
+
+
+def test_directive_is_shown_even_after_the_daemon_stopped(tmp_path):
+    state_dir = _state_dir(
+        tmp_path,
+        journal=[
+            _cycle(
+                directive={
+                    "source": "file",
+                    "version": 1,
+                    "path": "state/directive.json",
+                    "age_seconds": 120.0,
+                    "phases": ["pre_gravity"],
+                    "errors": [],
+                }
+            )
+        ],
+    )
+    (state_dir / "daemon.json").write_text(
+        json.dumps(_daemon(state="stopped"), ensure_ascii=False), encoding="utf-8"
+    )
+
+    state = load_state(state_dir, now=NOW)
+    text = "\n".join(render_text(state, width=120))
+
+    assert "守护已停止" in text
+    assert "策略 2 分前" in text

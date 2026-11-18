@@ -1,5 +1,7 @@
 
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
+from autoplay.directive import Directive
+from autoplay.phases import Phase
 from autoplay.planner import compute_plan
 from newstar_sdk.parsers import (
     parse_buildings,
@@ -53,7 +55,7 @@ def test_backoff_delay_grows_and_caps():
 
 def test_run_cycle_dry_run(fixture_html, monkeypatch):
     client = FakeClient()
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(client, DaemonConfig(dry_run=True))
 
@@ -65,7 +67,7 @@ def test_run_cycle_dry_run(fixture_html, monkeypatch):
 
 def test_run_cycle_executes_when_allowed(fixture_html, monkeypatch):
     client = FakeClient()
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(
         client,
@@ -78,7 +80,7 @@ def test_run_cycle_executes_when_allowed(fixture_html, monkeypatch):
 
 def test_run_cycle_respects_busy_queue(fixture_html, monkeypatch):
     client = FakeClient(building_queue=[object()])
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(
         client,
@@ -91,7 +93,7 @@ def test_run_cycle_respects_busy_queue(fixture_html, monkeypatch):
 
 def test_run_cycle_without_allow_list_skips(fixture_html, monkeypatch):
     client = FakeClient()
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(client, DaemonConfig(dry_run=False))
 
@@ -110,7 +112,7 @@ def _counters(**unread):
 
 def test_run_cycle_alerts_on_battle_report(fixture_html, monkeypatch):
     client = FakeClient(counters=_counters(**{"3": 2}))
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(
         client,
@@ -125,7 +127,7 @@ def test_run_cycle_alerts_on_battle_report(fixture_html, monkeypatch):
 
 def test_run_cycle_first_cycle_establishes_baseline(fixture_html, monkeypatch):
     client = FakeClient(counters=_counters(**{"3": 5}))
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(client, DaemonConfig(dry_run=True), previous_counters=None)
 
@@ -138,7 +140,7 @@ def test_pause_on_alert_skips_execution(fixture_html, monkeypatch):
     client = FakeClient(
         counters=_counters(**{"3": 1}),
     )
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(
         client,
@@ -163,7 +165,7 @@ def test_cycle_carries_dashboard_fields(fixture_html, monkeypatch):
         active=True,
     )
     client = FakeClient(building_queue=[queue], counters=_counters(**{"3": 2, "4": 3}))
-    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client: _install_plan(fixture_html))
+    monkeypatch.setattr("autoplay.daemon.build_plan", lambda _client, directive=None: _install_plan(fixture_html))
 
     result = run_cycle(
         client,
@@ -177,3 +179,45 @@ def test_cycle_carries_dashboard_fields(fixture_html, monkeypatch):
     assert result.queue_items["building"][0]["remaining_seconds"] == 125
     assert result.messages["unread"] == 5
     assert result.messages["categories"]
+
+
+def test_cycle_records_default_directive(fixture_html, monkeypatch):
+    client = FakeClient()
+    monkeypatch.setattr(
+        "autoplay.daemon.build_plan",
+        lambda _client, directive=None: _install_plan(fixture_html),
+    )
+
+    result = run_cycle(client, DaemonConfig(dry_run=True))
+
+    assert result.directive["source"] == "default"
+    assert result.directive["phases"] == [
+        "pre_gravity",
+        "expedition_prep",
+        "expedition",
+    ]
+    assert result.directive["errors"] == []
+    assert result.as_dict()["directive"] == result.directive
+
+
+def test_cycle_passes_injected_directive_to_planner(fixture_html, monkeypatch):
+    seen = {}
+    directive = Directive(
+        phases=(Phase("done", "终局", "里程碑", "milestone", 0, 0),),
+        source="file",
+        path="state/directive.json",
+        file_mtime=0.0,
+    )
+
+    def fake_plan(_client, injected=None):
+        seen["directive"] = injected
+        return _install_plan(fixture_html)
+
+    monkeypatch.setattr("autoplay.daemon.build_plan", fake_plan)
+
+    result = run_cycle(FakeClient(), DaemonConfig(dry_run=True), directive=directive)
+
+    assert seen["directive"] is directive
+    assert result.directive["source"] == "file"
+    assert result.directive["phases"] == ["done"]
+    assert result.directive["path"] == "state/directive.json"

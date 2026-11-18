@@ -3,6 +3,10 @@
 The guide splits the game into stages (farming -> gravity/processor ->
 expedition -> ascension).  Phase detection is intentionally simple and based on
 facts we can read, not on elapsed time.
+
+``PHASES`` is also the *default directive*: :func:`detect_phase` walks whatever
+phase list the injected directive carries (AI-1), and only falls back to this
+tuple when there is none.
 """
 
 from __future__ import annotations
@@ -61,9 +65,26 @@ def _level(items: Iterable[Any], element_id: int) -> int:
     return 0
 
 
-def detect_phase(buildings: Iterable[Any], research: Iterable[Any]) -> Phase:
-    if _level(buildings, RESOURCE_PROCESSOR_ID) < 1:
-        return PRE_GRAVITY
-    if _level(research, EXPEDITION_TECH_ID) < 9:
-        return EXPEDITION_PREP
-    return EXPEDITION
+def detect_phase(
+    buildings: Iterable[Any],
+    research: Iterable[Any],
+    directive: Any = None,
+) -> Phase:
+    """First phase whose goal is not met, in directive order.
+
+    ``directive`` is anything with ``phases`` (see
+    :class:`autoplay.directive.Directive`); ``None`` uses the built-in
+    three-phase default.  A ``milestone`` phase is never "met" by a level
+    check, so it ends the walk -- which is why validation keeps it last.
+    """
+
+    phases = tuple(getattr(directive, "phases", None) or PHASES)
+    for phase in phases:
+        if phase.goal_kind == "building":
+            if _level(buildings, phase.goal_element) < phase.goal_level:
+                return phase
+        elif phase.goal_kind == "research":
+            if _level(research, phase.goal_element) < phase.goal_level:
+                return phase
+    return phases[-1]
+

@@ -31,6 +31,8 @@ from local_config import load_config
 from autoplay.battles import collect_battles, write_battles
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
 from autoplay.daily import CLAIMED, run_daily_bonus
+from autoplay.directive import DEFAULT_PATH as DEFAULT_DIRECTIVE_PATH
+from autoplay.directive import load_directive
 from autoplay.expedition import build_expedition_report
 from autoplay.expedition_cycle import expedition_due, run_expedition_cycle
 from autoplay.journal import append_jsonl
@@ -169,6 +171,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_false",
         help="skip the daily sign-in check (每日签到); in --execute mode it is claimed",
     )
+    parser.add_argument(
+        "--directive",
+        default=DEFAULT_DIRECTIVE_PATH,
+        help="strategy directive file (missing/invalid falls back to the default)",
+    )
     parser.add_argument("--stop-file", default="state/STOP")
     parser.add_argument("--lock-file", default="state/daemon.lock")
     parser.add_argument("--once", action="store_true", help="run exactly one cycle")
@@ -297,6 +304,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "max_cost": args.max_cost,
         "pause_on_alert": bool(args.pause_on_alert),
         "bonus": bool(args.bonus),
+        "directive": args.directive,
         "expedition": bool(args.expedition),
         "expedition_allow": expedition_allowed,
         "expedition_every": args.expedition_every,
@@ -363,6 +371,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     previous_snapshot: Optional[Dict[str, Any]] = None
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None
     previous_bonus: Optional[str] = None
+    previous_directive: Optional[tuple] = None
     failures = 0
     cycles = 0
     max_cycles = 1 if args.once else args.max_cycles
@@ -430,8 +439,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                 flush=True,
                             )
                         previous_bonus = bonus_outcome.status
+                directive = load_directive(args.directive)
+                signature = (
+                    directive.source,
+                    directive.file_mtime,
+                    directive.errors,
+                )
+                if signature != previous_directive:
+                    if directive.errors:
+                        for problem in directive.errors:
+                            print(f"directive: {problem}", file=sys.stderr, flush=True)
+                    else:
+                        age = directive.age_seconds()
+                        where = f"（{args.directive}，{int(age)}s 前写入）" if age is not None else ""
+                        print(
+                            f"directive: {directive.source}{where} "
+                            f"phases={','.join(p.key for p in directive.phases)}",
+                            flush=True,
+                        )
+                    previous_directive = signature
                 result = run_cycle(
-                    client, daemon_config, previous_counters=previous_counters
+                    client,
+                    daemon_config,
+                    previous_counters=previous_counters,
+                    directive=directive,
                 )
                 if result.counters:
                     previous_counters = result.counters

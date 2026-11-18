@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from newstar_sdk.events import Event, diff_message_counters
 from newstar_sdk.exceptions import NewStarError
 
+from .directive import Directive, default_directive
 from .executor import ExecutionResult, execute_plan
 from .planner import build_plan
 from .reactions import Reaction, has_alert, react
@@ -51,6 +52,7 @@ class CycleResult:
     counters: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     messages: Dict[str, Any] = field(default_factory=dict)
     evidence: Dict[str, Any] = field(default_factory=dict)
+    directive: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -67,6 +69,7 @@ class CycleResult:
             "alerts": list(self.alerts),
             "messages": dict(self.messages),
             "evidence": dict(self.evidence),
+            "directive": dict(self.directive),
         }
 
 
@@ -187,13 +190,17 @@ def run_cycle(
     config: DaemonConfig,
     *,
     previous_counters: Optional[Dict[int, Dict[str, Any]]] = None,
+    directive: Optional[Directive] = None,
 ) -> CycleResult:
-    """Observe, plan and execute at most one action.  Raises if planning fails."""
+    """Observe, plan and execute at most one action.  Raises if planning fails.
+
+    ``directive`` injects the phase goals; without it the built-in default runs.
+    """
 
     events, reactions, counters = _observe(client, config, previous_counters)
     alerts = [reaction for reaction in reactions if reaction.kind == "alert"]
 
-    plan = build_plan(client)
+    plan = build_plan(client, directive)
 
     if config.pause_on_alert and has_alert(reactions):
         result = ExecutionResult(
@@ -230,4 +237,5 @@ def run_cycle(
         counters=counters,
         messages=_messages_summary(counters),
         evidence=dict(result.evidence),
+        directive=(directive or default_directive()).as_dict(),
     )

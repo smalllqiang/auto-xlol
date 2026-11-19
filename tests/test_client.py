@@ -392,3 +392,31 @@ def test_set_production_ratios_rejects_bad_input(fixture_html, monkeypatch):
     with pytest.raises(ActionRejected) as info:
         client.set_production_ratios({999: 90})
     assert info.value.before_post is True
+
+
+def test_set_session_cookie_accepts_bare_value():
+    client = NewStarClient("https://example.test/", verify_ssl=False)
+    client.set_session_cookie("vg03jr0oaiocba68e0b9jeq5r2")
+
+    assert client._session.cookies.get("2Moons") == "vg03jr0oaiocba68e0b9jeq5r2"
+
+
+def test_set_session_cookie_accepts_header_line():
+    client = NewStarClient("https://example.test/", verify_ssl=False)
+    client.set_session_cookie("Cookie: lang=zh; 2Moons=abc123def; other=1")
+
+    cookie = client._session.cookies.get("2Moons")
+    assert cookie == "abc123def"
+    assert client._session.cookies.get("lang") is None
+
+
+def test_set_session_cookie_sets_https_flag_and_rejects_empty():
+    client = NewStarClient("https://example.test/", verify_ssl=False)
+    client.set_session_cookie("abc")
+
+    jar_entry = next(iter(client._session.cookies))
+    assert jar_entry.secure is True
+    assert jar_entry.domain == "example.test"
+
+    with pytest.raises(ConfigurationError):
+        client.set_session_cookie("   ")

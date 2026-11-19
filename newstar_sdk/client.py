@@ -331,6 +331,63 @@ class NewStarClient:
         self._current_planet_id = None
         return self
 
+    def set_session_cookie(
+        self,
+        cookie: str,
+        *,
+        name: str = "2Moons",
+        domain: Optional[str] = None,
+    ) -> "NewStarClient":
+        """Import a PHP session cookie captured from a logged-in browser.
+
+        New-Star stores one session row per account (``PRIMARY KEY (userID)``)
+        and rewrites it on every request, so a second :meth:`login` replaces
+        the session the browser is using.  Importing the browser's cookie is
+        the way to run the browser and a script against the same session.
+
+        ``cookie`` accepts a bare value, ``2Moons=value`` or a whole
+        ``Cookie: 2Moons=value; ...`` header line.  The cookie is bound to the
+        host of :attr:`base_url` unless ``domain`` is given.
+        """
+
+        text = (cookie or "").strip()
+        if text.lower().startswith("cookie:"):
+            text = text[len("cookie:") :].strip()
+        if not text:
+            raise ConfigurationError("empty session cookie")
+
+        pairs = [item.strip() for item in text.split(";") if item.strip()]
+        cookie_name = name
+        cookie_value = ""
+        for pair in pairs:
+            key, sep, value = pair.partition("=")
+            if sep and key.strip() == name:
+                cookie_name, cookie_value = name, value.strip()
+                break
+        else:
+            key, sep, value = pairs[0].partition("=")
+            bare_key = key.strip().replace("-", "").replace("_", "")
+            if sep and bare_key.isalnum() and not value.strip().startswith("="):
+                cookie_name, cookie_value = key.strip(), value.strip()
+            else:
+                cookie_name, cookie_value = name, pairs[0]
+
+        if not cookie_value:
+            raise ConfigurationError("session cookie value is empty")
+
+        host = domain or urlparse(self.base_url).hostname
+        self._session.cookies.set_cookie(
+            create_cookie(
+                name=cookie_name,
+                value=cookie_value,
+                domain=host,
+                path="/",
+                secure=self.base_url.startswith("https://"),
+            )
+        )
+        self._logged_in = False
+        return self
+
     def login(self, force: bool = False) -> "NewStarClient":
         """Log in and keep the PHP session cookie for subsequent requests."""
 

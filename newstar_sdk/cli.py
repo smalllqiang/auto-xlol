@@ -95,6 +95,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.getenv("NEWSTAR_SESSION_FILE"),
         help="JSON cookie file used by save-session/load-session",
     )
+    parser.add_argument(
+        "--relogin",
+        action="store_true",
+        help=(
+            "replace an invalid --session-file with a fresh login; a new login "
+            "replaces the account's only session (the browser gets logged out)"
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="machine readable JSON output")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="increase log level")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -317,6 +325,7 @@ def _make_client(args: argparse.Namespace) -> NewStarClient:
             "missing --base-url (or NEWSTAR_BASE_URL), e.g. https://ol.lstyxl.com/"
         )
     password = args.password
+    shared_session = bool(args.session_file) and Path(args.session_file).exists()
     client = NewStarClient(
         args.base_url,
         args.username,
@@ -325,10 +334,19 @@ def _make_client(args: argparse.Namespace) -> NewStarClient:
         timeout=args.timeout,
         verify_ssl=args.verify_ssl,
         request_interval=args.request_interval,
+        # A shared session belongs to the browser too: re-creating it would log
+        # the browser out, so only an explicit --relogin may do that.
+        auto_relogin=not shared_session,
     )
-    if args.session_file and Path(args.session_file).exists():
+    if shared_session:
         if client.load_session(args.session_file):
             return client
+        if not getattr(args, "relogin", False):
+            raise SystemExit(
+                f"session file {args.session_file} is no longer valid; log in "
+                "again from the browser and re-import it, or pass --relogin "
+                "(a new login replaces the browser session)"
+            )
 
     if not client.username:
         raise SystemExit(

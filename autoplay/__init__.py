@@ -7,6 +7,8 @@ strategy here is opinionated and expected to change often.
 
 from __future__ import annotations
 
+from .agent import AgentConfig, AgentCycleResult, Decision, run_agent_cycle
+from .brief import build_brief, collect_brief, render_brief
 from .daily import DailyBonusOutcome, run_daily_bonus
 from .directive import (
     DEFAULT_PATH as DEFAULT_DIRECTIVE_PATH,
@@ -30,16 +32,30 @@ from .expedition import (
 )
 from .expedition_cycle import ExpeditionCycleResult, run_expedition_cycle
 from .expedition_executor import ExpeditionDispatchResult, dispatch_expedition
+from .llm import (
+    ChatReply,
+    FakeProvider,
+    OpenAICompatibleProvider,
+    Provider,
+    ProviderError,
+    provider_from_env,
+)
 from .phases import PHASES, Phase, detect_phase
 from .planner import Action, Plan, build_plan, compute_plan, expand_requirement_actions
+from .runner import RunReport, Step, parse_steps, run_steps
 from .ship_build import ShipBuildResult, build_recommended_ships
 from .threat import EspionageEvent, ThreatAssessment, assess_threat
 from .threat_executor import RecallResult, recall_candidates, recall_fleets
+from .tools import ToolRegistry, ToolResult, ToolSpec
 
 __all__ = [
     "Action",
+    "AgentConfig",
+    "AgentCycleResult",
+    "ChatReply",
     "DEFAULT_DIRECTIVE_PATH",
     "DailyBonusOutcome",
+    "Decision",
     "Directive",
     "DirectiveError",
     "EspionageEvent",
@@ -48,24 +64,40 @@ __all__ = [
     "ExpeditionDispatchResult",
     "ExpeditionGroup",
     "ExpeditionReport",
+    "FakeProvider",
+    "OpenAICompatibleProvider",
     "PHASES",
     "Phase",
     "Plan",
+    "Provider",
+    "ProviderError",
     "RecallResult",
+    "RunReport",
     "ShipBuildResult",
     "ShipRecommendation",
+    "Step",
     "ThreatAssessment",
+    "ToolRegistry",
+    "ToolResult",
+    "ToolSpec",
     "assess_threat",
+    "build_brief",
     "build_expedition_report",
-    "build_recommended_ships",
     "build_plan",
+    "build_recommended_ships",
+    "collect_brief",
     "compute_expedition_report",
     "compute_plan",
     "default_directive",
     "detect_phase",
     "dispatch_expedition",
+    "parse_steps",
+    "provider_from_env",
+    "render_brief",
+    "run_agent_cycle",
     "run_daily_bonus",
     "run_expedition_cycle",
+    "run_steps",
     "equivalent_cost",
     "execute_plan",
     "expand_requirement_actions",

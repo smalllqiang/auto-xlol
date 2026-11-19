@@ -6,8 +6,9 @@
 ## 项目是什么
 
 New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写操作的客户端，
-`autoplay` 是确定性策略层（阶段识别、规划、执行）。当前目标是让一个账号持续发展，
-所有策略都是代码，AI 不参与运行时决策。
+`autoplay` 是策略层（阶段识别、规划、执行）。当前目标是让一个账号持续发展。有两条
+路径：确定性的 planner/executor（默认），以及 AI 规划层——模型只做规划，事实与执行
+在代码侧，合法性由游戏裁决（ADR-030 / ADR-031）。
 
 运行实例是魔改服「战争宇宙：猛犸」（New-Star 2.8.1，自定义主题），与上游模板有差异。
 
@@ -23,6 +24,8 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 
 代码入口：`newstar_sdk/client.py`（HTTP + 高层动作）、`newstar_sdk/parsers.py`
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/directive.py`（策略目标来源）、`autoplay/executor.py`（执行）、
+`autoplay/brief.py`（事实 → 决策简报）、`autoplay/tools.py`（动词工具）、`autoplay/runner.py`（按前提执行计划）、
+`autoplay/agent.py`（模型决策循环）、`autoplay/prompt.py`（提示词语料）、`autoplay/llm.py`（Provider）、
 `autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、
 `autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
 
@@ -57,6 +60,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/session.py import '2Moons=...'    # 浏览器+脚本共用会话（详见已知坑）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
+.venv/bin/python scripts/agent.py --no-verify-ssl         # AI 规划一轮（默认 dry-run，--execute 才写）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
 
@@ -83,10 +87,15 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
    `client.py` 只做请求 + 编排 + 结果验证，不写选择器细节。
 4. **写操作必须验证**：以页面证据判断成功（队列出现目标项或等级变化），
    不能把 HTTP 200 当成功；失败抛 `ActionRejected`，不要静默。
-5. **执行默认 dry-run**：`execute_plan` 只有显式 `dry_run=False` + allow-list 才动手；
-   一次一个动作；队列忙就跳过对应类型；被拒不要自动重试；预检查拒绝
-   （`ActionRejected.before_post`）可让本轮换下一条候选。探险发送同样默认预览，
-   真实发送需 `--execute` + 舰船 allow-list。保留 `state/STOP` 急停。
+5. **执行默认 dry-run**：两条路径。
+   - 确定性路径：`execute_plan` 只有显式 `dry_run=False` + allow-list 才动手；
+     一次一个动作；队列忙就跳过对应类型；被拒不要自动重试；预检查拒绝
+     （`ActionRejected.before_post`）可让本轮换下一条候选。探险发送同样默认预览，
+     真实发送需 `--execute` + 舰船 allow-list。这是兼容保留，迁移任务见 roadmap P4-1。
+   - AI 路径：`autoplay/agent.py` 不设 allow-list、不做本地预检（`precheck=False`），
+     写工具在模型回合里只登记，由 `autoplay/runner.py` 统一执行，合法性由游戏裁决；
+     `scripts/agent.py` 默认 dry-run，`--execute` 才写入。
+   - 两条路径都必须保留 `state/STOP` 急停，并把结果写 journal。
 6. **单写者**：同一账号不要并发写。SDK 只保证单实例内串行；守护进程必须单进程。
 7. **改代码同步文档**：新增能力更新 `docs/usage.md`；改变取舍更新 `docs/decisions.md`；
    推进任务更新 `docs/roadmap.md`。文档只描述当前状态，历史交给 git。

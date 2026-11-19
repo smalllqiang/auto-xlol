@@ -15,6 +15,7 @@
 | --- | --- | --- |
 | 客户端 | `newstar_sdk/` | HTTP 会话、页面解析、数据模型、异常、`newstar` 命令行。稳定契约，不写策略。 |
 | 策略层 | `autoplay/` | 阶段识别、经济估算、依赖展开 + ROI 排序、执行编排、探险/造船/签到。可以频繁改。 |
+| AI 规划层 | `autoplay/brief.py`、`tools.py`、`runner.py`、`agent.py` | 事实 → 简报 → 模型规划 → 按前提执行；模型不碰算术、不直接写、合法性由游戏裁决。 |
 | 入口 | `scripts/` | 面向人的命令：计划、执行、常驻循环、探险、采集、看板。 |
 | 本地状态 | `state/` | 快照、事件、日志、心跳与急停开关；不入库。 |
 
@@ -22,6 +23,8 @@
 
 - 只读规划：识别当前阶段，展开阶段目标的依赖链，按回本时间排序产出建筑
 - 单步执行：默认 dry-run；需 `--execute` + allow-list；队列感知、单步预算、结果验证
+- AI 规划（可选）：简报喂模型，模型输出带前提的类型化步骤，runner 逐条执行；写工具不做
+  本地预检，合法性由游戏裁决（ADR-030 / ADR-031）
 - 常驻循环：单实例锁、指数退避、`state/STOP` 急停、日志/快照轮转、告警暂停
 - 探险：只读航道报告、建船建议、单队预览/发送、多航道循环（独立舰船 allow-list）
 - 每日签到：先读概览导航判断可领取，冷却期不消耗当天机会
@@ -55,7 +58,11 @@ source .venv/bin/activate
 .venv/bin/python scripts/run_forever.py --no-verify-ssl \
     --execute --allow 自律工厂
 
-# 4. 看板只读展示 state/，不连游戏
+# 4. AI 规划一轮（可选；先配置 NEWSTAR_AGENT_BASE_URL / NEWSTAR_AGENT_MODEL）
+.venv/bin/python scripts/agent.py --no-verify-ssl            # 预览，不写游戏
+.venv/bin/python scripts/agent.py --no-verify-ssl --execute  # 真实执行
+
+# 5. 看板只读展示 state/，不连游戏
 .venv/bin/python scripts/tui.py
 ```
 
@@ -253,6 +260,12 @@ autoplay/         # 策略层（易变）
   ship_build.py   # 推荐舰船建造（默认 dry-run）
   expedition_cycle.py  # 有上限的多航道发送循环
   executor.py     # 队列感知 + 安全闸
+  brief.py        # 事实 → 决策简报（AI 路径的输入）
+  tools.py        # 动词工具（建造/研究/造船/发船…）
+  runner.py       # 按 when/until 执行类型化步骤
+  agent.py        # 模型决策循环（失败回退 planner）
+  prompt.py       # 提示词语料
+  llm.py          # Provider 协议 + OpenAI 兼容实现
 newstar_sdk/      # 客户端组件（稳定契约）
   client.py       # HTTP 会话 + 高层操作
   parsers.py      # 页面解析（纯函数）

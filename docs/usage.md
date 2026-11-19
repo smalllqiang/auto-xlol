@@ -714,6 +714,9 @@ save_directive("state/directive.json", d)       # 原子写入，可直接编辑
 
 ## 13. 执行器与安全闸
 
+> 本节描述**确定性路径**。AI 路径（`autoplay/agent.py` + `runner.py`）不设 allow-list
+> 与本地预检，见第 23 节；两条路径都保留 `state/STOP` 和页面证据。
+
 `autoplay.execute_plan()` 把计划落成**最多一个**动作，默认只做 dry run：
 
 ```python
@@ -1218,3 +1221,62 @@ client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionReje
   「把合金冶炼厂 100% 降到 90%（约补 11,800/h）」并写 `kind=balance`；恢复发电站后
   净产回到 +392,000。
 - 预估补偿（11,800）与实测（12,000）差在页面取整，只用于排序，不作为精确值。
+
+## 23. AI 规划层（brief / tools / runner / agent）
+
+2026-11-19 起新增的一条路径：**模型只做规划**，代码提供事实与执行，合法性完全由游戏
+裁决（ADR-030 / ADR-031）。默认 dry-run，不设 allow-list；`state/STOP` 仍然有效。
+
+```
+页面 → SDK 解析 → brief（事实 + 派生量 + delta）
+              → 模型（plan/observe/messages + 写工具）
+              → steps[]（类型化，带 when/until）
+     → runner（逐条执行，前提不成立即停）
+     → tools（13 个动词） → 游戏裁决
+     → journal（kind=agent：brief / decision / report / usage）
+```
+
+| 模块 | 作用 |
+| --- | --- |
+| `autoplay/brief.py` | 快照 + 计划 → 决策简报（纯函数）。派生量、爆仓标记、队列 ETA、相对上次的 delta、读不到的页面 |
+| `autoplay/tools.py` | 动词工具注册表：`upgrade_building` / `upgrade_building_to` / `research` / `research_to` / `build_ships` / `send_fleet` / `recall_fleet` / `set_production_ratios` / `claim_daily_bonus` / `cancel_queue` / `destroy_building` + 读工具；结果区分 `requested` / `actual` |
+| `autoplay/runner.py` | 顺序执行 steps：`when` 前置检查、`until` 事后检查、写后刷新事实、遇阻即停并交还控制权 |
+| `autoplay/agent.py` | 决策循环：读工具直接执行，写工具先登记，`submit_plan` 或纯 JSON 都可作为计划；模型失败回退确定性规划器 |
+| `autoplay/prompt.py` | 提示词语料：角色、边界、工具速查、doctrine 原则、directive 目标 |
+| `autoplay/llm.py` | Provider 协议 + OpenAI 兼容实现 + `FakeProvider` |
+
+配置模型（环境变量或同名 CLI 参数）：
+
+```bash
+export NEWSTAR_AGENT_BASE_URL=https://api.example.com/v1
+export NEWSTAR_AGENT_MODEL=your-model
+export NEWSTAR_AGENT_API_KEY=...
+
+.venv/bin/python scripts/agent.py --no-verify-ssl --json       # 预览
+.venv/bin/python scripts/agent.py --no-verify-ssl --execute    # 真实执行
+```
+
+CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
+`--agent-temperature`；另有 `--max-rounds` / `--max-steps` / `--max-chars`。
+
+计划格式：
+
+```json
+{"goal": "...", "reason": "...",
+ "steps": [{"tool": "upgrade_building", "args": {"element": 14},
+            "when": {"kind": "queue_empty", "queue": "building"},
+            "until": {"kind": "level_at_least", "element": 14, "level": 1},
+            "why": "..."}]}
+```
+
+条件类型：`always` / `queue_empty` / `level_at_least` / `resources_at_least` / `phase`。
+
+几个必须知道的语义：
+
+- **写工具在模型回合里只登记，不执行**。模型调用 `upgrade_building` 得到的是
+  `status=staged`，本轮规划结束后 runner 才按顺序执行。这样模型不会误以为已经生效。
+- **`precheck=False`**：写操作不再做本地资源/前置预检，交给游戏拒绝；工具把拒绝翻译成
+  `code` / `retryable` / `requested` / `actual`。
+- **部分成功是正常结果**：多级建造、造船都可能只入队一部分，`ok=false` 不等于没发生。
+- **模型不可用**（超时、非法 JSON、没有步骤）→ 回退确定性规划器首条候选，cycle 标
+  `degraded`，daemon 不受影响。

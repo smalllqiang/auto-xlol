@@ -128,14 +128,16 @@ P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标�
 
 ## P3 AI 战略层（仅 AI-0 / AI-1 已立项）
 
-目标是把“大方向策略”从代码里的固定阶段目标和 2023 攻略中解耦出来：AI 只决定目标、
-约束和风险姿态，具体依赖展开、经济计算、单步执行和安全验证仍由确定性代码完成。
-**本期只做知识外置和 directive 抽象，不接模型。**
+目标是把“大方向策略”从代码里的固定阶段目标和 2023 攻略中解耦出来。分两步走：
+AI-0/1 只外置知识与目标；AI-2/3 让模型做规划，但事实、执行与合法性判定仍在代码侧
+（ADR-030 / ADR-031）。
 
 | # | 任务 | 状态 | 交付物 | 验收 |
 | --- | --- | --- | --- | --- |
 | AI-0 | 知识外置：doctrine + playbooks + 默认策略 | ✅ | `docs/doctrine.md`、`docs/playbooks.md`、默认 directive（doctrine 里 v1 草案） | doctrine 覆盖现有 3 个阶段、2 条核心机制事实和 8 条原则；playbooks 覆盖 9 个危机场景；默认策略由 `tests/test_planner_golden.py` 逐字段冻结 |
 | AI-1 | Directive 抽象：planner 接受可注入目标 | ✅ | `autoplay/directive.py`（`Directive` + 校验 + 原子落盘）、`state/directive.json`、journal/TUI `directive` 字段 | 默认 directive 由 golden 测试证明逐字段一致；原子写入（temp + fsync + rename）；旧 journal 缺字段时看板退回原布局；executor 零改动 |
+| AI-2 | 事实 → 简报、动词工具、按前提执行 | ✅ | `autoplay/brief.py`、`autoplay/tools.py`、`autoplay/runner.py`；`tests/test_brief.py` / `test_tools.py` / `test_runner.py` | 简报只含代码算好的数；工具按动词划分（不按元素爆炸）；写工具 `precheck=False`；结果区分 `requested`/`actual`；runner 遇阻即停 |
+| AI-3 | 决策循环与模型接入 | ✅ | `autoplay/agent.py`、`autoplay/prompt.py`、`autoplay/llm.py`、`scripts/agent.py`；`tests/test_agent.py` | 写工具只登记、由 runner 统一执行；模型失败回退确定性规划器；`state/STOP` 优先；默认 dry-run；journal `kind=agent` |
 
 **AI-0 知识外置（不接模型）**
 
@@ -178,14 +180,16 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 `tests/test_directive.py`（24 个用例，含注入后 planner 换目标、坏文件回退、原子写）；
 `executor` 未改动。
 
-**边界（本期不做的部分）**
+**边界与后续（P4）**
 
-- 不接模型、不做 brief/prompt、不做 shadow/审批/自动 directive；这些属于 AI-2
-  及以后，等 AI-0/1 落地后再单独讨论。
-- P2-4 / P2-5 暂不改状态，等 AI-2+ 立项时再合并或重写。
-- 执行层安全闸（dry-run、allow-list、一次一步、页面证据、`state/STOP`）保持不变。
-- AI-0/1 不引入运行时 AI，仍符合 ADR-006；等 AI-2+ 再接模型时新增 ADR，明确
-  战略层边界。
+- AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、由游戏裁决，见
+  ADR-030。执行层仍保留 dry-run 默认、页面证据与 `state/STOP`。
+- P4-1：旧确定性脚本（`run_forever --execute --allow`、探险、生产、召回）仍带
+  allow-list；迁移到无闸门路径前列为兼容保留。
+- P4-2：journal 记录提示词/工具版本哈希，支持按版本回放同一份 brief。
+- P4-3：工具参数枚举按当前页面动态生成，减少模型报出不存在的元素。
+- P4-4：`scripts/eval_agent.py` 离线场景回放与一致率统计（决策 vs planner）。
+- P4-5：`run_forever` 的模型路由——常规轮次走 planner，告警/阶段切换才叫模型。
 
 ## 核实与技术债
 

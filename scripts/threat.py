@@ -22,11 +22,10 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from local_config import load_config
+from local_config import add_session_args, load_config, make_client
 
 from autoplay.threat import assess_threat
 from autoplay.threat_executor import recall_candidates, recall_fleets
-from newstar_sdk import NewStarClient
 from newstar_sdk.exceptions import NewStarError
 
 
@@ -54,6 +53,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=[],
         help="fleet id that may be recalled (repeatable)",
     )
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -100,15 +100,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    with NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=0.4,
-    ) as client:
+    with make_client(config, interval=0.4) as client:
         try:
             messages = []
             for category in (0, 3):

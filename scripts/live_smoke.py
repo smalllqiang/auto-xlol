@@ -4,6 +4,10 @@
 Read-only by default.  Use ``--mutate`` to test a safe action cycle
 (queue one building level and cancel it again, then queue/cancel research).
 
+This script always logs in with the account password.  An account has exactly
+one session slot, so that login replaces the browser's session; use
+``scripts/session.py`` when the browser must stay logged in.
+
 Environment variables:
     NEWSTAR_BASE_URL, NEWSTAR_USERNAME, NEWSTAR_PASSWORD, NEWSTAR_UNIVERSE,
     NEWSTAR_VERIFY_SSL

@@ -18,9 +18,8 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from local_config import load_config
+from local_config import add_session_args, load_config, make_client
 
-from newstar_sdk import NewStarClient
 from newstar_sdk.exceptions import NewStarError
 from newstar_sdk.models import Coordinates
 
@@ -40,6 +39,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--interval", type=float, default=0.4, help="seconds between requests")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     parser.add_argument("--planet", help="only show this planet, e.g. 1:1:8")
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -76,15 +76,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    with NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=config.interval,
-    ) as client:
+    with make_client(config) as client:
         try:
             report = client.get_control()
         except NewStarError as exc:

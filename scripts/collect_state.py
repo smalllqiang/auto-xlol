@@ -21,9 +21,8 @@ import warnings
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from local_config import load_config
+from local_config import add_session_args, load_config, make_client
 
-from newstar_sdk import NewStarClient
 from newstar_sdk.events import diff_snapshots
 from newstar_sdk.snapshot import build_snapshot
 
@@ -65,6 +64,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=None,
         help="events JSONL file (default: events.jsonl next to --out)",
     )
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -127,17 +127,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    client = NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=config.interval,
-    )
+    client = make_client(config)
     try:
-        client.login()
         snapshot = build_snapshot(
             client,
             include_research=not args.no_research,

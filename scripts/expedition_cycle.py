@@ -15,10 +15,9 @@ import warnings
 from pathlib import Path
 from typing import Optional, Sequence
 
-from local_config import load_config
+from local_config import add_session_args, load_config, make_client
 
 from autoplay import build_expedition_report, run_expedition_cycle
-from newstar_sdk import NewStarClient
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -51,6 +50,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--allow", action="append", default=[], metavar="ID", help="repeatable ship id allow-list"
     )
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -101,17 +101,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    client = NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=config.interval,
-    )
+    client = make_client(config)
     try:
-        client.login()
         result = run_expedition_cycle(
             client,
             dry_run=not args.execute,

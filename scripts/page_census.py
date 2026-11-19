@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from local_config import Config, load_config
+from local_config import Config, add_session_args, load_config, make_client
 
 from newstar_sdk import NewStarClient
 from newstar_sdk import __version__ as sdk_version
@@ -391,6 +391,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--all", action="store_true", help="capture every known read-only page")
     parser.add_argument("--discover", action="store_true", help="also follow nav links found on the overview page")
     parser.add_argument("--save-session", metavar="PATH", help="persist the session cookie to PATH")
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -406,17 +407,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    client = NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=config.interval,
-    )
+    client = make_client(config)
     try:
-        client.login()
         overview = client.get_overview()
         print(
             f"logged in as {overview.username} @ {overview.universe} "

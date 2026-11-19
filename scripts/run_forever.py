@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from local_config import load_config
+from local_config import add_session_args, load_config, make_client
 
 from autoplay.battles import collect_battles, write_battles
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
@@ -42,7 +42,6 @@ from autoplay.power import apply_ratio_plan, plan_power_response
 from autoplay.records import collect_records, write_records
 from autoplay.statistics import collect_statistics, write_statistics
 from autoplay.threat import assess_client
-from newstar_sdk import NewStarClient
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
 from newstar_sdk.exceptions import ActionRejected, NewStarError
@@ -270,6 +269,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--expedition-target", help="override expedition target coordinates")
     parser.add_argument("--expedition-speed", type=int, default=10)
     parser.add_argument("--expedition-stay-time", type=int, default=1)
+    add_session_args(parser)
     return parser.parse_args(argv)
 
 
@@ -424,15 +424,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    client = NewStarClient(
-        config.base_url,
-        config.username,
-        config.password,
-        universe=config.universe,
-        verify_ssl=config.verify_ssl,
-        timeout=config.timeout,
-        request_interval=0.4,
-    )
+    client = None
     journal_path = Path(args.journal)
     snapshots_path = Path(args.snapshots)
     events_path = Path(args.events)
@@ -452,6 +444,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     max_cycles = 1 if args.once else args.max_cycles
 
     try:
+        client = make_client(config, interval=0.4)
         while not stop["requested"]:
             if stop_file.exists():
                 print(f"stop file present ({stop_file}); exiting", file=sys.stderr)
@@ -907,7 +900,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             stopped_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             next_cycle_at=None,
         )
-        client.close()
+        if client is not None:
+            client.close()
         try:
             os.close(lock_fd)
         finally:

@@ -844,11 +844,19 @@ class NewStarClient:
         *,
         target_level: Optional[int] = None,
         verify: bool = True,
+        precheck: bool = True,
     ) -> List[QueueEntry]:
         """Queue one or more levels of a building.
 
         ``levels`` is added to the currently queued level (not necessarily the
         finished level).  ``target_level`` overrides that calculation.
+        ``levels`` above 1 is submitted as one request; the game expands it into
+        one queue entry per level.
+
+        ``precheck`` raises before the POST when the page says resources or
+        requirements are missing.  Pass ``False`` to let the game itself judge:
+        the strategy layer does, because a local approximation has been wrong
+        before (ADR-030).
         """
 
         element_id = resolve_element(building, CATEGORY_BUILDING)
@@ -856,20 +864,21 @@ class NewStarClient:
         item = items.get(element_id)
         if item is None:
             raise GameError(f"building {element_id} is not available on this planet")
-        if not item.requirements_met:
-            raise ActionRejected(
-                f"{item.name} requirements are not met: {', '.join(item.requirements)}",
-                before_post=True,
-            )
-        if item.missing_resources:
-            raise ActionRejected(
-                f"not enough resources for {item.name}: "
-                + ", ".join(
-                    f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
-                    for rid, amount in sorted(item.missing_resources.items())
-                ),
-                before_post=True,
-            )
+        if precheck:
+            if not item.requirements_met:
+                raise ActionRejected(
+                    f"{item.name} requirements are not met: {', '.join(item.requirements)}",
+                    before_post=True,
+                )
+            if item.missing_resources:
+                raise ActionRejected(
+                    f"not enough resources for {item.name}: "
+                    + ", ".join(
+                        f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
+                        for rid, amount in sorted(item.missing_resources.items())
+                    ),
+                    before_post=True,
+                )
 
         if target_level is None and int(levels) < 1:
             raise ValueError("levels must be at least 1")
@@ -994,28 +1003,33 @@ class NewStarClient:
         *,
         target_level: Optional[int] = None,
         verify: bool = True,
+        precheck: bool = True,
     ) -> List[QueueEntry]:
-        """Queue one or more levels of a technology."""
+        """Queue one or more levels of a technology.
+
+        ``precheck=False`` skips the local resources/requirements test and lets
+        the game decide (see :meth:`upgrade_building`)."""
 
         element_id = resolve_element(technology, CATEGORY_TECHNOLOGY)
         items = {item.id: item for item in self.get_research()}
         item = items.get(element_id)
         if item is None:
             raise GameError(f"technology {element_id} is not available")
-        if not item.requirements_met:
-            raise ActionRejected(
-                f"{item.name} requirements are not met: {', '.join(item.requirements)}",
-                before_post=True,
-            )
-        if item.missing_resources:
-            raise ActionRejected(
-                f"not enough resources for {item.name}: "
-                + ", ".join(
-                    f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
-                    for rid, amount in sorted(item.missing_resources.items())
-                ),
-                before_post=True,
-            )
+        if precheck:
+            if not item.requirements_met:
+                raise ActionRejected(
+                    f"{item.name} requirements are not met: {', '.join(item.requirements)}",
+                    before_post=True,
+                )
+            if item.missing_resources:
+                raise ActionRejected(
+                    f"not enough resources for {item.name}: "
+                    + ", ".join(
+                        f"{RESOURCE_NAMES_ZH.get(rid, rid)} {amount:g}"
+                        for rid, amount in sorted(item.missing_resources.items())
+                    ),
+                    before_post=True,
+                )
 
         if target_level is None and int(levels) < 1:
             raise ValueError("levels must be at least 1")
@@ -1112,10 +1126,14 @@ class NewStarClient:
         *,
         mode: str = "fleet",
         verify: bool = True,
+        precheck: bool = True,
     ) -> List[QueueEntry]:
         """Build ships or defences.
 
         ``ships`` maps element ids/names to amounts, e.g. ``{202: 10}``.
+        ``precheck=False`` skips the local ``max_buildable`` clamp and lets the
+        game cap or reject the order (see :meth:`upgrade_building`); the caller
+        must then compare the returned queue with what it asked for.
         """
 
         mode = self._normalise_shipyard_mode(mode)
@@ -1135,6 +1153,8 @@ class NewStarClient:
             item = items.get(element_id)
             if item is None:
                 raise GameError(f"element {element_id} is not available in this shipyard")
+            if not precheck:
+                continue
             if not item.requirements_met:
                 raise ActionRejected(
                     f"{item.name} requirements are not met: {', '.join(item.requirements)}",

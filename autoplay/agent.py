@@ -387,7 +387,9 @@ def run_agent_cycle(
             max_rounds=cfg.max_rounds,
             max_chars=cfg.max_chars,
         )
-        if not decision.steps:
+        # ``submitted`` with zero steps is a deliberate "wait this round"; only a
+        # reply with no plan at all falls back to the planner.
+        if not decision.submitted:
             decision = fallback_decision(brief, "模型没有给出可执行步骤")
     except ProviderError as exc:
         error = str(exc)

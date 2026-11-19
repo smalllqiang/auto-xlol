@@ -168,6 +168,63 @@ def test_stop_file_short_circuits_everything():
     assert provider.calls == []
 
 
+def test_explicit_empty_plan_means_wait_not_fallback():
+    provider = FakeProvider(
+        [
+            _reply(
+                [
+                    ToolCall(
+                        id="1",
+                        name="submit_plan",
+                        arguments=json.dumps({"goal": "等队列", "steps": []}),
+                    )
+                ]
+            )
+        ]
+    )
+
+    result = run_agent_cycle(
+        FakeClient(),
+        provider,
+        config=AgentConfig(dry_run=True, stop_file="state/does-not-exist-STOP"),
+    )
+
+    assert result.status == "ok"
+    assert result.decision["fallback"] is False
+    assert result.decision["steps"] == []
+    assert result.report["status"] == "empty"
+
+
+def test_execute_cycle_writes_through_the_runner_only():
+    provider = FakeProvider(
+        [
+            _reply(
+                [
+                    ToolCall(
+                        id="1",
+                        name="submit_plan",
+                        arguments=json.dumps(
+                            {"steps": [{"tool": "upgrade_building", "args": {"element": 14}}]}
+                        ),
+                    )
+                ]
+            )
+        ]
+    )
+    client = FakeClient()
+
+    result = run_agent_cycle(
+        client,
+        provider,
+        config=AgentConfig(dry_run=False, stop_file="state/does-not-exist-STOP"),
+    )
+
+    # The write happened once, and only after the model finished planning.
+    assert client.writes == [("upgrade_building", 14, 1)]
+    assert result.report["status"] == "completed"
+    assert result.report["steps"][0]["status"] == "ok"
+
+
 def test_dry_run_cycle_runs_the_runner_without_writing():
     provider = FakeProvider(
         [

@@ -1313,3 +1313,36 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
   `history` 与 `delta`；进程本身无状态。
 - **模型不可用**（超时、非法 JSON、没有步骤）→ 回退确定性规划器首条候选，cycle 标
   `degraded`，daemon 不受影响。
+
+### 持久运行（agent 循环）
+
+`--every > 0` 才进入循环；`--interval` 是**游戏请求间隔**，两者不是一回事。
+
+```bash
+# 1. 先验证配置，不连游戏
+.venv/bin/python scripts/config.py --validate
+
+# 2. 单轮 dry-run，确认模型与简报都正常
+.venv/bin/python scripts/agent.py --no-verify-ssl --json
+
+# 3. 小范围真实执行（1 小时，每小时 6 轮）
+.venv/bin/python scripts/agent.py --no-verify-ssl --execute \
+    --every 600 --max-steps 1 --max-cycles 6 --json
+
+# 4. 常驻（5 分钟一轮，单步）
+nohup .venv/bin/python -u scripts/agent.py --no-verify-ssl --execute \
+    --every 300 --max-steps 1 --journal-max-bytes 20000000 \
+    >> state/agent.out 2>&1 &
+```
+
+循环行为：
+
+- 每轮重新读 `state/directive.json` 与 journal 记忆，进程本身无状态；
+- 写 `state/agent.json` 心跳（`pid` / `updated_at` / `cycles` / `status` / `next_at`）；
+- `--execute` 时持有 `state/agent.lock`，与 `run_forever.py` 的 `state/daemon.lock`
+  互斥（对方在跑就拒绝启动，退出码 3）；
+- 连续异常按 `--backoff-base` / `--backoff-max` 指数退避，达到 `--max-failures` 退出；
+- `state/STOP` 或 SIGTERM 在下一拍退出，并释放锁。
+
+停止：`touch state/STOP`（优雅），或 `kill <pid>`。不要 `kill -9`，否则
+`state/agent.lock` 变成陈旧锁——下次启动会自动接管，但正在进行的写操作会中断。

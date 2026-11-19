@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -49,6 +50,12 @@ def _clean_env(monkeypatch, tmp_path):
         "NEWSTAR_UNIVERSE",
         "NEWSTAR_VERIFY_SSL",
         "NEWSTAR_SESSION_FILE",
+        "NEWSTAR_TIMEOUT",
+        "NEWSTAR_AGENT_BASE_URL",
+        "NEWSTAR_AGENT_MODEL",
+        "NEWSTAR_AGENT_API_KEY",
+        "NEWSTAR_AGENT_TEMPERATURE",
+        "NEWSTAR_AGENT_TIMEOUT",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.chdir(tmp_path)
@@ -191,3 +198,123 @@ def test_make_client_relogins_when_explicitly_allowed(monkeypatch):
     client.close()
 
     assert calls["login"] == 1
+
+
+def _env_file(tmp_path, body: str) -> str:
+    path = tmp_path / ".env"
+    path.write_text(body, encoding="utf-8")
+    return str(path)
+
+
+def test_agent_settings_are_loaded_from_the_same_file(tmp_path):
+    module = _module()
+    path = _env_file(
+        tmp_path,
+        "NEWSTAR_BASE_URL=https://game.test/\n"
+        "NEWSTAR_AGENT_BASE_URL=https://model.test/v1\n"
+        "NEWSTAR_AGENT_MODEL=model-a\n"
+        "NEWSTAR_AGENT_API_KEY=sk-1\n",
+    )
+
+    config = module.load_config(
+        _args(config=path, base_url=None, username=None, password=None, universe=None)
+    )
+
+    assert config.agent.configured is True
+    assert config.agent.base_url == "https://model.test/v1"
+    assert config.agent.model == "model-a"
+    assert config.agent.api_key == "sk-1"
+
+
+def test_agent_settings_follow_precedence(tmp_path, monkeypatch):
+    module = _module()
+    path = _env_file(tmp_path, "NEWSTAR_BASE_URL=https://game.test/\nNEWSTAR_AGENT_MODEL=file-model\n")
+
+    monkeypatch.setenv("NEWSTAR_AGENT_MODEL", "env-model")
+    config = module.load_config(_args(config=path, base_url=None, username=None, password=None))
+    assert config.agent.model == "env-model"
+
+    config = module.load_config(
+        _args(
+            config=path,
+            base_url=None,
+            username=None,
+            password=None,
+            agent_model="cli-model",
+        )
+    )
+    assert config.agent.model == "cli-model"
+
+
+def test_unconfigured_agent_is_visible(tmp_path):
+    module = _module()
+    path = _env_file(tmp_path, "NEWSTAR_BASE_URL=https://game.test/\n")
+
+    config = module.load_config(_args(config=path, base_url=None, username=None, password=None))
+
+    assert config.agent.configured is False
+    assert config.agent.as_dict()["api_key"] == ""
+
+
+def test_bad_agent_temperature_fails_loudly(tmp_path):
+    module = _module()
+    path = _env_file(
+        tmp_path,
+        "NEWSTAR_BASE_URL=https://game.test/\nNEWSTAR_AGENT_TEMPERATURE=hot\n",
+    )
+
+    with pytest.raises(SystemExit):
+        module.load_config(_args(config=path, base_url=None, username=None, password=None))
+
+
+def test_load_values_does_not_require_a_base_url():
+    module = _module()
+
+    assert module.load_values(argparse.Namespace(config=None)) == {}
+
+
+def _config_script():
+    module = _module()
+    sys.modules["local_config"] = module
+    spec = importlib.util.spec_from_file_location("config_script", SCRIPTS / "config.py")
+    script = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(script)
+    return script
+
+
+def test_config_script_masks_secrets_and_reports_problems(tmp_path, capsys):
+    (tmp_path / ".env").write_text(
+        "NEWSTAR_BASE_URL=https://game.test/\nNEWSTAR_USERNAME=user\nNEWSTAR_PASSWORD=pw\n",
+        encoding="utf-8",
+    )
+    script = _config_script()
+
+    assert script.main(["--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["game"]["password"] == "***"
+    assert payload["errors"] == []
+    assert any("模型" in warning for warning in payload["warnings"])
+    # A missing model is a warning: the other scripts still work.
+    assert script.main(["--validate"]) == 0
+
+
+def test_config_script_validate_fails_on_missing_required(tmp_path, capsys):
+    (tmp_path / ".env").write_text("NEWSTAR_USERNAME=user\nNEWSTAR_PASSWORD=pw\n", encoding="utf-8")
+    script = _config_script()
+
+    assert script.main(["--validate"]) == 1
+    assert "BASE_URL" in capsys.readouterr().out
+
+
+def test_config_script_can_reveal_secrets(tmp_path, capsys):
+    (tmp_path / ".env").write_text(
+        "NEWSTAR_BASE_URL=https://game.test/\nNEWSTAR_USERNAME=user\nNEWSTAR_PASSWORD=pw\n",
+        encoding="utf-8",
+    )
+    script = _config_script()
+
+    script.main(["--json", "--reveal"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["game"]["password"] == "pw"

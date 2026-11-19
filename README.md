@@ -42,6 +42,10 @@ uv venv --python 3.14
 uv pip install -e ".[dev]"
 source .venv/bin/activate
 
+# 0. 一份 .env 放全部配置（游戏凭证 + 模型端点）
+cp .env.example .env
+.venv/bin/python scripts/config.py --validate
+
 # 1. 先看计划，不碰游戏
 .venv/bin/python scripts/plan.py --no-verify-ssl
 .venv/bin/python scripts/run_once.py --no-verify-ssl        # 影子模式

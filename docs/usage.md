@@ -17,6 +17,34 @@
 - `max_retries` / `retry_backoff`：网络错误和 5xx 的重试策略。
 - `auto_relogin`：会话失效时是否用已有账号密码自动重登。
 
+### 本地配置文件（`.env`）
+
+脚本共用一份 `.env`，把游戏凭证和模型端点放在同一个文件里：
+
+```bash
+cp .env.example .env
+# 填 NEWSTAR_BASE_URL / NEWSTAR_USERNAME / NEWSTAR_PASSWORD
+# 以及 NEWSTAR_AGENT_BASE_URL / NEWSTAR_AGENT_MODEL / NEWSTAR_AGENT_API_KEY
+.venv/bin/python scripts/config.py --validate   # 不连游戏，只检查配置
+.venv/bin/python scripts/config.py --reveal     # 需要看明文时
+```
+
+优先级：**命令行 > 环境变量 > `.env` > `passwd.txt`**。`.env` 与 `passwd.txt`
+都在 `.gitignore` 里，不会被提交；但它们是明文，保管责任在使用者。
+
+| 键 | 用途 |
+| --- | --- |
+| `NEWSTAR_BASE_URL` / `_UNIVERSE` / `_USERNAME` / `_PASSWORD` | 游戏实例与凭证 |
+| `NEWSTAR_VERIFY_SSL` | `0` 跳过 TLS 校验（证书过期的私服） |
+| `NEWSTAR_SESSION_FILE` | 共享会话；默认 `state/session.json` |
+| `NEWSTAR_TIMEOUT` | 游戏请求超时（秒） |
+| `NEWSTAR_AGENT_BASE_URL` / `_MODEL` / `_API_KEY` | 模型端点（`scripts/agent.py`） |
+| `NEWSTAR_AGENT_TEMPERATURE` / `_TIMEOUT` | 采样温度、模型超时 |
+
+`scripts/config.py` 默认打码显示密码与 API key，`--reveal` 才显示明文；
+`--validate` 只在**缺少必填项**（实例地址、用户名、密码/会话）或找不到配置文件时返回 1。
+模型没配只算提示：其余脚本照常运行，只有 `scripts/agent.py` 会拒绝启动。
+
 ### 宇宙解析
 
 登录页的宇宙下拉框通常是“值=数字 ID，文本=宇宙名”。SDK 会读取它：

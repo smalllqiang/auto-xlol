@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import warnings
 from datetime import datetime, timezone
@@ -24,7 +23,7 @@ from typing import Optional, Sequence
 
 from local_config import add_session_args, load_config, make_client
 
-from autoplay import AgentConfig, load_directive, provider_from_env, run_agent_cycle
+from autoplay import AgentConfig, load_directive, run_agent_cycle
 from autoplay.journal import append_jsonl
 from autoplay.llm import OpenAICompatibleProvider
 
@@ -53,25 +52,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--agent-model", help="override NEWSTAR_AGENT_MODEL")
     parser.add_argument("--agent-api-key", help="override NEWSTAR_AGENT_API_KEY")
     parser.add_argument("--agent-temperature", type=float, default=None)
+    parser.add_argument("--agent-timeout", type=float, default=None, help="模型请求超时（秒）")
     add_session_args(parser)
     return parser.parse_args(argv)
 
 
-def _provider(args: argparse.Namespace):
-    if args.agent_base_url or args.agent_model:
-        if not (args.agent_base_url and args.agent_model):
-            raise SystemExit("--agent-base-url 与 --agent-model 必须同时提供")
-        return OpenAICompatibleProvider(
-            args.agent_base_url,
-            args.agent_model,
-            api_key=args.agent_api_key or os.getenv("NEWSTAR_AGENT_API_KEY", ""),
-            temperature=(
-                args.agent_temperature
-                if args.agent_temperature is not None
-                else float(os.getenv("NEWSTAR_AGENT_TEMPERATURE", "0.2"))
-            ),
-        )
-    return provider_from_env()
+def _provider(config):
+    """Build the provider from the merged config (file + env + flags)."""
+
+    settings = config.agent
+    if not settings.configured:
+        return None
+    return OpenAICompatibleProvider(
+        settings.base_url,
+        settings.model,
+        api_key=settings.api_key,
+        temperature=settings.temperature,
+        timeout=settings.timeout,
+    )
 
 
 def render(result) -> str:
@@ -115,11 +113,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    provider = _provider(args)
+    provider = _provider(config)
     if provider is None:
         print(
-            "未配置模型：设置 NEWSTAR_AGENT_BASE_URL / NEWSTAR_AGENT_MODEL，"
-            "或传 --agent-base-url/--agent-model",
+            "未配置模型：在 .env 里填 NEWSTAR_AGENT_BASE_URL / NEWSTAR_AGENT_MODEL"
+            "（或传 --agent-base-url/--agent-model），可用 scripts/config.py --validate 检查",
             file=sys.stderr,
         )
         return 2

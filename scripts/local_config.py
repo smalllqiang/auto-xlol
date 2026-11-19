@@ -15,7 +15,7 @@ import argparse
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -35,6 +35,35 @@ SESSION_EXPIRED_HINT = """\
 
 
 @dataclass
+class AgentSettings:
+    """Model endpoint settings, loaded from the same file as the credentials.
+
+    Keeping them here (instead of reading ``os.environ`` directly) means a
+    ``.env`` only has to be filled once: the planning script sees the model,
+    the endpoint and the game credentials through the same loader.
+    """
+
+    base_url: str = ""
+    model: str = ""
+    api_key: str = ""
+    temperature: float = 0.2
+    timeout: float = 60.0
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.base_url and self.model)
+
+    def as_dict(self, *, reveal: bool = False) -> Dict[str, object]:
+        return {
+            "base_url": self.base_url,
+            "model": self.model,
+            "api_key": self.api_key if reveal else ("***" if self.api_key else ""),
+            "temperature": self.temperature,
+            "timeout": self.timeout,
+        }
+
+
+@dataclass
 class Config:
     base_url: str
     username: str
@@ -45,6 +74,41 @@ class Config:
     interval: float = 0.5
     session_file: Optional[str] = None
     relogin: bool = True
+    agent: AgentSettings = field(default_factory=AgentSettings)
+
+
+#: Keys copied from the process environment over the config file.
+ENV_KEYS = (
+    "NEWSTAR_BASE_URL",
+    "NEWSTAR_USERNAME",
+    "NEWSTAR_PASSWORD",
+    "NEWSTAR_UNIVERSE",
+    "NEWSTAR_VERIFY_SSL",
+    "NEWSTAR_TIMEOUT",
+    "NEWSTAR_SESSION_FILE",
+    "NEWSTAR_AGENT_BASE_URL",
+    "NEWSTAR_AGENT_MODEL",
+    "NEWSTAR_AGENT_API_KEY",
+    "NEWSTAR_AGENT_TEMPERATURE",
+    "NEWSTAR_AGENT_TIMEOUT",
+)
+
+#: CLI flag -> config key.  Every destination is read with ``getattr`` so a
+#: script that only declares a subset of these flags still works.
+CLI_KEYS = (
+    ("base_url", "NEWSTAR_BASE_URL"),
+    ("username", "NEWSTAR_USERNAME"),
+    ("password", "NEWSTAR_PASSWORD"),
+    ("universe", "NEWSTAR_UNIVERSE"),
+    ("timeout", "NEWSTAR_TIMEOUT"),
+    ("session_file", "NEWSTAR_SESSION_FILE"),
+    ("agent_base_url", "NEWSTAR_AGENT_BASE_URL"),
+    ("agent_model", "NEWSTAR_AGENT_MODEL"),
+    ("agent_api_key", "NEWSTAR_AGENT_API_KEY"),
+    ("agent_temperature", "NEWSTAR_AGENT_TEMPERATURE"),
+    ("agent_timeout", "NEWSTAR_AGENT_TIMEOUT"),
+)
+
 
 
 # ---------------------------------------------------------------------------
@@ -97,11 +161,22 @@ def _parse_passwd_txt(path: Path) -> Dict[str, str]:
     return values
 
 
-def load_config(args: argparse.Namespace) -> Config:
+def load_values(args: argparse.Namespace) -> Dict[str, str]:
+    """Merge config files, environment and CLI flags into one flat dict.
+
+    Precedence is command line > environment > config file, which is what the
+    scripts advertise.  Split out from :func:`load_config` so a diagnostic
+    command can inspect a half-filled file without tripping the "missing base
+    URL" check.
+    """
+
     values: Dict[str, str] = {}
 
-    explicit = [args.config] if args.config else []
-    if not explicit:
+    explicit = []
+    configured_path = getattr(args, "config", None)
+    if configured_path:
+        explicit = [configured_path]
+    else:
         for candidate in (".env", "passwd.txt"):
             if Path(candidate).exists():
                 explicit.append(candidate)
@@ -115,30 +190,31 @@ def load_config(args: argparse.Namespace) -> Config:
         else:
             values.update(_parse_passwd_txt(path))
 
-    # Environment variables win over the config file.
-    for key in (
-        "NEWSTAR_BASE_URL",
-        "NEWSTAR_USERNAME",
-        "NEWSTAR_PASSWORD",
-        "NEWSTAR_UNIVERSE",
-        "NEWSTAR_VERIFY_SSL",
-        "NEWSTAR_SESSION_FILE",
-    ):
+    for key in ENV_KEYS:
         if key in os.environ and os.environ[key].strip():
             values[key] = os.environ[key].strip()
 
-    if args.base_url:
-        values["NEWSTAR_BASE_URL"] = args.base_url
-    if args.username:
-        values["NEWSTAR_USERNAME"] = args.username
-    if args.password:
-        values["NEWSTAR_PASSWORD"] = args.password
-    if args.universe:
-        values["NEWSTAR_UNIVERSE"] = args.universe
-    if args.no_verify_ssl:
+    for flag, key in CLI_KEYS:
+        value = getattr(args, flag, None)
+        if value not in (None, ""):
+            values[key] = str(value)
+    if getattr(args, "no_verify_ssl", False):
         values["NEWSTAR_VERIFY_SSL"] = "0"
-    if getattr(args, "session_file", None):
-        values["NEWSTAR_SESSION_FILE"] = args.session_file
+    return values
+
+
+def _float_value(values: Dict[str, str], key: str, default: float) -> float:
+    raw = values.get(key)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"{key} 必须是数字，当前是 {raw!r}") from exc
+
+
+def load_config(args: argparse.Namespace) -> Config:
+    values = load_values(args)
 
     session_file = values.get("NEWSTAR_SESSION_FILE") or None
     if not session_file and Path(DEFAULT_SESSION_FILE).exists():
@@ -161,9 +237,17 @@ def load_config(args: argparse.Namespace) -> Config:
         password=password,
         universe=values.get("NEWSTAR_UNIVERSE") or None,
         verify_ssl=verify not in {"0", "false", "no", "off"},
-        interval=args.interval,
+        timeout=_float_value(values, "NEWSTAR_TIMEOUT", 20.0),
+        interval=getattr(args, "interval", 0.5),
         session_file=session_file if session_ready else None,
         relogin=relogin,
+        agent=AgentSettings(
+            base_url=values.get("NEWSTAR_AGENT_BASE_URL", ""),
+            model=values.get("NEWSTAR_AGENT_MODEL", ""),
+            api_key=values.get("NEWSTAR_AGENT_API_KEY", ""),
+            temperature=_float_value(values, "NEWSTAR_AGENT_TEMPERATURE", 0.2),
+            timeout=_float_value(values, "NEWSTAR_AGENT_TIMEOUT", 60.0),
+        ),
     )
 
 

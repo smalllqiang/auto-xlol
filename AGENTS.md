@@ -59,6 +59,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/production.py --no-verify-ssl    # 生产比例（--set + --execute --allow 才写入）
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/session.py import '2Moons=...'    # 浏览器+脚本共用会话（详见已知坑）
+.venv/bin/python scripts/config.py --validate            # 检查 .env（游戏 + 模型端点）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/agent.py --no-verify-ssl         # AI 规划一轮（默认 dry-run，--execute 才写）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）

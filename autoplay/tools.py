@@ -19,7 +19,7 @@ Read tools are safe to call at any time.  Write tools honour the registry's
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from newstar_sdk.constants import (
     CATEGORY_BUILDING,
@@ -41,7 +41,17 @@ from newstar_sdk.exceptions import (
 from .planner import Plan, compute_plan
 
 #: Tools that never change the account.  Everything else is a write.
-READ_TOOLS = frozenset({"observe", "plan", "messages"})
+READ_TOOLS = frozenset({"observe", "plan", "messages", "expedition_report"})
+
+#: tool name -> (argument holding an element, its category).  Used to resolve
+#: names to ids even in dry-run, so a preview cannot hide an invalid plan.
+_ELEMENT_ARGS = {
+    "upgrade_building": ("element", CATEGORY_BUILDING),
+    "upgrade_building_to": ("element", CATEGORY_BUILDING),
+    "destroy_building": ("element", CATEGORY_BUILDING),
+    "research": ("technology", CATEGORY_TECHNOLOGY),
+    "research_to": ("technology", CATEGORY_TECHNOLOGY),
+}
 
 
 def _field(entry: Any, name: str, default: Any = None) -> Any:
@@ -262,6 +272,24 @@ class ToolRegistry:
                 },
                 kind="read",
             ),
+            "expedition_report": ToolSpec(
+                name="expedition_report",
+                description=(
+                    "探险准备报告：航道数、当前每队积分、与目标积分的缺口、推荐船型与"
+                    "前置 blocker。发船或造船前先调它，不要靠猜舰船 ID 与数量。"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "target_score": {
+                            "type": "number",
+                            "description": "每队目标积分，默认 500000（攻略先验）",
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+                kind="read",
+            ),
             "upgrade_building": ToolSpec(
                 name="upgrade_building",
                 description=(
@@ -467,19 +495,82 @@ class ToolRegistry:
         if handler is None:
             return ToolResult(ok=False, status="error", code="INTERNAL_ERROR", message="handler 缺失")
 
-        if spec.kind == "write" and self.dry_run:
-            return ToolResult(
-                ok=True,
-                status="dry_run",
-                code="DRY_RUN",
-                message=f"预览：未执行 {spec.name}",
-                requested=payload,
-            )
+        if spec.kind == "write":
+            # Validate and resolve names even for a preview: a dry run that
+            # accepts an impossible plan is worse than no dry run at all.
+            normalised, error = self._normalise(spec.name, payload)
+            if error:
+                return ToolResult(
+                    ok=False,
+                    status="error",
+                    code="INVALID_ARGS",
+                    message=error,
+                    requested=dict(payload),
+                )
+            payload = normalised
+            if self.dry_run:
+                return ToolResult(
+                    ok=True,
+                    status="dry_run",
+                    code="DRY_RUN",
+                    message=f"预览：未执行 {spec.name}",
+                    requested=payload,
+                )
 
         try:
             return handler(payload)
         except BaseException as exc:  # noqa: BLE001 - every failure is data here
             return translate(exc)
+
+    def _normalise(self, name: str, payload: Mapping[str, Any]) -> Tuple[Dict[str, Any], str]:
+        """Check required arguments and resolve element names to ids."""
+
+        spec = self._specs()[name]
+        required = spec.parameters.get("required") or []
+        missing = [key for key in required if key not in payload]
+        if missing:
+            return {}, f"缺少参数：{'、'.join(missing)}"
+        normalised = dict(payload)
+
+        element_arg = _ELEMENT_ARGS.get(name)
+        if element_arg:
+            field_name, category = element_arg
+            try:
+                normalised[field_name] = int(resolve_element(payload[field_name], category))
+            except (KeyError, TypeError, ValueError) as exc:
+                return {}, f"{field_name} 无法解析：{exc}"
+
+        if name in ("build_ships", "send_fleet"):
+            mode = str(payload.get("mode", "fleet"))
+            category = CATEGORY_SHIP if mode == "fleet" else CATEGORY_DEFENSE
+            ships = payload.get("ships")
+            if not isinstance(ships, Mapping) or not ships:
+                return {}, "ships 必须是非空对象"
+            try:
+                normalised["ships"] = {
+                    int(resolve_element(key, category)): int(value)
+                    for key, value in ships.items()
+                }
+            except (TypeError, ValueError) as exc:
+                return {}, f"ships 无法解析：{exc}"
+
+        if name == "set_production_ratios":
+            ratios = payload.get("ratios")
+            if not isinstance(ratios, Mapping) or not ratios:
+                return {}, "ratios 必须是非空对象"
+            try:
+                resolved = {
+                    int(resolve_element(key, CATEGORY_BUILDING)): int(value)
+                    for key, value in ratios.items()
+                }
+            except (TypeError, ValueError) as exc:
+                return {}, f"ratios 无法解析：{exc}"
+            bad = {key: value for key, value in resolved.items() if not 0 <= value <= 100}
+            if bad:
+                return {}, f"比例必须在 0–100（步长 10）：{bad}"
+            normalised["ratios"] = resolved
+
+        return normalised, ""
 
     # -- read handlers ------------------------------------------------------
 
@@ -540,6 +631,23 @@ class ToolRegistry:
                 "pages": result.pages,
                 "messages": messages,
             },
+        )
+
+    def _tool_expedition_report(self, args: Mapping[str, Any]) -> ToolResult:
+        from .expedition import DEFAULT_TARGET_SCORE, build_expedition_report
+
+        report = build_expedition_report(
+            self.client,
+            target_score=float(args.get("target_score", DEFAULT_TARGET_SCORE)),
+        )
+        return ToolResult(
+            ok=True,
+            status="ok",
+            message=(
+                f"{report.slots} 条航道、空闲 {report.free_slots}，"
+                f"积分缺口 {report.score_gap:,.0f}"
+            ),
+            evidence=report.as_dict(),
         )
 
     # -- write handlers -----------------------------------------------------

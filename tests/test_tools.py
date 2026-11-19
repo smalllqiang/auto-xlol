@@ -182,3 +182,74 @@ def test_send_fleet_half_sent_is_never_retried():
 
     assert result.ok is False
     assert result.retryable is False
+
+
+def test_dry_run_validates_and_resolves_element_names():
+    client = FakeClient()
+    result = _registry(client, dry_run=True).call("upgrade_building", {"element": "合金冶炼厂"})
+
+    assert result.status == "dry_run"
+    assert result.requested["element"] == 1  # name resolved even without acting
+    assert client.calls == []
+
+
+def test_dry_run_rejects_unknown_element_instead_of_pretending():
+    result = _registry(FakeClient(), dry_run=True).call(
+        "upgrade_building", {"element": "不存在的建筑"}
+    )
+
+    assert result.ok is False
+    assert result.code == "INVALID_ARGS"
+    assert "无法解析" in result.message
+
+
+def test_dry_run_rejects_missing_required_argument():
+    result = _registry(FakeClient(), dry_run=True).call("upgrade_building", {})
+
+    assert result.ok is False
+    assert result.code == "INVALID_ARGS"
+    assert "缺少参数" in result.message
+
+
+def test_expedition_report_is_a_read_tool_with_a_recommendation_hook():
+    from pathlib import Path
+
+    from newstar_sdk.parsers import (
+        parse_buildings,
+        parse_fleets,
+        parse_overview,
+        parse_research,
+    )
+
+    fixtures = Path(__file__).parent / "fixtures"
+
+    def html(name):
+        return (fixtures / name).read_text(encoding="utf-8")
+
+    class ExpeditionClient:
+        def get_research(self):
+            return parse_research(html("research.html"))
+
+        def get_buildings(self):
+            return parse_buildings(html("buildings.html"))
+
+        def get_shipyard(self, mode="fleet"):
+            return []
+
+        def get_available_ships(self):
+            return {}
+
+        def get_fleets(self):
+            return parse_fleets(html("fleet_table_empty.html"))
+
+        def get_overview(self):
+            return parse_overview(html("overview.html"))
+
+    registry = ToolRegistry(ExpeditionClient(), dry_run=True)
+    assert any(spec.name == "expedition_report" and spec.kind == "read" for spec in registry.specs())
+
+    result = registry.call("expedition_report", {})
+
+    assert result.ok is True
+    assert result.evidence["slots"] == 0
+    assert result.evidence["notes"]

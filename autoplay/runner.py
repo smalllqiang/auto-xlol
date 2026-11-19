@@ -149,6 +149,9 @@ def load_facts(client: Any, directive: Any = None) -> Facts:
         facts.queues = {
             "building": len(client.get_building_queue()),
             "research": len(client.get_research_queue()),
+            # Without this a ``queue_empty: shipyard`` condition passed
+            # vacuously, which is worse than not offering the condition.
+            "shipyard": len(client.get_ship_queue("fleet")),
         }
     except NewStarError as exc:
         facts.error = f"{facts.error}; queues: {exc}".lstrip("; ")

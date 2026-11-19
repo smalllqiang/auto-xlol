@@ -1267,11 +1267,12 @@ client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionReje
 | 模块 | 作用 |
 | --- | --- |
 | `autoplay/brief.py` | 快照 + 计划 → 决策简报（纯函数）。派生量、爆仓标记、队列 ETA、相对上次的 delta、读不到的页面 |
-| `autoplay/tools.py` | 动词工具注册表：`upgrade_building` / `upgrade_building_to` / `research` / `research_to` / `build_ships` / `send_fleet` / `recall_fleet` / `set_production_ratios` / `claim_daily_bonus` / `cancel_queue` / `destroy_building` + 读工具；结果区分 `requested` / `actual` |
+| `autoplay/tools.py` | 动词工具注册表：`upgrade_building` / `upgrade_building_to` / `research` / `research_to` / `build_ships` / `send_fleet` / `recall_fleet` / `set_production_ratios` / `claim_daily_bonus` / `cancel_queue` / `destroy_building`；读工具含 `expedition_report`；结果区分 `requested` / `actual` |
 | `autoplay/runner.py` | 顺序执行 steps：`when` 前置检查、`until` 事后检查、写后刷新事实、遇阻即停并交还控制权 |
 | `autoplay/agent.py` | 决策循环：读工具直接执行，写工具先登记，`submit_plan` 或纯 JSON 都可作为计划；模型失败回退确定性规划器 |
 | `autoplay/prompt.py` | 提示词语料：角色、边界、工具速查、doctrine 原则、directive 目标 |
 | `autoplay/llm.py` | Provider 协议 + OpenAI 兼容实现 + `FakeProvider` |
+| `autoplay/memory.py` | 从 journal 读回最近 N 轮（`{cycle, chose, result}`），并给下一轮简报提供 delta 基线 |
 
 配置模型（环境变量或同名 CLI 参数）：
 
@@ -1306,5 +1307,9 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
 - **`precheck=False`**：写操作不再做本地资源/前置预检，交给游戏拒绝；工具把拒绝翻译成
   `code` / `retryable` / `requested` / `actual`。
 - **部分成功是正常结果**：多级建造、造船都可能只入队一部分，`ok=false` 不等于没发生。
+- **dry-run 也会校验参数**：元素名会解析成 ID，缺参数或名字不存在直接返回
+  `INVALID_ARGS`，不会给出"看起来能跑"的假预览。
+- **跨轮记忆**：`scripts/agent.py` 读回最近 `--history` 条 `kind=agent` 记录，简报里带
+  `history` 与 `delta`；进程本身无状态。
 - **模型不可用**（超时、非法 JSON、没有步骤）→ 回退确定性规划器首条候选，cycle 标
   `degraded`，daemon 不受影响。

@@ -26,9 +26,10 @@ class FakeRegistry:
 
 
 class FactsClient:
-    def __init__(self, level=0, queue=0, resources=None):
+    def __init__(self, level=0, queue=0, resources=None, ship_queue=0):
         self.level = level
         self.queue = queue
+        self.ship_queue = ship_queue
         self.resources = resources or {901: 1000}
 
     def get_buildings(self):
@@ -42,6 +43,9 @@ class FactsClient:
 
     def get_research_queue(self):
         return []
+
+    def get_ship_queue(self, mode="fleet"):
+        return [object()] * self.ship_queue
 
     def get_overview(self):
         return SimpleNamespace(resources=SimpleNamespace(amounts=dict(self.resources)))
@@ -150,3 +154,15 @@ def test_parse_steps_rejects_bad_shape():
         parse_steps([{"tool": "step", "args": "not-an-object"}])
     with pytest.raises(ValueError):
         parse_steps([{"tool": "step", "when": "nope"}])
+
+
+def test_shipyard_queue_condition_is_really_read():
+    registry = FakeRegistry([])
+    steps = parse_steps(
+        [{"tool": "step", "args": {}, "when": {"kind": "queue_empty", "queue": "shipyard"}}]
+    )
+
+    report = run_steps(registry, steps, client=FactsClient(ship_queue=1))
+
+    assert report.status == "blocked"
+    assert "shipyard" in report.reason

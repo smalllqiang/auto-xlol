@@ -26,6 +26,7 @@ from local_config import add_session_args, load_config, make_client
 from autoplay import AgentConfig, load_directive, run_agent_cycle
 from autoplay.journal import append_jsonl
 from autoplay.llm import OpenAICompatibleProvider
+from autoplay.memory import decision_history, last_brief, next_cycle, read_agent_entries
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -48,6 +49,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--max-rounds", type=int, default=6, help="model/tool round trips")
     parser.add_argument("--max-steps", type=int, default=8, help="steps allowed per cycle")
     parser.add_argument("--max-chars", type=int, default=6000, help="brief character budget")
+    parser.add_argument(
+        "--history", type=int, default=8, help="recent agent cycles to include in the brief"
+    )
     parser.add_argument("--agent-base-url", help="override NEWSTAR_AGENT_BASE_URL")
     parser.add_argument("--agent-model", help="override NEWSTAR_AGENT_MODEL")
     parser.add_argument("--agent-api-key", help="override NEWSTAR_AGENT_API_KEY")
@@ -123,6 +127,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     directive = load_directive(args.directive)
+    journal = Path(args.journal)
+    # Previous cycles give the model a short memory: what it tried, and what the
+    # account looked like then (the delta baseline).
+    entries = read_agent_entries(journal, limit=args.history)
     client = make_client(config)
     try:
         result = run_agent_cycle(
@@ -136,17 +144,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 max_chars=args.max_chars,
                 stop_file=args.stop_file,
             ),
+            history=decision_history(entries),
+            previous=last_brief(entries),
         )
     finally:
         client.close()
 
     payload = result.as_dict()
     payload["kind"] = "agent"
+    payload["cycle"] = next_cycle(entries)
     payload["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     payload["dry_run"] = not args.execute
     for error in directive.errors:
         payload.setdefault("directive_errors", []).append(error)
-    append_jsonl(Path(args.journal), payload, max_bytes=args.journal_max_bytes)
+    append_jsonl(journal, payload, max_bytes=args.journal_max_bytes)
 
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

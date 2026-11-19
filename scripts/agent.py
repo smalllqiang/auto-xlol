@@ -3,7 +3,7 @@
 
 Default is one dry-run cycle: the model still plans, the runner still walks the
 steps, but write tools only report what they *would* do.  Add ``--execute`` to
-let the plan touch the account, and ``--interval N`` to keep running.
+let the plan touch the account, and ``--every N`` to keep running.
 
 There is no allow-list on purpose (ADR-030): the game is the only judge of what
 is legal, and every step is journaled either way.  ``state/STOP`` stops the loop

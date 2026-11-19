@@ -43,6 +43,10 @@ source .venv/bin/activate
 .venv/bin/python scripts/plan.py --no-verify-ssl
 .venv/bin/python scripts/run_once.py --no-verify-ssl        # 影子模式
 
+# 1.5 想一边用浏览器玩、一边跑脚本？导入浏览器的 2Moons Cookie
+#     一个账号只有一份会话，脚本会复用它而不是重新登录（详见 docs/usage.md）
+.venv/bin/python scripts/session.py --no-verify-ssl import '2Moons=...'
+
 # 2. 小步授权执行（一轮）
 .venv/bin/python scripts/run_forever.py --no-verify-ssl --once \
     --execute --allow 自律工厂

@@ -120,6 +120,15 @@ HTML 片段。`parse_messages()` 解析该片段，`parse_message_counters()` �
 
 `save_session()` 只写 Cookie、用户名、宇宙和 base URL，不写密码；这是有意的安全取舍。需要自动重登时，调用方仍要在构造客户端时提供密码。
 
+**一个账号只有一份会话**：`session` 表的主键是 `userID`（`install/mysql.sql`），
+而 `Session::save()` 在每个请求结束时都会 `REPLACE INTO` 当前会话行
+（`includes/classes/Session.class.php`）。因此第二次登录会替换第一条会话，
+浏览器和脚本无法各自持有一份独立会话。要两端同时在线，只能共享同一个 `2Moons`
+Cookie：`set_session_cookie()` 负责导入，脚本用 `state/session.json` 自动复用，并在
+共享模式下关闭 `auto_relogin`（重登会踢掉浏览器）。细节见
+[使用说明](usage.md#多端共用会话浏览器--脚本同时在线)。
+
+
 ## 5. 元素识别与本地化
 
 - 元素 ID 是稳定的，名称随语言包/私服改动。SDK 以 ID 为主键。

@@ -55,6 +55,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/empire.py --no-verify-ssl        # 全局面板（每星资源/建筑/舰只）
 .venv/bin/python scripts/production.py --no-verify-ssl    # 生产比例（--set + --execute --allow 才写入）
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
+.venv/bin/python scripts/session.py import '2Moons=...'    # 浏览器+脚本共用会话（详见已知坑）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
@@ -117,6 +118,12 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   不消耗，游戏用毛产去比（实测 765,000 对 600,017），缺口靠提高毛产而不是攒资源。
 - **部分模块禁用**：`market`、`fair` 返回「模块已禁用」，`information` 固定 503。
 - **证书过期**：`verify_ssl=False`，脚本加 `--no-verify-ssl`。
+- **一个账号只有一份会话**：`session` 表主键是 `userID`，每个请求结束都 `REPLACE INTO`
+  同一行，所以第二次登录会立刻踢掉第一次的 Cookie。浏览器和脚本只能共享同一个
+  `2Moons` Cookie：浏览器优先时 `scripts/session.py import '2Moons=...'`，脚本会写
+  `state/session.json` 并自动复用、**不重登**（重登会踢浏览器，故需 `--relogin` 显式
+  允许）。共享期间不要两端并发发舰队——三步 token 在 PHP session 里。细节见
+  `docs/usage.md` 的「多端共用会话」。
 - **看板存活看心跳**：`state/daemon.json` 的 `updated_at` 是权威依据；容器/PID
   命名空间里 `os.kill(pid, 0)` 可能看不到守护，别只凭 `daemon.lock` 的 pid 判断。
 - **看板读 journal 新字段**：cycle 条目含 `plan_top` / `queue_items` / `messages` /

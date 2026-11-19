@@ -347,3 +347,19 @@
 - 代价：每轮多一个 GET（只在 `--balance-power` 打开时）；预估补偿按线性折算，与
   页面取整有几十到几百的误差；生产比例改动会影响后续快照的产能，需要看 journal
   的 `kind=balance` 才能解释。
+
+## ADR-029：浏览器与脚本共用一份会话，脚本默认不重登
+
+- 状态：接受（2026-11-19）
+- 决定：新增 `scripts/session.py` 与 `state/session.json` 作为共享会话；所有脚本改为
+  经 `local_config.make_client()` 建客户端，会话文件存在时只复用、不 `login()`，失效
+  时打印重新导入的提示；`--relogin` 才允许用账号密码重新登录。SDK 增加
+  `set_session_cookie()`，接受裸值、`2Moons=值` 或整行 `Cookie:` 头。
+- 背景：`session` 表主键是 `userID`，且 `Session::save()` 每个请求都 `REPLACE INTO`
+  同一行，所以第二次登录会让先前的 Cookie 立刻失效（实测浏览器跳到
+  `index.php?code=3`）。服务端不支持“两套独立会话”，唯一可行的是两端复用同一个
+  Cookie。改造前每个脚本都调用 `login()`，运行一次就把浏览器踢下线。
+- 代价：会话最长 12 小时（`SESSION_LIFETIME=43200`），过期或被浏览器重新登录替换后
+  要人工重新 `import`；共用期间不能并发发舰队（三步 token 在 PHP session 里），浏览器
+  的当前星球也会被脚本请求里的 `cp` 覆盖。真正多开需要服务端把 session 主键改成
+  `sessionID`；本项目不控制服务器，不依赖该改动。

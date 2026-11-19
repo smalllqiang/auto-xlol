@@ -42,6 +42,70 @@ client.ensure_login()   # 已登录则直接返回，否则尝试使用现有 Co
 - `set_credentials(username, password)` 可在运行中替换凭证；它会清空旧 Cookie 并令下一次 `login()`/`ensure_login()` 重新登录。
 - `save_session()` / `load_session()` 只保存 Cookie、用户名、宇宙和 base URL，不保存密码；文件权限在支持的平台上为 `0600`。`load_session()` 会验证会话，返回 `False` 表示已失效。
 
+### 多端共用会话（浏览器 + 脚本同时在线）
+
+New-Star 的会话表主键是 `userID`（`install/mysql.sql` 里 `PRIMARY KEY (userID)`），
+而且每个请求结束时都会把当前会话 `REPLACE INTO` 这一行。结果是一个账号在服务器上
+**只有一份会话**：
+
+- 在浏览器里正常登录后，再运行脚本 `login()`，脚本的新会话会替换浏览器的那一行，
+  浏览器下一个请求就会跳到 `index.php?code=3`（被踢下线）；
+- 反过来，在浏览器里重新登录，脚本共享的 Cookie 也会立刻失效。
+
+所以不存在“两套独立会话”的做法，只能让浏览器和脚本**复用同一个 `2Moons` Cookie**。
+仓库脚本已经支持这件事：
+
+```bash
+# 浏览器优先（推荐）：浏览器登录游戏 -> DevTools -> Application -> Cookies
+# 复制 2Moons 的值，然后导入。会先验证 Cookie 再写 state/session.json。
+.venv/bin/python scripts/session.py --no-verify-ssl import '2Moons=vg03jr0o...'
+
+# 之后所有脚本自动复用 state/session.json，不会再调用 login()：
+.venv/bin/python scripts/plan.py --no-verify-ssl
+
+# 查看/检查/打印 Cookie
+.venv/bin/python scripts/session.py status      # 会话是否仍被服务器接受
+.venv/bin/python scripts/session.py show        # 打印 Cookie，供粘回浏览器
+```
+
+脚本优先的流程（把脚本创建的新会话交给浏览器）：
+
+```bash
+.venv/bin/python scripts/session.py --no-verify-ssl login
+# 它会把 2Moons Cookie 打印出来；在浏览器 DevTools 里双击该 Cookie 的值粘贴即可。
+```
+
+脚本侧的行为：
+
+- `state/session.json` 存在时会自动使用；也可以用 `--session-file PATH` 或
+  `NEWSTAR_SESSION_FILE` 指定别的路径。
+- 共享会话**失效时不会自动重登**（重登会踢掉浏览器），而是打印重新 `import` 的提示。
+  确实要用账号密码重新登录时加 `--relogin`。
+- SDK 自带的 `newstar` 命令行同样遵守这条规则：`--session-file` 失效时默认报错，
+  要重新登录必须显式加 `--relogin`。
+- SDK 侧的等价写法：
+
+  ```python
+  client = NewStarClient(base_url, verify_ssl=False, auto_relogin=False)
+  client.set_session_cookie("2Moons=vg03jr0o...")   # 也接受裸值或整行 Cookie 头
+  client.save_session("state/session.json")
+  client.get_overview()
+  ```
+
+限制与注意：
+
+- 会话最长 12 小时（`SESSION_LIFETIME = 43200`，按最后一次活动续期）；浏览器 Cookie
+  本身也在 12 小时后过期，过期后重新登录并再 `import` 一次即可。
+- 浏览器点“退出”会删除这条会话，脚本随之失效。
+- 舰队三步发送的 token 存在 PHP session 里，两端共用同一份。不要一边在浏览器里发
+  舰队、一边让脚本发舰队；脚本自身的舰队流程是一次性走完三步的。
+- 当前星球（`planetId`）也存在 session 里。脚本每次请求都会带 `cp=<自己的星球>`，
+  所以浏览器里没有带 `cp` 的页面可能被脚本切到别的星球；在浏览器里固定用
+  `game.php?page=overview&cp=<星球 ID>` 即可。
+- PHP 的 session 文件锁会让并发的同名会话请求排队（实测 4 个并发请求约 1 秒完成），
+  不会互相踢下线，但不要把它当成并发加速手段。
+
+
 ### TLS
 
 默认验证证书。遇到证书过期/自签名实例：

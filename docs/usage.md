@@ -1313,6 +1313,13 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
   `history` 与 `delta`；进程本身无状态。
 - **模型不可用**（超时、非法 JSON、没有步骤）→ 回退确定性规划器首条候选，cycle 标
   `degraded`，daemon 不受影响。
+- **满队列不是失败**：游戏返回「最多只能添加 N 个队列」时工具译成 `QUEUE_FULL`
+  （`retryable=true`），runner 记为 `blocked`，等下一轮而不是把计划判死。
+- **探险的 `stay_time` 默认 1**：省略或写 0 会被游戏以「无效返回时间」拒绝，工具现在
+  自己补 1。
+- **cycle.status 有四种**：`ok` / `failed`（有步骤被拒）/ `degraded`（模型不可用、
+  回退 planner）/ `stopped`（STOP）。连续 `failed`/`degraded` 会按退避重试，达到
+  `--max-failures` 退出，避免像首轮那样带着坏工具空转一整夜。
 
 ### 持久运行（agent 循环）
 

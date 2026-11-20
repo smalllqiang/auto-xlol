@@ -253,3 +253,29 @@ def test_dry_run_cycle_runs_the_runner_without_writing():
     assert result.report["status"] == "completed"
     assert result.report["steps"][0]["status"] == "dry_run"
     assert client.writes == []
+
+
+def test_failed_step_marks_the_cycle_failed():
+    provider = FakeProvider(
+        [
+            _reply(
+                [
+                    ToolCall(
+                        id="1",
+                        name="submit_plan",
+                        arguments=json.dumps({"steps": [{"tool": "launch_rocket", "args": {}}]}),
+                    )
+                ]
+            )
+        ]
+    )
+
+    result = run_agent_cycle(
+        FakeClient(),
+        provider,
+        config=AgentConfig(dry_run=False, stop_file="state/does-not-exist-STOP"),
+    )
+
+    assert result.status == "failed"
+    assert result.report["status"] == "failed"
+    assert "UNKNOWN_TOOL" in result.report["reason"]

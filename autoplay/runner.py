@@ -57,6 +57,7 @@ class Facts:
     levels: Dict[int, int] = field(default_factory=dict)
     research_levels: Dict[int, int] = field(default_factory=dict)
     queues: Dict[str, int] = field(default_factory=dict)
+    queues_ok: bool = False
     resources: Dict[int, float] = field(default_factory=dict)
     phase: str = ""
     error: str = ""
@@ -153,6 +154,7 @@ def load_facts(client: Any, directive: Any = None) -> Facts:
             # vacuously, which is worse than not offering the condition.
             "shipyard": len(client.get_ship_queue("fleet")),
         }
+        facts.queues_ok = True
     except NewStarError as exc:
         facts.error = f"{facts.error}; queues: {exc}".lstrip("; ")
     try:
@@ -188,6 +190,10 @@ def check(condition: Optional[Mapping[str, Any]], facts: Facts) -> Tuple[bool, s
     if kind == "always":
         return True, ""
     if kind == "queue_empty":
+        if not facts.queues_ok:
+            # Unknown must never read as "empty": that is how a full queue
+            # turned into a rejected POST in the first long run.
+            return False, "队列读取失败，无法确认是否为空"
         queue = str(condition.get("queue", "building"))
         count = int(facts.queues.get(queue, 0))
         return count == 0, "" if count == 0 else f"{queue} 队列还有 {count} 项"
@@ -257,6 +263,14 @@ def run_steps(
             continue
         # A rejection is data: stop and let the caller re-plan.  "skipped" is a
         # normal no-op (e.g. sign-in already claimed), not a failure.
+        if result.code == "QUEUE_FULL":
+            # A full queue is a "come back later", not a broken plan.
+            return RunReport(
+                status="blocked",
+                steps=results,
+                stopped_at=index,
+                reason=f"第 {index + 1} 步遇到满队列，等下一轮：{result.message}",
+            )
         if not result.ok and result.status != "skipped":
             return RunReport(
                 status="failed",

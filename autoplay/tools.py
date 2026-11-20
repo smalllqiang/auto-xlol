@@ -158,12 +158,23 @@ def translate(exc: BaseException) -> ToolResult:
             message=str(exc),
         )
     if isinstance(exc, GameError):
+        text = str(exc)
+        # "你最多只能添加 5 个建筑队列！" is a full queue, not a broken request:
+        # it is worth waiting, and the model should see that distinction.
+        if "队列" in text or "queue" in text.lower():
+            return ToolResult(
+                ok=False,
+                status="rejected",
+                code="QUEUE_FULL",
+                retryable=True,
+                message=text,
+            )
         return ToolResult(
             ok=False,
             status="rejected",
             code="GAME_ERROR",
             retryable=False,
-            message=str(exc),
+            message=text,
         )
     if isinstance(exc, SessionExpired):
         return ToolResult(
@@ -775,6 +786,10 @@ class ToolRegistry:
 
     def _tool_send_fleet(self, args: Mapping[str, Any]) -> ToolResult:
         mission = args["mission"]
+        # The game rejects stay_time=0 for expedition/hold/dark-matter missions
+        # ("无效返回时间").  Default to the smallest valid option instead of
+        # letting every omitted value turn into a rejection.
+        stay_time = int(args.get("stay_time") or 1)
         try:
             dispatch = self.client.send_fleet(
                 args["target"],
@@ -782,23 +797,32 @@ class ToolRegistry:
                 mission,
                 speed=int(args.get("speed", 10)),
                 resources=args.get("resources"),
-                stay_time=int(args.get("stay_time", 0)),
+                stay_time=stay_time,
             )
         except NewStarError as exc:
             result = translate(exc)
-            result.requested = {"target": args["target"], "mission": mission}
+            result.requested = {
+                "target": args["target"],
+                "mission": mission,
+                "stay_time": stay_time,
+            }
             return result
 
-        evidence = dispatch.as_dict() if hasattr(dispatch, "as_dict") else dict(dispatch)
-        confirmed = bool(evidence.get("mission") or evidence.get("target_coordinates"))
+        payload = dispatch.as_dict() if hasattr(dispatch, "as_dict") else dict(dispatch)
+        confirmed = bool(payload.get("mission") or payload.get("target_coordinates"))
         return ToolResult(
             ok=confirmed,
             status="ok" if confirmed else "partial",
             code="" if confirmed else "NO_CONFIRMATION",
             retryable=False,  # a half-sent fleet must be re-observed, never retried
             message="舰队已发送（确认页已解析）" if confirmed else "没有拿到确认页",
-            requested={"target": args["target"], "ships": args["ships"], "mission": mission},
-            actual={"dispatch": evidence},
+            requested={
+                "target": args["target"],
+                "ships": args["ships"],
+                "mission": mission,
+                "stay_time": stay_time,
+            },
+            actual={"dispatch": payload},
         )
 
     def _tool_recall_fleet(self, args: Mapping[str, Any]) -> ToolResult:

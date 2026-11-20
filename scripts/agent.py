@@ -258,7 +258,14 @@ def run_loop(args, provider, config) -> int:
                 status = result.status
                 reason = result.reason
                 phase = result.phase
-                failures = 0
+                if result.status in {"failed", "degraded"}:
+                    failures += 1
+                    delay = backoff_delay(failures, args.backoff_base, args.backoff_max)
+                    if failures >= max(1, args.max_failures):
+                        exit_code = 1
+                        break
+                else:
+                    failures = 0
                 if args.json:
                     print(json.dumps(payload, ensure_ascii=False, indent=2))
                 else:

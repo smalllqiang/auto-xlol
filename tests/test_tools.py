@@ -253,3 +253,53 @@ def test_expedition_report_is_a_read_tool_with_a_recommendation_hook():
     assert result.ok is True
     assert result.evidence["slots"] == 0
     assert result.evidence["notes"]
+
+
+def test_send_fleet_serialises_a_real_dispatch():
+    from newstar_sdk.models import FleetDispatch
+
+    class FleetClient:
+        def __init__(self):
+            self.kwargs = {}
+
+        def send_fleet(self, target, ships, mission, **kwargs):
+            self.kwargs = kwargs
+            return FleetDispatch(mission=15, mission_name="探险", ships={202: 1})
+
+    client = FleetClient()
+    result = ToolRegistry(client, dry_run=False).call(
+        "send_fleet", {"target": "3:505:16", "ships": {"202": 1}, "mission": 15}
+    )
+
+    # Regression: the first long run reported 43 successful dispatches as
+    # INTERNAL_ERROR because FleetDispatch had no as_dict().
+    assert result.ok is True
+    assert result.actual["dispatch"]["mission"] == 15
+    assert result.actual["dispatch"]["ships"] == {"202": 1}
+
+
+def test_send_fleet_defaults_stay_time_to_one():
+    from newstar_sdk.models import FleetDispatch
+
+    class FleetClient:
+        def __init__(self):
+            self.kwargs = {}
+
+        def send_fleet(self, target, ships, mission, **kwargs):
+            self.kwargs = kwargs
+            return FleetDispatch(mission=15)
+
+    client = FleetClient()
+    ToolRegistry(client, dry_run=False).call(
+        "send_fleet", {"target": "3:505:16", "ships": {"202": 1}, "mission": "expedition"}
+    )
+
+    # stay_time=0 is rejected by the game as an invalid return time.
+    assert client.kwargs["stay_time"] == 1
+
+
+def test_full_queue_is_retryable_not_a_game_error():
+    result = translate(GameError("你最多只能添加 5 个建筑队列！"))
+
+    assert result.code == "QUEUE_FULL"
+    assert result.retryable is True

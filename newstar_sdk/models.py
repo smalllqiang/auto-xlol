@@ -436,6 +436,29 @@ class FleetDispatch:
     arrival_time: Optional[str] = None
     ships: Dict[int, int] = field(default_factory=dict)
 
+    def as_dict(self) -> Dict[str, object]:
+        """JSON-able form; the agent tool layer reads it after a dispatch.
+
+        Without this, callers had no stable way to serialise the result and a
+        successful send looked like a failure (``TypeError: not iterable``).
+        """
+
+        return {
+            "mission": self.mission,
+            "mission_name": self.mission_name,
+            "from_coordinates": (
+                str(self.from_coordinates) if self.from_coordinates is not None else None
+            ),
+            "target_coordinates": (
+                str(self.target_coordinates) if self.target_coordinates is not None else None
+            ),
+            "distance": self.distance,
+            "consumption": self.consumption,
+            "start_time": self.start_time,
+            "arrival_time": self.arrival_time,
+            "ships": {str(key): value for key, value in self.ships.items()},
+        }
+
 
 @dataclass
 class FleetPreview:

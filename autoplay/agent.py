@@ -406,9 +406,15 @@ def run_agent_cycle(
         max_steps=cfg.max_steps,
     )
 
+    if error:
+        status = "degraded"
+    elif report.status in {"failed", "unexpected"}:
+        status = "failed"
+    else:
+        status = "ok"
     return AgentCycleResult(
-        status="degraded" if error else "ok",
-        reason=decision.reason or error,
+        status=status,
+        reason=report.reason or decision.reason or error,
         phase=str(account.get("phase") or ""),
         goal=str(account.get("goal") or ""),
         brief=brief,

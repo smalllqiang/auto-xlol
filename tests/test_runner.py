@@ -56,7 +56,13 @@ def _ok():
 
 
 def test_check_condition_kinds():
-    facts = Facts(levels={1: 3}, research_levels={124: 9}, queues={"building": 0}, resources={901: 50})
+    facts = Facts(
+        levels={1: 3},
+        research_levels={124: 9},
+        queues={"building": 0},
+        queues_ok=True,
+        resources={901: 50},
+    )
 
     assert check({"kind": "always"}, facts) == (True, "")
     assert check({"kind": "queue_empty", "queue": "building"}, facts)[0] is True
@@ -166,3 +172,24 @@ def test_shipyard_queue_condition_is_really_read():
 
     assert report.status == "blocked"
     assert "shipyard" in report.reason
+
+
+def test_queue_condition_fails_closed_when_unreadable():
+    facts = Facts(levels={1: 1}, queues={}, queues_ok=False)
+
+    holds, why = check({"kind": "queue_empty", "queue": "shipyard"}, facts)
+
+    assert holds is False
+    assert "队列读取失败" in why
+
+
+def test_full_queue_blocks_instead_of_failing():
+    registry = FakeRegistry(
+        [ToolResult(ok=False, status="rejected", code="QUEUE_FULL", message="队列满了")]
+    )
+    steps = parse_steps([{"tool": "step", "args": {}}])
+
+    report = run_steps(registry, steps, client=FactsClient())
+
+    assert report.status == "blocked"
+    assert "满队列" in report.reason

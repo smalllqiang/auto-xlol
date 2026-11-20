@@ -183,15 +183,15 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 **边界与后续（P4）**
 
 AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、由游戏裁决（ADR-030），
-执行层保留 dry-run 默认、页面证据与 `state/STOP`。P4-2 与 P4-6 已完成（见下方记录）；
-下列按优先级排列，下一轮长跑前优先 P4-7 与 P4-1。
+执行层保留 dry-run 默认、页面证据与 `state/STOP`。P4-2、P4-6 与 P4-7 已完成（见下方
+记录）；下列按优先级排列，下一轮长跑前优先 P4-1 与 P4-3。
 
 | # | 要做什么 | 状态 | 触发它的问题 | 验收 |
 | --- | --- | --- | --- | --- |
 | P4-1 | 去掉旧确定性脚本的 allow-list | ⬜ | `run_forever`、探险、生产、召回仍需人预先授权 | `--execute` 不再要求 `--allow`；脚本与测试同步，行为无其它变化 |
 | P4-2 | agent journal 可回放 | ✅ | 读工具结果（`expedition_report` 等）未入库；无提示词/工具版本哈希，事后无法复原模型看到了什么 | 每条含 `prompt_hash`/`tools_hash` 与 `tool_events`；同一 brief 能复现决策 |
 | P4-6 | 船坞剩余槽位进简报 | ✅ | 本实例只有 5 个队列槽，模型一次提交 6 种舰必然撞上限 | 简报给出剩余槽位；`build_ships` 按槽位拆单或在提交前拒绝 |
-| P4-7 | 新增 `ships_at_least` 条件 | ⬜ | 模型拿 `queue_empty: shipyard` 代理"船造好了没"，多次空等 | `load_facts` 读可用舰数；舰队就绪才放行 `send_fleet` |
+| P4-7 | 新增 `ships_at_least` 条件 | ✅ | 模型拿 `queue_empty: shipyard` 代理"船造好了没"，多次空等 | `load_facts` 读可用舰数；舰队就绪才放行 `send_fleet` |
 | P4-3 | 工具参数枚举随页面生成 | ⬜ | 模型可能报出本服不存在的元素/舰种 | schema 每次由当前页面生成；非法值在 dry-run 即 `INVALID_ARGS` |
 | P4-4 | 离线评估脚本 `scripts/eval_agent.py` | ⬜ | 只有实跑，没有回归基线 | 固定快照集上输出 JSON 合法率、与 planner 意图一致率、拒绝率 |
 | P4-5 | `run_forever` 的模型路由 | ⬜ | 每轮都叫模型，多数轮次无事可做 | 常规轮走 planner，告警/阶段切换才调模型，并记录路由原因 |
@@ -220,6 +220,15 @@ AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、
 `failed`。上限可用 `--shipyard-slots` 覆盖。测试：`tests/test_brief.py`（槽位与渲染）、
 `tests/test_tools.py`（拆单/满槽/读不到）、`tests/test_runner.py`（blocked）、
 `tests/test_agent_args.py`（CLI 默认值）。
+
+**P4-7 记录（2026-11-20）**：`autoplay/runner.py` 的 `Facts` 新增 `ships` /
+`ships_ok`，`check` 支持 `{"kind": "ships_at_least", "ships": {"202": 4}}`：读船坞页
+`ShipInfo.available`（在港舰数，不含在途舰队与建造队列），缺任一舰种或数量不足即不
+成立，读不到时 fail-closed。`load_facts(client, directive, steps=...)` 只在计划里有
+步骤的 `when` / `until` 用到该条件时才多读一次船坞页；写后刷新只按当前及剩余步骤判断。
+提示词把发船前检查改为 `ships_at_least`，并说明 `until` 只是立刻复查、不会等待。
+测试 `tests/test_runner.py`：在港数判定、缺失舰种、读不到时 fail-closed、按需读取
+（`ship_reads`）、`send_fleet` 未就绪时 blocked、就绪后放行。
 
 ## 核实与技术债
 

@@ -10,6 +10,7 @@ from autoplay.runner import (
     run_steps,
 )
 from autoplay.tools import ToolResult, ToolSpec
+from newstar_sdk.exceptions import TransportError
 
 
 class FakeRegistry:
@@ -26,11 +27,22 @@ class FakeRegistry:
 
 
 class FactsClient:
-    def __init__(self, level=0, queue=0, resources=None, ship_queue=0):
+    def __init__(self, level=0, queue=0, resources=None, ship_queue=0, ships=None, ships_error=None):
         self.level = level
         self.queue = queue
         self.ship_queue = ship_queue
         self.resources = resources or {901: 1000}
+        self.ships = ships or {}
+        self.ships_error = ships_error
+        self.ship_reads = 0
+
+    def get_shipyard(self, mode="fleet"):
+        self.ship_reads += 1
+        if self.ships_error is not None:
+            raise self.ships_error
+        return [
+            SimpleNamespace(id=key, available=value) for key, value in self.ships.items()
+        ]
 
     def get_buildings(self):
         return [SimpleNamespace(id=1, level=self.level)]
@@ -213,3 +225,89 @@ def test_shipyard_slot_limit_blocks_instead_of_failing():
 
     assert report.status == "blocked"
     assert "船坞槽位不足" in report.reason
+
+
+def test_ships_condition_checks_stationed_ships():
+    facts = Facts(ships={202: 4, 203: 1}, ships_ok=True)
+
+    assert check({"kind": "ships_at_least", "ships": {"202": 3}}, facts) == (True, "")
+
+    holds, why = check({"kind": "ships_at_least", "ships": {"202": 5, "203": 1}}, facts)
+    assert holds is False
+    assert "202" in why
+    assert "203" not in why
+
+
+def test_ships_condition_rejects_non_numeric_elements():
+    holds, why = check(
+        {"kind": "ships_at_least", "ships": {"轻型运输舰": 1}}, Facts(ships_ok=True)
+    )
+
+    assert holds is False
+    assert "整数" in why
+
+
+def test_ships_condition_fails_closed_when_unreadable():
+    holds, why = check(
+        {"kind": "ships_at_least", "ships": {"202": 1}}, Facts(levels={1: 1})
+    )
+
+    assert holds is False
+    assert "读取失败" in why
+
+
+def test_load_facts_reads_the_shipyard_only_when_a_step_needs_it():
+    client = FactsClient(ships={202: 4})
+
+    plain = load_facts(client)
+    assert plain.ships == {}
+    assert plain.ships_ok is False
+    assert client.ship_reads == 0
+
+    steps = parse_steps(
+        [{"tool": "step", "args": {}, "when": {"kind": "ships_at_least", "ships": {"202": 1}}}]
+    )
+    facts = load_facts(client, steps=steps)
+    assert facts.ships == {202: 4}
+    assert facts.ships_ok is True
+    assert client.ship_reads == 1
+
+
+def test_ships_condition_blocks_until_the_fleet_is_ready():
+    registry = FakeRegistry([])
+    steps = parse_steps(
+        [{"tool": "step", "args": {}, "when": {"kind": "ships_at_least", "ships": {"202": 4}}}]
+    )
+
+    report = run_steps(registry, steps, client=FactsClient(ships={202: 1}))
+
+    assert report.status == "blocked"
+    assert "舰船 202" in report.reason
+    assert registry.calls == []
+
+
+def test_ships_condition_releases_a_ready_fleet():
+    registry = FakeRegistry([_ok()])
+    steps = parse_steps(
+        [{"tool": "step", "args": {}, "when": {"kind": "ships_at_least", "ships": {"202": 4}}}]
+    )
+
+    report = run_steps(registry, steps, client=FactsClient(ships={202: 4}))
+
+    assert report.status == "completed"
+    assert registry.calls == [("step", {})]
+
+
+def test_ships_condition_fails_closed_when_the_shipyard_is_unreadable():
+    registry = FakeRegistry([])
+    steps = parse_steps(
+        [{"tool": "step", "args": {}, "when": {"kind": "ships_at_least", "ships": {"202": 4}}}]
+    )
+
+    report = run_steps(
+        registry, steps, client=FactsClient(ships_error=TransportError("boom"))
+    )
+
+    assert report.status == "blocked"
+    assert "读取失败" in report.reason
+    assert registry.calls == []

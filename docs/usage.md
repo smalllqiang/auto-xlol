@@ -1301,7 +1301,7 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
             "why": "..."}]}
 ```
 
-条件类型：`always` / `queue_empty` / `level_at_least` / `resources_at_least` / `phase`。
+条件类型：`always` / `queue_empty` / `level_at_least` / `resources_at_least` / `ships_at_least` / `phase`。
 
 几个必须知道的语义：
 
@@ -1336,6 +1336,12 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
   其余列进 `actual.skipped` 并返回 `QUEUE_SLOTS_LIMIT`（runner 记为 `blocked`）；
   槽位为 0 时整单不 POST。队列读不到时不本地拦，仍交给游戏裁决。上限用
   `--shipyard-slots` 覆盖（例如以后买了队列升级）。
+- **`ships_at_least`（P4-7）**：条件形如
+  `{"kind": "ships_at_least", "ships": {"202": 4}}`，读船坞页的 `available`
+  （在港舰数，不含在途舰队和建造队列）。`load_facts` 只在有计划步骤用到它时才会多读
+  一次船坞页；读不到时 fail-closed，不会在未知数量下放行 `send_fleet`。用它做发船
+  步骤的 `when`，不要用 `queue_empty: shipyard` 代理"船造好了没"；`until` 只是执行后
+  立刻复查一次，不会等待。
 - **探险的 `stay_time` 默认 1**：省略或写 0 会被游戏以「无效返回时间」拒绝，工具现在
   自己补 1。
 - **cycle.status 有四种**：`ok` / `failed`（有步骤被拒）/ `degraded`（模型不可用、

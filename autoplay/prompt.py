@@ -55,7 +55,12 @@ TOOL_RULES = """## 工具
 - `{"kind": "queue_empty", "queue": "building" | "research" | "shipyard"}`
 - `{"kind": "level_at_least", "element": 124, "level": 9}`
 - `{"kind": "resources_at_least", "resources": {"901": 1000}}`
-- `{"kind": "phase", "phase": "expedition_prep"}`"""
+- `{"kind": "ships_at_least", "ships": {"202": 4}}`（在港舰数，不是队列里的数量）
+- `{"kind": "phase", "phase": "expedition_prep"}`
+
+发船前用 `ships_at_least` 确认舰船已经造好并在港，不要拿 `queue_empty: shipyard`
+当"船造好了没"的代理：队列空不说明舰船够了，队列忙也不说明船没造好。`until` 只是
+执行后立刻复查一次，不会等待；想等船造好，把 `ships_at_least` 放在发船步骤的 `when` 上。"""
 
 PRINCIPLES = """## 原则（来自 doctrine，冲突时以简报事实为准）
 

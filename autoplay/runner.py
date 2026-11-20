@@ -28,7 +28,14 @@ from .tools import ToolRegistry, ToolResult
 
 #: Conditions understood by :func:`check`.  Unknown kinds stop the run instead
 #: of being ignored -- a typo must not turn into a skipped guard.
-CONDITION_KINDS = ("always", "queue_empty", "level_at_least", "resources_at_least", "phase")
+CONDITION_KINDS = (
+    "always",
+    "queue_empty",
+    "level_at_least",
+    "resources_at_least",
+    "ships_at_least",
+    "phase",
+)
 
 #: Result codes that mean "come back later", not "the plan is broken".
 BLOCKING_CODES = frozenset({"QUEUE_FULL", "QUEUE_SLOTS_LIMIT"})
@@ -62,6 +69,9 @@ class Facts:
     queues: Dict[str, int] = field(default_factory=dict)
     queues_ok: bool = False
     resources: Dict[int, float] = field(default_factory=dict)
+    #: Ships currently stationed (shipyard ``available``), not those in flight.
+    ships: Dict[int, int] = field(default_factory=dict)
+    ships_ok: bool = False
     phase: str = ""
     error: str = ""
 
@@ -135,8 +145,28 @@ def parse_steps(payload: Iterable[Any]) -> List[Step]:
     return steps
 
 
-def load_facts(client: Any, directive: Any = None) -> Facts:
-    """Read what conditions need.  Failures are recorded, not raised."""
+def _needs_ships(steps: Optional[Iterable[Step]]) -> bool:
+    """Only read the shipyard when a step actually asks about ship counts."""
+
+    for step in steps or []:
+        for condition in (step.when, step.until):
+            if isinstance(condition, Mapping) and condition.get("kind") == "ships_at_least":
+                return True
+    return False
+
+
+def load_facts(
+    client: Any,
+    directive: Any = None,
+    *,
+    steps: Optional[Iterable[Step]] = None,
+) -> Facts:
+    """Read what conditions need.  Failures are recorded, not raised.
+
+    The shipyard page is read only when one of ``steps`` asks for
+    ``ships_at_least``: that is one extra request per refresh, and most plans
+    never need it.
+    """
 
     facts = Facts()
     try:
@@ -164,6 +194,15 @@ def load_facts(client: Any, directive: Any = None) -> Facts:
         facts.resources = dict(client.get_overview().resources.amounts)
     except NewStarError as exc:
         facts.error = f"{facts.error}; overview: {exc}".lstrip("; ")
+    if _needs_ships(steps):
+        try:
+            shipyard = client.get_shipyard("fleet")
+            facts.ships = {
+                int(item.id): int(getattr(item, "available", 0) or 0) for item in shipyard
+            }
+            facts.ships_ok = True
+        except NewStarError as exc:
+            facts.error = f"{facts.error}; ships: {exc}".lstrip("; ")
     if facts.levels or facts.research_levels:
         try:
             facts.phase = detect_phase(
@@ -212,6 +251,24 @@ def check(condition: Optional[Mapping[str, Any]], facts: Facts) -> Tuple[bool, s
             if have < float(needed):
                 deficits.append(f"{key}: {have:,.0f} < {float(needed):,.0f}")
         return not deficits, "；".join(deficits)
+    if kind == "ships_at_least":
+        if not facts.ships_ok:
+            # Unknown is not zero: a send_fleet must not be released on a guess.
+            return False, "舰船数量读取失败，无法确认舰队是否就绪"
+        wanted = condition.get("ships")
+        if not isinstance(wanted, Mapping) or not wanted:
+            return False, "ships_at_least 需要非空的 ships 对象，例如 {\"202\": 4}"
+        deficits = []
+        for key, needed in wanted.items():
+            try:
+                element = int(key)
+                amount = int(needed)
+            except (TypeError, ValueError):
+                return False, f"ships_at_least 的舰船 ID 和数量必须是整数：{key}={needed}"
+            have = int(facts.ships.get(element, 0))
+            if have < amount:
+                deficits.append(f"舰船 {element}: {have} < {amount}")
+        return not deficits, "；".join(deficits)
     if kind == "phase":
         wanted = str(condition.get("phase", ""))
         return facts.phase == wanted, "" if facts.phase == wanted else f"阶段是 {facts.phase}，不是 {wanted}"
@@ -239,7 +296,7 @@ def run_steps(
     if not plan:
         return RunReport(status="empty", reason="没有步骤")
 
-    facts = load_facts(client, directive) if client is not None else None
+    facts = load_facts(client, directive, steps=plan) if client is not None else None
     results: List[StepResult] = []
 
     for index, step in enumerate(plan[: max(1, int(max_steps))]):
@@ -285,7 +342,9 @@ def run_steps(
             )
 
         if facts is not None and _kind_of(registry, step.tool) == "write":
-            facts = load_facts(client, directive)
+            # Refresh only for the current step and what is left: an earlier
+            # ships_at_least guard does not justify reading the shipyard again.
+            facts = load_facts(client, directive, steps=plan[index:])
 
         if step.until and facts is not None:
             holds, why_not = check(step.until, facts)

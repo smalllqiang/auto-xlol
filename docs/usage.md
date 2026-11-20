@@ -84,6 +84,9 @@ echo "cycle failed" | .venv/bin/python scripts/notify.py --title 告警
 .venv/bin/python scripts/notify.py --test --json   # 机器可读结果
 ```
 
+`scripts/expedition_farm.py --notify` 已接入这个渠道（默认关闭，消息以 `[探险]`
+开头）；其它脚本可以直接 `from utils.notify import notify` 复用。
+
 行为与限制：
 
 - 未配置 `NEWSTAR_FEISHU_WEBHOOK` 时返回 `SendResult(skipped=True)`，不报错、不发请求；
@@ -1217,6 +1220,7 @@ allow-list、dry-run 和燃料校验。
 | `--retry-delay` | 60 | 航道仍占用/舰船不足/发送失败后的重试间隔 |
 | `--max-sleep` | 900 | 两次舰队表刷新的最长间隔；到点重新核对航道与返航时间 |
 | `--max-sends` | 0 | 单次 tick 最多发几队；0 = 把所有空闲航道一次填满 |
+| `--notify` | 关 | 把每次状态/错误上报到飞书；需 `.env` 的 `NEWSTAR_FEISHU_WEBHOOK` |
 
 运行规则：
 
@@ -1239,6 +1243,11 @@ allow-list、dry-run 和燃料校验。
   所以常驻探险时先停掉守护循环（或反之）。心跳写到 `state/expedition_farm.json`；
   每个 tick 追加一条 `state/journal.jsonl`（`kind=expedition`、`source=expedition_farm`），
   看板会把它当成「上次调度」。
+- **飞书上报默认关闭**：加 `--notify` 才打开；即使打开，`.env` 里没有
+  `NEWSTAR_FEISHU_WEBHOOK` 也只打印提示、不上报。每条消息以 `[探险]` 开头
+  （预览、单轮、循环 tick、请求失败、会话失效、急停和停止各发一条），方便在群里
+  识别主题；`--json` 模式下 stdout 仍是 JSON，上报内容是给人看的摘要。
+  上报失败只写 stderr，不影响补队。
 
 ## 20. 威胁评估与召回（P2-2）
 

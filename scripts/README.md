@@ -159,7 +159,9 @@ echo "cycle failed" | .venv/bin/python scripts/notify.py --title 告警
 
 如果只想常驻探险、不想让 `run_forever` 反复重读整份报告，用独立的
 `scripts/expedition_farm.py`：它按返航时间 +5s 补下一波，默认每 10 小时重查一次最大航道数。
-两者共用 `state/daemon.lock`，**不要同时运行**。
+两者共用 `state/daemon.lock`，**不要同时运行**。加 `--notify` 可把每轮状态/错误发到飞书
+（默认关闭；还需 `.env` 的 `NEWSTAR_FEISHU_WEBHOOK`，没配则只提示不上报），消息以
+`[探险]` 开头。
 
 ### AI 规划（`agent.py`）
 

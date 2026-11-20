@@ -29,6 +29,7 @@ from local_config import (
     SESSION_LOST_HINT,
     add_session_args,
     load_config,
+    load_values,
     make_client,
 )
 
@@ -56,6 +57,16 @@ from autoplay.journal import append_jsonl
 from autoplay.runtime import EXIT_BUSY, acquire_lock, release_lock, write_status
 from newstar_sdk.exceptions import AuthenticationError, NewStarError, SessionExpired
 from newstar_sdk.models import Coordinates
+from utils.notify import (
+    DEFAULT_TIMEOUT,
+    ENV_SECRET,
+    ENV_TIMEOUT,
+    ENV_WEBHOOK,
+    FeishuNotifier,
+)
+
+#: Prefix used for every Feishu report so the group can tell topics apart.
+NOTIFY_TITLE = "探险"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -141,6 +152,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--stop-file", default="state/STOP", help="emergency stop file")
     parser.add_argument("--execute", action="store_true", help="actually send (default: preview)")
     parser.add_argument("--once", action="store_true", help="with --execute: one fill pass, then exit")
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        help=(
+            "把每次状态和错误上报到飞书（默认关闭）。"
+            f"需要 .env 里的 {ENV_WEBHOOK}；没配置时本次不上报"
+        ),
+    )
     parser.add_argument(
         "--allow",
         action="append",
@@ -303,6 +322,53 @@ def _check_args(args: argparse.Namespace, ships: Dict[int, int]) -> Optional[int
             )
             return 2
     return None
+
+
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
+
+
+def _make_notifier(args: argparse.Namespace) -> Optional[FeishuNotifier]:
+    """Build the opt-in Feishu channel, or ``None`` when it is unavailable.
+
+    ``--notify`` is the first gate; an actual webhook in ``.env`` is the second.
+    A missing webhook is only a warning: the farm keeps running without reports.
+    """
+
+    if not getattr(args, "notify", False):
+        return None
+    values = load_values(args)
+    webhook = values.get(ENV_WEBHOOK, "").strip()
+    if not webhook:
+        print(
+            f"提示：--notify 需要 {ENV_WEBHOOK}（.env）；未配置，本次不上报",
+            file=sys.stderr,
+        )
+        return None
+    return FeishuNotifier(
+        webhook,
+        values.get(ENV_SECRET, "").strip(),
+        values.get(ENV_TIMEOUT, "").strip() or DEFAULT_TIMEOUT,
+    )
+
+
+def _report(notifier: Optional[FeishuNotifier], text: str) -> None:
+    """Best-effort report; a delivery problem must never stop the farm."""
+
+    if notifier is None:
+        return
+    try:
+        result = notifier.send_text(f"[{NOTIFY_TITLE}] {text}")
+    except Exception as exc:  # noqa: BLE001 - reporting is best-effort
+        print(
+            f"警告：飞书上报异常：{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+    if not result.ok and not result.skipped:
+        print(f"警告：飞书上报失败：{result.error}", file=sys.stderr, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +662,7 @@ def run_preview(
     planet_name: str,
     planet_coordinates: Optional[Coordinates],
     args: argparse.Namespace,
+    notifier: Optional[FeishuNotifier] = None,
 ) -> int:
     tech, max_slots = read_max_slots(client)
     slots = read_live_slots(client, clock, plan_target=plan.target)
@@ -621,6 +688,17 @@ def run_preview(
             retry_delay=float(args.retry_delay),
             max_sleep=float(args.max_sleep),
         )
+    status_text = render_status(
+        planet_id=planet_id,
+        planet_name=planet_name,
+        planet_coordinates=planet_coordinates,
+        plan=plan,
+        tech=tech,
+        max_slots=max_slots,
+        slots=slots,
+        fill=fill,
+        next_wake=next_wake,
+    )
     if args.json:
         print(
             render_json(
@@ -637,23 +715,12 @@ def run_preview(
         )
     else:
         print("模式      预览（不会发送舰队）")
-        print(
-            render_status(
-                planet_id=planet_id,
-                planet_name=planet_name,
-                planet_coordinates=planet_coordinates,
-                plan=plan,
-                tech=tech,
-                max_slots=max_slots,
-                slots=slots,
-                fill=fill,
-                next_wake=next_wake,
-            )
-        )
+        print(status_text)
         print(
             "提示      真实执行加 --execute --allow "
             + ",".join(str(ship_id) for ship_id in sorted(plan.ships))
         )
+    _report(notifier, "预览（不会发送舰队）\n" + status_text)
     return 1 if fill.status == "error" else 0
 
 
@@ -667,6 +734,7 @@ def run_once(
     planet_name: str,
     planet_coordinates: Optional[Coordinates],
     args: argparse.Namespace,
+    notifier: Optional[FeishuNotifier] = None,
 ) -> int:
     tech, max_slots, slots, fill, next_wake, clock = run_tick(
         client,
@@ -701,6 +769,17 @@ def run_once(
         next_wake=next_wake,
         state="once",
     )
+    status_text = render_status(
+        planet_id=planet_id,
+        planet_name=planet_name,
+        planet_coordinates=planet_coordinates,
+        plan=plan,
+        tech=tech,
+        max_slots=max_slots,
+        slots=slots,
+        fill=fill,
+        next_wake=next_wake,
+    )
     if args.json:
         print(
             render_json(
@@ -716,19 +795,8 @@ def run_once(
             )
         )
     else:
-        print(
-            render_status(
-                planet_id=planet_id,
-                planet_name=planet_name,
-                planet_coordinates=planet_coordinates,
-                plan=plan,
-                tech=tech,
-                max_slots=max_slots,
-                slots=slots,
-                fill=fill,
-                next_wake=next_wake,
-            )
-        )
+        print(status_text)
+    _report(notifier, "执行（单轮）\n" + status_text)
     return 1 if fill.status == "error" else 0
 
 
@@ -742,6 +810,7 @@ def run_loop(
     planet_name: str,
     planet_coordinates: Optional[Coordinates],
     args: argparse.Namespace,
+    notifier: Optional[FeishuNotifier] = None,
 ) -> int:
     stop = {"requested": False}
     stop_file = Path(args.stop_file)
@@ -760,6 +829,7 @@ def run_loop(
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
             )
+            _report(notifier, f"发现急停文件 {stop_file}，退出")
             break
         try:
             tech, max_slots, slots, fill, next_wake, clock = run_tick(
@@ -810,19 +880,21 @@ def run_loop(
                     ),
                     flush=True,
                 )
-            else:
-                print(f"[{_stamp()}] 第 {len(timetable.slots)}/{max_slots} 条航道；{fill.reason}", flush=True)
-                if fill.sent:
-                    for index, slot in enumerate(fill.sent, 1):
-                        print(
-                            f"  + 第 {index} 队 → {slot.target}；返航 "
-                            f"{iso_local(slot.expected_return_at) or '未知'}",
-                            flush=True,
-                        )
-                print(
-                    f"  下次唤醒 {iso_local(next_wake)}；时间表 {timetable.path}",
-                    flush=True,
+            tick_lines = [
+                f"[{_stamp()}] 第 {len(timetable.slots)}/{max_slots} 条航道；{fill.reason}"
+            ]
+            for index, slot in enumerate(fill.sent, 1):
+                tick_lines.append(
+                    f"  + 第 {index} 队 → {slot.target}；返航 "
+                    f"{iso_local(slot.expected_return_at) or '未知'}"
                 )
+            tick_lines.append(
+                f"  下次唤醒 {iso_local(next_wake)}；时间表 {timetable.path}"
+            )
+            if not args.json:
+                for line in tick_lines:
+                    print(line, flush=True)
+            _report(notifier, "\n".join(tick_lines))
             def heartbeat(
                 _tech=tech,
                 _max_slots=max_slots,
@@ -853,6 +925,7 @@ def run_loop(
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
             )
+            _report(notifier, f"会话不可用：{type(exc).__name__}: {exc}")
             print(SESSION_LOST_HINT, file=sys.stderr, flush=True)
             try:
                 append_jsonl(
@@ -890,6 +963,11 @@ def run_loop(
                 f"{delay:.0f}s 后重试",
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
+            )
+            _report(
+                notifier,
+                f"请求失败（第 {failures} 次）：{type(exc).__name__}: {exc}；"
+                f"{delay:.0f}s 后重试",
             )
             try:
                 append_jsonl(
@@ -943,6 +1021,7 @@ def run_loop(
         file=sys.stderr if args.json else sys.stdout,
         flush=True,
     )
+    _report(notifier, f"已停止；时间表已保存到 {timetable.path}")
     return 0
 
 
@@ -968,6 +1047,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     config = load_config(args)
     if not config.verify_ssl:
         warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+
+    notifier = _make_notifier(args)
 
     lock_fd = None
     if args.execute:
@@ -1054,6 +1135,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 planet_name=planet_name,
                 planet_coordinates=planet_coordinates,
                 args=args,
+                notifier=notifier,
             )
         if args.once:
             return run_once(
@@ -1065,6 +1147,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 planet_name=planet_name,
                 planet_coordinates=planet_coordinates,
                 args=args,
+                notifier=notifier,
             )
         return run_loop(
             client,
@@ -1075,8 +1158,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             planet_name=planet_name,
             planet_coordinates=planet_coordinates,
             args=args,
+            notifier=notifier,
         )
     finally:
+        if notifier is not None:
+            notifier.close()
         if client is not None:
             client.close()
         if lock_fd is not None:

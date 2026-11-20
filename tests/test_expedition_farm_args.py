@@ -7,6 +7,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +20,7 @@ from newstar_sdk.models import (
     PlanetInfo,
     PlanetSummary,
 )
+from utils.notify import ENV_WEBHOOK
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "expedition_farm.py"
 
@@ -43,6 +45,7 @@ def test_defaults_match_the_requested_behavior():
     assert args.stay_time == 1
     assert args.execute is False
     assert args.once is False
+    assert args.notify is False
     assert args.lock_file == "state/daemon.lock"
 
 
@@ -62,6 +65,50 @@ def test_execute_requires_allow_list_covering_the_composition():
         )
         is None
     )
+
+
+class _RecordingNotifier:
+    def __init__(self):
+        self.texts = []
+
+    def send_text(self, text):
+        self.texts.append(text)
+        return SimpleNamespace(ok=True, skipped=False, error=None)
+
+
+def test_notify_requires_both_flag_and_webhook(monkeypatch, tmp_path, capsys):
+    module = _module()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv(ENV_WEBHOOK, raising=False)
+
+    assert module._make_notifier(module.parse_args([])) is None
+
+    args = module.parse_args(["--notify"])
+    assert module._make_notifier(args) is None
+    assert ENV_WEBHOOK in capsys.readouterr().err
+
+    monkeypatch.setenv(
+        ENV_WEBHOOK, "https://open.feishu.cn/open-apis/bot/v2/hook/test"
+    )
+    notifier = module._make_notifier(args)
+    assert notifier is not None
+    assert notifier.webhook.endswith("/test")
+    notifier.close()
+
+
+def test_report_prefixes_the_topic_and_swallows_errors(capsys):
+    module = _module()
+    notifier = _RecordingNotifier()
+
+    module._report(notifier, "第 1/4 条航道")
+    assert notifier.texts == ["[探险] 第 1/4 条航道"]
+
+    class _Boom:
+        def send_text(self, text):
+            raise RuntimeError("boom")
+
+    module._report(_Boom(), "x")
+    assert "飞书上报异常" in capsys.readouterr().err
 
 
 def test_resolve_planet_defaults_to_first_and_accepts_index_coordinates_and_id():
@@ -188,6 +235,46 @@ def test_run_tick_fills_every_lane_and_records_expected_returns(tmp_path):
     assert len(timetable.slots) == 4
 
 
+def test_run_once_reports_the_status_with_a_topic_prefix(tmp_path, capsys):
+    module = _module()
+    client = _OverviewClient()
+    args = module.parse_args(
+        [
+            "--execute",
+            "--allow",
+            "207",
+            "--timetable",
+            str(tmp_path / "timetable.json"),
+            "--status-file",
+            str(tmp_path / "status.json"),
+            "--journal",
+            str(tmp_path / "journal.jsonl"),
+            "--notify",
+        ]
+    )
+    timetable = module.ExpeditionTimetable(path=tmp_path / "timetable.json")
+    notifier = _RecordingNotifier()
+
+    code = module.run_once(
+        client,
+        plan=module.ExpeditionPlan(
+            target="3:505:16", ships={207: 8621}, speed=10, stay_time=1
+        ),
+        timetable=timetable,
+        clock=module.GameClock(),
+        planet_id=22828,
+        planet_name="母星",
+        planet_coordinates=Coordinates(3, 505, 8),
+        args=args,
+        notifier=notifier,
+    )
+
+    assert code == 0
+    assert len(notifier.texts) == 1
+    assert notifier.texts[0].startswith("[探险] 执行（单轮）")
+    assert "星球      母星 [3:505:8]" in notifier.texts[0]
+
+
 def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
     module = _module()
     plan = ExpeditionPlan(target="3:505:16", ships={207: 8621})
@@ -199,6 +286,7 @@ def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
         journal=str(tmp_path / "journal.jsonl"),
         status_file=str(tmp_path / "status.json"),
     )
+    notifier = _RecordingNotifier()
 
     def fail_tick(*_args, **_kwargs):
         raise SessionExpired("the game session is no longer valid")
@@ -214,6 +302,7 @@ def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
         planet_name="test",
         planet_coordinates=None,
         args=args,
+        notifier=notifier,
     )
 
     assert code == module.EXIT_SESSION_EXPIRED
@@ -221,3 +310,6 @@ def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
     assert journal[-1]["kind"] == "session_error"
     assert "session.py import" in capsys.readouterr().err
     assert json.loads(Path(args.status_file).read_text())["state"] == "error"
+    assert any(
+        text.startswith("[探险] 会话不可用") for text in notifier.texts
+    )

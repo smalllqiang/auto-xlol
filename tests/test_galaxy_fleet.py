@@ -179,3 +179,20 @@ def test_dispatch_result_maps_expedition_label(fixture_html):
     assert result is not None
     assert result.mission == 15
     assert result.mission_name == "探险"
+
+
+def test_fleet_selection_parses_localized_thousands_separator():
+    def page(value: str) -> str:
+        return f"""
+        <div class="build_box flethan">
+          <input type="text" name="ship207" value="">
+          <div class="hang3">战列舰</div>
+          <div id="ship207_value">{value}</div>
+        </div>
+        """
+
+    # 275.328 / 275,328 both mean 275,328; truncating at the separator
+    # reported only 275 available battleships.
+    assert parse_fleet_selection(page("275.328"))[207].count == 275_328
+    assert parse_fleet_selection(page("275,328"))[207].count == 275_328
+    assert parse_fleet_selection(page("275"))[207].count == 275

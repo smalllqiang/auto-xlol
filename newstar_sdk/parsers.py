@@ -104,12 +104,14 @@ def _float(value: Any) -> Optional[float]:
 
 
 def _int(value: Any, default: Optional[int] = None) -> Optional[int]:
+    """Parse a localized integer (``275.328`` and ``275,328`` mean 275328)."""
+
     if value is None or value == "":
         return default
-    try:
-        return int(float(str(value)))
-    except (TypeError, ValueError):
-        return first_int(str(value), default)
+    text = str(value)
+    if not re.search(r"\d", text):
+        return first_int(text, default)
+    return int(parse_number(text))
 
 
 # ---------------------------------------------------------------------------
@@ -702,7 +704,7 @@ def parse_ship_queue(html: str) -> List[QueueEntry]:
         time_node = row.select_one("#time[data-time]")
         remaining = _int(time_node.get("data-time")) if time_node else None
         amount_node = row.select_one("#auftr0") or row.select_one(".onlistremov")
-        amount = first_int(_text(amount_node))
+        amount = _int(_text(amount_node))
         position = first_int(_text(row.select_one(".onlistrenum")))
         index = (position - 1) if position and position > 0 else len(entries)
         active = "active_row" in row.get("class", [])
@@ -900,7 +902,7 @@ def parse_fleets(html: str) -> List[FleetInfo]:
                 tds = ship_row.find_all("td")
                 if len(tds) >= 2:
                     ship_name = _text(tds[-2]).rstrip(":")
-                    ship_count = first_int(_text(tds[-1]))
+                    ship_count = _int(_text(tds[-1]))
                     if ship_name and ship_count is not None:
                         ships[ship_name] = ship_count
 
@@ -910,7 +912,7 @@ def parse_fleets(html: str) -> List[FleetInfo]:
                 number=first_int(cell_texts[0]),
                 mission=mission_name,
                 mission_id=mission_id,
-                amount=first_int(cell_texts[2]),
+                amount=_int(cell_texts[2]),
                 start_coordinates=parse_coordinates(cell_texts[3]),
                 start_time=cell_texts[4],
                 target_coordinates=parse_coordinates(cell_texts[5]),
@@ -1051,7 +1053,7 @@ def parse_fleet_dispatch_result(html: str) -> Optional[FleetDispatch]:
             match = re.search(r"gebaeude/(\d+)\.gif", img.get("src", ""))
             if match:
                 element_id = int(match.group(1))
-        count = first_int(_text(box.select_one(".fleettab15")))
+        count = _int(_text(box.select_one(".fleettab15")))
         if element_id is not None and count is not None:
             ships[element_id] = count
 

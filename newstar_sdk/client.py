@@ -124,6 +124,13 @@ class NewStarClient:
     planet_id:
         Select this planet before the first request.  Most methods also
         accept a planet id via :meth:`select_planet`.
+    ignore_cookie_expiry:
+        Shared-session mode: the game keeps the server-side session alive on
+        every request (``lastActivity``) but does not resend ``Set-Cookie``,
+        so a locally persisted ``expires`` would drop a live session at 12 h.
+        When true the client clears cookie expiry after each response and
+        writes ``expires: null`` in :meth:`save_session`.  Defaults to false,
+        i.e. the usual browser-like cookie expiry.
     """
 
     def __init__(
@@ -140,6 +147,7 @@ class NewStarClient:
         session: Optional[requests.Session] = None,
         planet_id: Optional[int] = None,
         auto_relogin: bool = True,
+        ignore_cookie_expiry: bool = False,
         max_retries: int = 2,
         retry_backoff: float = 1.5,
         request_interval: float = 0.25,
@@ -151,6 +159,7 @@ class NewStarClient:
         self.timeout = float(timeout)
         self.verify_ssl = bool(verify_ssl)
         self.auto_relogin = bool(auto_relogin)
+        self.ignore_cookie_expiry = bool(ignore_cookie_expiry)
         self.max_retries = max(0, int(max_retries))
         self.retry_backoff = max(0.0, float(retry_backoff))
         self.request_interval = max(0.0, float(request_interval))
@@ -226,6 +235,8 @@ class NewStarClient:
                     ) from exc
 
                 self._last_response = response
+                if self.ignore_cookie_expiry:
+                    self._clear_cookie_expiry()
                 if response.status_code >= 500 and attempt < retries:
                     time.sleep(self.retry_backoff * (attempt + 1))
                     continue
@@ -487,6 +498,18 @@ class NewStarClient:
             self._logged_in = False
             self._last_overview = None
 
+    def _clear_cookie_expiry(self) -> None:
+        """Drop local cookie expiry in shared-session mode.
+
+        The server refreshes ``lastActivity`` on every request but does not
+        resend ``Set-Cookie``, so a locally persisted ``expires`` would make
+        the jar stop sending a session the server still accepts.
+        """
+
+        for cookie in self._session.cookies:
+            if cookie.expires is not None:
+                cookie.expires = None
+
     def save_session(self, path: Union[str, Path]) -> Path:
         """Persist cookies and non-secret client state to a JSON file."""
 
@@ -501,7 +524,7 @@ class NewStarClient:
                     "domain": cookie.domain,
                     "path": cookie.path,
                     "secure": bool(cookie.secure),
-                    "expires": cookie.expires,
+                    "expires": None if self.ignore_cookie_expiry else cookie.expires,
                 }
             )
         payload = {
@@ -541,7 +564,7 @@ class NewStarClient:
                 domain=item.get("domain") or None,
                 path=item.get("path") or "/",
                 secure=bool(item.get("secure")),
-                expires=item.get("expires"),
+                expires=None if self.ignore_cookie_expiry else item.get("expires"),
             )
             self._session.cookies.set_cookie(cookie)
         if not self._universe and payload.get("universe"):

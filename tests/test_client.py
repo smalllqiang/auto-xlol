@@ -142,6 +142,71 @@ def test_save_and_load_session(tmp_path):
     assert cookie == "session-value"
 
 
+def _session_file(tmp_path, expires):
+    path = tmp_path / "session.json"
+    path.write_text(
+        json.dumps(
+            {
+                "base_url": "https://example.test/",
+                "username": "user",
+                "cookies": [
+                    {
+                        "name": "2Moons",
+                        "value": "abc",
+                        "domain": "example.test",
+                        "path": "/",
+                        "secure": True,
+                        "expires": expires,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_default_client_keeps_cookie_expiry(tmp_path):
+    path = _session_file(tmp_path, 4102444800)
+    client = NewStarClient("https://example.test/", verify_ssl=False)
+
+    assert client.load_session(path, validate=False) is True
+    assert next(iter(client._session.cookies)).expires == 4102444800
+
+    out = client.save_session(tmp_path / "out.json")
+    assert json.loads(out.read_text(encoding="utf-8"))["cookies"][0]["expires"] == 4102444800
+
+
+def test_ignore_cookie_expiry_loads_without_expiry(tmp_path):
+    path = _session_file(tmp_path, 4102444800)
+    client = NewStarClient(
+        "https://example.test/", verify_ssl=False, ignore_cookie_expiry=True
+    )
+
+    assert client.load_session(path, validate=False) is True
+    assert next(iter(client._session.cookies)).expires is None
+
+    out = client.save_session(tmp_path / "out.json")
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["cookies"][0]["expires"] is None
+
+
+def test_ignore_cookie_expiry_clears_after_each_response(monkeypatch):
+    client = NewStarClient(
+        "https://example.test/", verify_ssl=False, ignore_cookie_expiry=True
+    )
+    client._session.cookies.set(
+        "2Moons", "abc", domain="example.test", path="/", expires=4102444800
+    )
+    monkeypatch.setattr(
+        client._session, "request", lambda *a, **k: FakeResponse("<html></html>")
+    )
+
+    client._raw_request("GET", "game.php")
+
+    assert next(iter(client._session.cookies)).expires is None
+
+
 def test_select_planet_rejects_unknown(fixture_html, monkeypatch):
     client = _make_client()
     client._current_planet_id = 10001

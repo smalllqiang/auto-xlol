@@ -182,14 +182,21 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 
 **边界与后续（P4）**
 
-- AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、由游戏裁决，见
-  ADR-030。执行层仍保留 dry-run 默认、页面证据与 `state/STOP`。
-- P4-1：旧确定性脚本（`run_forever --execute --allow`、探险、生产、召回）仍带
-  allow-list；迁移到无闸门路径前列为兼容保留。
-- P4-2：journal 记录提示词/工具版本哈希，支持按版本回放同一份 brief。
-- P4-3：工具参数枚举按当前页面动态生成，减少模型报出不存在的元素。
-- P4-4：`scripts/eval_agent.py` 离线场景回放与一致率统计（决策 vs planner）。
-- P4-5：`run_forever` 的模型路由——常规轮次走 planner，告警/阶段切换才叫模型。
+AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、由游戏裁决（ADR-030），
+执行层保留 dry-run 默认、页面证据与 `state/STOP`。下列按优先级排列；P4-2 与 P4-6 是
+下一轮长跑前值得先做的。
+
+| # | 要做什么 | 触发它的问题 | 验收 |
+| --- | --- | --- | --- |
+| P4-1 | 去掉旧确定性脚本的 allow-list | `run_forever`、探险、生产、召回仍需人预先授权 | `--execute` 不再要求 `--allow`；脚本与测试同步，行为无其它变化 |
+| P4-2 | agent journal 可回放 | 读工具结果（`expedition_report` 等）未入库；无提示词/工具版本哈希，事后无法复原模型看到了什么 | 每条含 `prompt_hash`/`tools_hash` 与 `tool_events`；同一 brief 能复现决策 |
+| P4-6 | 船坞剩余槽位进简报 | 本实例只有 5 个队列槽，模型一次提交 6 种舰必然撞上限 | 简报给出剩余槽位；`build_ships` 按槽位拆单或在提交前拒绝 |
+| P4-7 | 新增 `ships_at_least` 条件 | 模型拿 `queue_empty: shipyard` 代理"船造好了没"，多次空等 | `load_facts` 读可用舰数；舰队就绪才放行 `send_fleet` |
+| P4-3 | 工具参数枚举随页面生成 | 模型可能报出本服不存在的元素/舰种 | schema 每次由当前页面生成；非法值在 dry-run 即 `INVALID_ARGS` |
+| P4-4 | 离线评估脚本 `scripts/eval_agent.py` | 只有实跑，没有回归基线 | 固定快照集上输出 JSON 合法率、与 planner 意图一致率、拒绝率 |
+| P4-5 | `run_forever` 的模型路由 | 每轮都叫模型，多数轮次无事可做 | 常规轮走 planner，告警/阶段切换才调模型，并记录路由原因 |
+| P4-8 | 探险编队只用可派遣舰种 | 编队里出现过殖民舰、探测器与未知 mod 舰 | 编队模板排除非战斗/运输舰，或提示词明确禁止 |
+| P4-9 | 看板显示 agent 状态 | TUI 只读 `daemon.json`，看不到 agent 心跳与 failed 比例 | TUI 增加 agent 块：cycles / status / failed 率 |
 
 ## 核实与技术债
 

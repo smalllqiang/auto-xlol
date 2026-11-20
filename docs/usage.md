@@ -1353,3 +1353,7 @@ nohup .venv/bin/python -u scripts/agent.py --no-verify-ssl --execute \
 
 停止：`touch state/STOP`（优雅），或 `kill <pid>`。不要 `kill -9`，否则
 `state/agent.lock` 变成陈旧锁——下次启动会自动接管，但正在进行的写操作会中断。
+
+长跑后先看三个数：`state/agent.json` 的 `cycles` / `status`、`report.status` 里
+`failed` 的比例、以及失败 code 的分布。`QUEUE_FULL` 只应出现在 `blocked`；
+若 `failed` 超过两成，先查 `agent.out` 里的 tool 报错，不要急着调策略。

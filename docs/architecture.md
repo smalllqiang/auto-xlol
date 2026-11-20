@@ -242,7 +242,9 @@ runner 停下并把事实交回模型重新规划，这比写一个永远正确�
 已知边界：
 
 - 同一份 brief 不保证同一决策（温度、模型版本）。journal 记录了 `usage` 与
-  `transcript` 摘要，但还没有记录提示词/工具版本哈希，回放能力有限（roadmap P4）。
+  `transcript` 摘要，但读工具（`observe` / `plan` / `expedition_report`）的结果只回给
+  模型、不入库，也没有提示词/工具版本哈希，事后无法复原"它当时看到了什么"
+  （roadmap P4-2）。
 - 工具的参数枚举目前是通用类型，没有按当前页面动态生成；模型报出不存在的元素时，
   `resolve_element` 会把它变成 `INVALID_ARGS`，而不是被猜成另一个元素。
 - 旧的确定性脚本（`run_forever --execute --allow`、探险/生产脚本）仍保留 allow-list，

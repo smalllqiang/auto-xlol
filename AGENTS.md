@@ -26,6 +26,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 （纯解析）、`autoplay/planner.py`（计划）、`autoplay/directive.py`（策略目标来源）、`autoplay/executor.py`（执行）、
 `autoplay/brief.py`（事实 → 决策简报）、`autoplay/tools.py`（动词工具）、`autoplay/runner.py`（按前提执行计划）、
 `autoplay/agent.py`（模型决策循环）、`autoplay/prompt.py`（提示词语料）、`autoplay/llm.py`（Provider）、
+`autoplay/memory.py`（跨轮记忆）、`autoplay/runtime.py`（pid 锁/心跳）、
 `autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、
 `autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
 
@@ -174,8 +175,10 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 2. 在 `tests/fixtures/` 放脱敏样本，先写失败的解析测试。
 3. `parsers.py` 加纯解析函数，`models.py` 加数据结构。
 4. `client.py` 加高层方法（必要时验证），`__init__.py` 导出。
-5. 跑 `ruff` + `pytest`；再对真实实例跑一次只读 live 测试。
-6. 更新 `docs/usage.md`（用法）和 `docs/roadmap.md`（如果推进了任务）。
+5. `models.py` 新增/修改的类型若会被工具层或 journal 序列化，补 `as_dict()` 与用例——
+   缺它会让成功返回在序列化时抛 `TypeError`，被误报成工具失败。
+6. 跑 `ruff` + `pytest`；再对真实实例跑一次只读 live 测试。
+7. 更新 `docs/usage.md`（用法）和 `docs/roadmap.md`（如果推进了任务）。
 
 ## 验收清单
 

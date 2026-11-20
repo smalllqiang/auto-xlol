@@ -22,7 +22,7 @@
 ## 自动化能力
 
 - 只读规划：识别当前阶段，展开阶段目标的依赖链，按回本时间排序产出建筑
-- 单步执行：默认 dry-run；需 `--execute` + allow-list；队列感知、单步预算、结果验证
+- 单步执行（确定性路径）：默认 dry-run；需 `--execute` + allow-list；队列感知、单步预算、结果验证
 - AI 规划（可选）：简报喂模型，模型输出带前提的类型化步骤，runner 逐条执行；写工具不做
   本地预检，合法性由游戏裁决（ADR-030 / ADR-031）
 - 常驻循环：单实例锁、指数退避、`state/STOP` 急停、日志/快照轮转、告警暂停
@@ -270,6 +270,8 @@ autoplay/         # 策略层（易变）
   agent.py        # 模型决策循环（失败回退 planner）
   prompt.py       # 提示词语料
   llm.py          # Provider 协议 + OpenAI 兼容实现
+  memory.py       # 从 journal 读回最近 N 轮，补 history/delta
+  runtime.py      # 常驻循环的 pid 锁、心跳、陈旧锁接管
 newstar_sdk/      # 客户端组件（稳定契约）
   client.py       # HTTP 会话 + 高层操作
   parsers.py      # 页面解析（纯函数）

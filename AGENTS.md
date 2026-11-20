@@ -27,7 +27,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 `autoplay/brief.py`（事实 → 决策简报）、`autoplay/tools.py`（动词工具）、`autoplay/runner.py`（按前提执行计划）、
 `autoplay/agent.py`（模型决策循环）、`autoplay/prompt.py`（提示词语料）、`autoplay/llm.py`（Provider）、
 `autoplay/memory.py`（跨轮记忆）、`autoplay/runtime.py`（pid 锁/心跳）、
-`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、
+`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、`autoplay/expedition_scheduler.py`（常驻探险调度）、
 `autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
 
 ## 环境与命令
@@ -55,6 +55,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/dispatch_expedition.py --no-verify-ssl  # 探险预览（--execute --allow 才发送）
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl   # 常驻探险预览（--execute --allow 207 才发送）
 .venv/bin/python scripts/threat.py --no-verify-ssl        # 威胁报告（--recall --execute --allow 才召回）
 .venv/bin/python scripts/empire.py --no-verify-ssl        # 全局面板（每星资源/建筑/舰只）
 .venv/bin/python scripts/production.py --no-verify-ssl    # 生产比例（--set + --execute --allow 才写入）
@@ -66,7 +67,8 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
 ```
 
-本实例证书过期，脚本通常要加 `--no-verify-ssl`。
+本实例证书过期，脚本通常要加 `--no-verify-ssl`。每个脚本的用途、常用参数与写入条件见
+`scripts/README.md`。
 
 ## 目录职责
 

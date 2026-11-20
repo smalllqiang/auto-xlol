@@ -1114,6 +1114,60 @@ allow-list、dry-run 和燃料校验。
 
 先预览、再小批量执行，是多航道场景的推荐用法。
 
+### 19.1 常驻探险调度（`expedition_farm.py`）
+
+`scripts/expedition_cycle.py` 是「跑一轮」；`scripts/expedition_farm.py` 是「一直跑」。
+它只做一件事：把每一条探险航道都填满固定编队，记录返航时间，到点后补下一波。
+
+```bash
+# 只读预览：当前航道、编队、燃料/停留选项；不会发送
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl
+
+# 真实执行一轮（适合 cron / 手工验证）
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl \
+  --execute --allow 207 --once
+
+# 常驻：填满后睡到最早返航时间 +5s，再补下一波
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl \
+  --execute --allow 207
+```
+
+默认值：
+
+| 参数 | 默认 | 含义 |
+| --- | --- | --- |
+| `--planet` | 第一颗星球 | 星球 id、坐标 `3:505:8` 或 1 基序号；也接受时间表里保存的星球 |
+| `--ships` | `207=8621` | 编队组成；战列舰 207×8621 ≈ 500,018 fleetPoints |
+| `--target` | 本星系第 16 位 | 探险目标坐标 |
+| `--speed` / `--stay-time` | 10 / 1 | 舰队速度 / 停留选项（`0` 会被游戏拒绝） |
+| `--check-hours` | 10 | 每 10 小时重读研究页，刷新「最大航道数」 |
+| `--return-delay` | 5 | 预期返航后延迟多少秒再补下一波 |
+| `--retry-delay` | 60 | 航道仍占用/舰船不足/发送失败后的重试间隔 |
+| `--max-sleep` | 900 | 两次舰队表刷新的最长间隔；到点重新核对航道与返航时间 |
+| `--max-sends` | 0 | 单次 tick 最多发几队；0 = 把所有空闲航道一次填满 |
+
+运行规则：
+
+- **最大航道数**是 `floor(sqrt(探险技术等级))`，不是空闲航道数；在途和返航中的
+  探险队（任务 15/18）都占用航道。脚本每 10 小时重读一次研究页，航道增加后自动多填。
+- 每次发送后把确认页的返航时间（模板里的 `fleetEndTime`）写进时间表；下一次唤醒取
+  「最早返航时间 + `--return-delay`」与下一轮航道检查、`--max-sleep` 安全刷新中的最小值。
+  因此正常路径是返航后 5 秒补下一波，不会等固定轮询。
+- 时间表默认 `state/expedition_timetable.json`：星球、编队、最大航道、当前占用、
+  每条航道的目标/返航时间/剩余时间，以及最近 200 条发送历史。重启后先读时间表，
+  再以舰队表为准重建航道；换星球会清空旧航道记录。
+- 舰队表里第 6 列（模型字段 `target_time`）才是返航的绝对时间；第 7 列
+  （`arrival_time`）是剩余时间字符串。时间表两者都记，便于人工核对。
+- 发送前检查本星可用舰船；不足时**不会减配**，只记录「舰船不足」并按
+  `--retry-delay` 重试。脚本不自动造船、不自动召回；缺船先用
+  `scripts/build_expedition_ships.py` 或游戏内船坞补齐。
+- 写操作默认 dry-run；真实发送必须 `--execute` + `--allow`，且编队里的每个舰船 id
+  都必须在 allow-list 里。`state/STOP` 在每次 tick 和睡眠期间（每 5 秒）检查。
+- 默认与 `run_forever.py` 共用 `state/daemon.lock`：同一账号只能有一个写者，
+  所以常驻探险时先停掉守护循环（或反之）。心跳写到 `state/expedition_farm.json`；
+  每个 tick 追加一条 `state/journal.jsonl`（`kind=expedition`、`source=expedition_farm`），
+  看板会把它当成「上次调度」。
+
 ## 20. 威胁评估与召回（P2-2）
 
 把「被侦察/来袭」从告警升级为结构化判断：读间谍报告（分类 0）、战斗报告

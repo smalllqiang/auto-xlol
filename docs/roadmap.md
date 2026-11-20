@@ -100,6 +100,7 @@ journal 里回放。
 | P2-1 | 探险阶段规划 | ✅ | 航道/积分规划、建船建议与前置链、编队拆分、单队/多队预览与发送、自动补船闭环已支持；本机验证发送/召回 |
 | P2-1b | 探险调度接入守护循环 | ✅ | `run_forever --expedition` 按轮次节流调用 `expedition_cycle`，独立舰船 allow-list/上限；本机 `--once` 实测发送并召回 |
 | P2-1c | 每日签到 | ✅ | 概览导航判断可用性（不碰 `page=bonus`），`--execute` 下守护循环自动领取；本机 2026-11-16 实测领取 +24h 冷却 |
+| P2-1d | 常驻探险调度 | ✅ | `expedition_farm` 维护返航时间表，按返航 +5s 补下一波，每 10h 重查最大航道；离线单测覆盖时间解析/时间表/填满/舰船不足，未跑 live（避免替换浏览器会话） |
 | P2-2 | 舰队与威胁响应 | ✅ | 间谍/战斗报告 + 舰队表 → `calm`/`watch`/`danger`；`--threat-every` / `--pause-on-threat`；召回支持预览 + 舰队 id allow-list + 页面验证（资源转移/多星球仍属 P2-3） |
 | P2-3 | 多星球调度 | ⬜ | 只读解析已就绪（`control` 全局面板 + `scripts/empire.py`）；跨星调度、切星、分星计划未做 |
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
@@ -124,7 +125,7 @@ P2-3 前置记录（2026-11-18）：`page=control` 解析与 `scripts/empire.py`
 新增「帝国」块（殖民位 + 每星面积/资源/舰防，无文件时隐藏）。**跨星调度、切星、
 分星计划仍未做**，所以 P2-3 保持 ⬜——当前账号只有 1 颗星，多星路径只能离线构造。
 
-P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。
+P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。`scripts/expedition_farm.py` 是独立的常驻调度：固定编队（默认 8621 战列舰）填满所有航道，按舰队表返航时间 +5s 补下一波，时间表写 `state/expedition_timetable.json`，默认每 10h 重查最大航道；它与 `run_forever` 共用写者锁。测试见 `tests/test_expedition_scheduler.py`、`tests/test_expedition_farm_args.py`。
 
 ## P3 AI 战略层（仅 AI-0 / AI-1 已立项）
 

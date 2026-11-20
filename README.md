@@ -73,7 +73,8 @@ cp .env.example .env
 每轮会检查队列、资源和单步预算，一次只做一个动作；`state/STOP` 存在即拒绝运行；被拒
 不会自动重试。探险相关脚本默认只预览，真实发送需 `--execute` + 舰船 allow-list。
 
-全部命令与参数见 [使用说明](docs/usage.md)；策略为什么这样定见
+每个脚本干什么、常用参数是什么意思见 [scripts/README.md](scripts/README.md)；
+完整命令与 API 用法见 [使用说明](docs/usage.md)；策略为什么这样定见
 [架构与设计](docs/architecture.md) 和 [设计决策](docs/decisions.md)。
 
 ## SDK 组件

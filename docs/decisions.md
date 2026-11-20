@@ -401,3 +401,24 @@
   场景回放，不能只看"跑起来没报错"。
 - 判据：runner 遇到不满足的前提必须停止；journal 能看到每一步的 `tool/args/until/why`
   与结果；模型不经手任何算术。
+
+## ADR-032：会话文件是唯一缓存，密码登录结果必须回写
+
+- 状态：接受（2026-11-20）；补充 ADR-029，不改变“共享文件有效时不自动重登”的约束。
+- 决定：`scripts/local_config.py` 把 `state/session.json`（或
+  `NEWSTAR_SESSION_FILE` / `--session-file` 指定的路径）当作会话的唯一缓存。
+  取得会话的顺序固定为：文件里仍有效的 Cookie → 账号密码登录（仅在无文件或
+  `--relogin` 时）。**任何新建会话**（首次登录、`--relogin`、运行中
+  `auto_relogin`）都立即写回该文件；`--no-save-session` 显式关闭回写。写前校验
+  文件里的 `base_url` / `username`，与本次账号不符就拒绝覆盖并提示改用
+  `--session-file` 或 `--no-save-session`。脚本启动时在 stderr 打印会话来源。
+- 背景：ADR-029 只做了“有文件就不重登”，密码登录的结果仍只存在进程内存里。于是
+  没有文件时每次运行都静默新建会话（浏览器照样被踢），`--relogin` 之后文件里仍是
+  上一次的旧 Cookie，下次运行又失败又重登；用户也无法从 `state/` 判断脚本当前
+  用的是哪份会话。
+- 代价：密码登录会写本地 Cookie 文件（权限 `0600`，已在 `.gitignore`），敏感面与
+  显式 `save_session()` 相同；多进程仍受“同一账号只有一份会话”和单写者约束，
+  回写只解决本地真值，不解决并发。
+- 判据：`scripts/session.py status` 检查的就是脚本实际复用的会话；首次无文件运行后
+  `state/session.json` 存在且下次运行不再 `login()`；`--no-save-session` 不产生文件；
+  属主不符时拒绝写入。

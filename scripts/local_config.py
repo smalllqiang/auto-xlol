@@ -7,11 +7,17 @@ is imported by the SDK itself; it only serves the scripts in this directory.
 The scripts also share a *session file*.  New-Star keeps exactly one session per
 account (see ``docs/usage.md``), so when a session file exists the scripts reuse
 it instead of logging in again; a fresh login would log the browser out.
+
+The file is the single cache of the session: a password login (first run with
+no file, or ``--relogin``) is written back to it, so the next run reuses the
+same cookie instead of logging in a second time.  ``--no-save-session`` opts
+out for one-off runs that must not touch the shared file.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -73,6 +79,8 @@ class Config:
     timeout: float = 20.0
     interval: float = 0.5
     session_file: Optional[str] = None
+    session_target: str = DEFAULT_SESSION_FILE
+    persist_session: bool = True
     relogin: bool = True
     agent: AgentSettings = field(default_factory=AgentSettings)
 
@@ -221,6 +229,11 @@ def load_config(args: argparse.Namespace) -> Config:
         session_file = DEFAULT_SESSION_FILE
     session_ready = bool(session_file) and Path(session_file).exists()
     relogin = bool(getattr(args, "relogin", False)) or not session_ready
+    # Where a new session is written: the configured path, or the shared
+    # default.  Kept separate from ``session_file`` because that one only
+    # points at a file that is already usable.
+    session_target = values.get("NEWSTAR_SESSION_FILE") or DEFAULT_SESSION_FILE
+    persist_session = not bool(getattr(args, "no_save_session", False))
 
     base_url = values.get("NEWSTAR_BASE_URL", "")
     username = values.get("NEWSTAR_USERNAME", "")
@@ -240,6 +253,8 @@ def load_config(args: argparse.Namespace) -> Config:
         timeout=_float_value(values, "NEWSTAR_TIMEOUT", 20.0),
         interval=getattr(args, "interval", 0.5),
         session_file=session_file if session_ready else None,
+        session_target=session_target,
+        persist_session=persist_session,
         relogin=relogin,
         agent=AgentSettings(
             base_url=values.get("NEWSTAR_AGENT_BASE_URL", ""),
@@ -267,6 +282,110 @@ def add_session_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="会话失效时用账号密码重新登录（会踢掉浏览器里的会话）",
     )
+    parser.add_argument(
+        "--no-save-session",
+        action="store_true",
+        help=(
+            "不要把用账号密码取得的会话写入共享文件；该会话仅在本次进程有效。"
+            "用于临时账号或一次性运行，避免覆盖共享会话"
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared session file
+# ---------------------------------------------------------------------------
+
+
+def _session_meta(path: Path) -> Dict[str, object]:
+    """Best-effort read of a session file's metadata (never raises)."""
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _check_session_owner(path: Path, client: NewStarClient) -> None:
+    """Refuse to overwrite a shared session that belongs to someone else.
+
+    Overwriting it would silently hand the wrong account the shared file, so
+    this is a hard error instead of a warning.
+    """
+
+    payload = _session_meta(path)
+    if not payload:
+        return
+    stored_base = str(payload.get("base_url") or "")
+    stored_user = str(payload.get("username") or "")
+    same_base = stored_base.rstrip("/").casefold() == client.base_url.rstrip("/").casefold()
+    if stored_base and not same_base:
+        raise SystemExit(
+            f"共享会话 {path} 属于 {stored_base}，本次连接的是 {client.base_url}；"
+            "请用 --session-file 指向对应文件，或加 --no-save-session"
+        )
+    if stored_user and client.username and stored_user != client.username:
+        raise SystemExit(
+            f"共享会话 {path} 属于账号 {stored_user}，本次使用的是 {client.username}；"
+            "请用 --session-file 指向对应文件，或加 --no-save-session"
+        )
+
+
+class _SharedSessionClient(NewStarClient):
+    """A client that writes every session it creates to the shared file.
+
+    :func:`make_client` configures ``session_target`` / ``persist_session``.
+    Overriding :meth:`login` also covers logins that happen *after* the initial
+    acquisition (``auto_relogin`` on an expired cookie): those would otherwise
+    live only in memory and be lost when the process exits.
+    """
+
+    session_target: Optional[Path] = None
+    persist_session: bool = False
+
+    def login(self, force: bool = False) -> "NewStarClient":
+        if self._logged_in and not force:
+            return self
+        super().login(force=force)
+        if self.persist_session and self.session_target is not None:
+            _check_session_owner(self.session_target, self)
+            self.save_session(self.session_target)
+            print(
+                f"会话：已重新登录并写入 {self.session_target}",
+                file=sys.stderr,
+            )
+        return self
+
+
+def _report_reused_session(path: Path) -> None:
+    saved_at = str(_session_meta(path).get("saved_at") or "")
+    suffix = f"（保存于 {saved_at}）" if saved_at else ""
+    print(f"会话：复用 {path}{suffix}", file=sys.stderr)
+
+
+def _report_new_session(persisted: bool, target: Optional[Path]) -> None:
+    if persisted and target is not None:
+        print(
+            f"会话：账号密码登录（浏览器里的会话已被替换），已写入 {target}",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "会话：账号密码登录（浏览器里的会话已被替换；"
+            "--no-save-session，不写共享文件，仅本次进程有效）",
+            file=sys.stderr,
+        )
+
+
+def _persist_session(client: NewStarClient, target: Optional[Path]) -> bool:
+    """Write a freshly created session to the shared file."""
+
+    if target is None:
+        return False
+    _check_session_owner(target, client)
+    client.save_session(target)
+    return True
 
 
 def make_client(
@@ -275,16 +394,22 @@ def make_client(
     interval: Optional[float] = None,
     timeout: Optional[float] = None,
     relogin: Optional[bool] = None,
+    persist: Optional[bool] = None,
 ) -> NewStarClient:
-    """Build a client that reuses the shared session file when it exists.
+    """Build a client around the shared session file.
 
-    A shared session is never re-created automatically: logging in again would
-    replace the account's only session and log the browser out.  Use
-    ``--relogin`` (or delete the session file) when a fresh login is intended.
+    Resolution order: an existing file that the server still accepts, otherwise
+    a password login (only when allowed; a fresh login replaces the account's
+    only session and logs the browser out).  Every session created here -- or
+    later by ``auto_relogin`` -- is written back to the shared file unless
+    ``--no-save-session`` is set, so the next run can reuse it.
     """
 
     allow_relogin = config.relogin if relogin is None else relogin
-    client = NewStarClient(
+    persist_session = config.persist_session if persist is None else persist
+    target = Path(config.session_target) if config.session_target else None
+    persist = bool(persist_session and target is not None)
+    client = _SharedSessionClient(
         config.base_url,
         config.username or None,
         config.password or None,
@@ -294,10 +419,20 @@ def make_client(
         request_interval=config.interval if interval is None else interval,
         auto_relogin=allow_relogin,
     )
+    client.session_target = target
+    # The initial acquisition below saves explicitly (so it can report once);
+    # the hook is armed afterwards for mid-run ``auto_relogin``.
+    client.persist_session = False
+
+    def hand_over() -> NewStarClient:
+        client.persist_session = persist
+        return client
+
     session_file = Path(config.session_file) if config.session_file else None
     if session_file is not None and session_file.exists():
         if client.load_session(session_file):
-            return client
+            _report_reused_session(session_file)
+            return hand_over()
         if not allow_relogin:
             client.close()
             raise SystemExit(SESSION_EXPIRED_HINT.format(path=session_file))
@@ -306,8 +441,11 @@ def make_client(
             "（浏览器里的会话会被替换）",
             file=sys.stderr,
         )
+        if persist:
+            _check_session_owner(target, client)
         client.login(force=True)
-        return client
+        _report_new_session(persist and _persist_session(client, target), target)
+        return hand_over()
     if not client.username or not client.has_password():
         client.close()
         raise SystemExit(
@@ -315,4 +453,6 @@ def make_client(
             "file) and import a session file with scripts/session.py"
         )
     client.ensure_login()
-    return client
+    _report_new_session(persist and _persist_session(client, target), target)
+    return hand_over()
+

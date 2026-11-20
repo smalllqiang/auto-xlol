@@ -36,6 +36,7 @@ def _args(**overrides):
         "interval": 0.1,
         "session_file": None,
         "relogin": False,
+        "no_save_session": False,
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -91,7 +92,27 @@ def test_load_config_auto_uses_default_session_file():
     config = module.load_config(_args())
 
     assert config.session_file == "state/session.json"
+    assert config.session_target == "state/session.json"
     assert config.relogin is False
+    assert config.persist_session is True
+
+
+def test_load_config_keeps_default_target_even_without_a_file():
+    module = _module()
+
+    config = module.load_config(_args())
+
+    assert config.session_file is None
+    assert config.session_target == "state/session.json"
+    assert config.relogin is True
+
+
+def test_load_config_no_save_session_flag():
+    module = _module()
+
+    config = module.load_config(_args(no_save_session=True))
+
+    assert config.persist_session is False
 
 
 def test_load_config_env_session_file_and_missing_base_url():
@@ -117,10 +138,11 @@ def test_add_session_args_parses_flags():
     parser = argparse.ArgumentParser()
     module.add_session_args(parser)
 
-    args = parser.parse_args(["--session-file", "x.json", "--relogin"])
+    args = parser.parse_args(["--session-file", "x.json", "--relogin", "--no-save-session"])
 
     assert args.session_file == "x.json"
     assert args.relogin is True
+    assert args.no_save_session is True
 
 
 def test_make_client_reuses_valid_session(monkeypatch):
@@ -198,6 +220,153 @@ def test_make_client_relogins_when_explicitly_allowed(monkeypatch):
     client.close()
 
     assert calls["login"] == 1
+
+
+def _fake_login(monkeypatch, module, value="fresh"):
+    """Make ``login`` succeed by dropping a cookie in the jar."""
+
+    def login(self, force=False):
+        self._session.cookies.set("2Moons", value, domain="example.test", path="/")
+        self._logged_in = True
+
+    monkeypatch.setattr(module.NewStarClient, "login", login)
+
+
+def test_password_login_is_written_to_the_shared_file(monkeypatch, capsys):
+    module = _module()
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=None,
+        relogin=True,
+    )
+    _fake_login(monkeypatch, module)
+
+    client = module.make_client(config)
+    client.close()
+
+    payload = json.loads(Path("state/session.json").read_text(encoding="utf-8"))
+    assert payload["base_url"] == "https://example.test/"
+    assert payload["username"] == "user"
+    assert [item["name"] for item in payload["cookies"]] == ["2Moons"]
+    assert [item["value"] for item in payload["cookies"]] == ["fresh"]
+    assert "已写入" in capsys.readouterr().err
+
+
+def test_no_save_session_keeps_a_password_login_in_memory(monkeypatch, capsys):
+    module = _module()
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=None,
+        persist_session=False,
+        relogin=True,
+    )
+    _fake_login(monkeypatch, module)
+
+    client = module.make_client(config)
+    client.close()
+
+    assert not Path("state/session.json").exists()
+    err = capsys.readouterr().err
+    assert "--no-save-session" in err
+
+
+def test_relogin_replaces_the_stale_shared_session(monkeypatch):
+    module = _module()
+    session = Path("state/session.json")
+    session.parent.mkdir()
+    session.write_text(
+        json.dumps(
+            {
+                "base_url": "https://example.test/",
+                "username": "user",
+                "cookies": [{"name": "2Moons", "value": "old"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=str(session),
+        session_target=str(session),
+        relogin=True,
+    )
+    monkeypatch.setattr(module.NewStarClient, "load_session", lambda *a, **k: False)
+    _fake_login(monkeypatch, module)
+
+    client = module.make_client(config)
+    client.close()
+
+    payload = json.loads(session.read_text(encoding="utf-8"))
+    assert [item["value"] for item in payload["cookies"]] == ["fresh"]
+    assert payload["saved_at"]
+
+
+def test_make_client_refuses_to_overwrite_another_account(monkeypatch):
+    module = _module()
+    session = Path("shared.json")
+    session.write_text(
+        json.dumps({"base_url": "https://example.test/", "username": "other"}),
+        encoding="utf-8",
+    )
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=str(session),
+        session_target=str(session),
+        relogin=True,
+    )
+    monkeypatch.setattr(module.NewStarClient, "load_session", lambda *a, **k: False)
+    monkeypatch.setattr(
+        module.NewStarClient,
+        "login",
+        lambda *a, **k: pytest.fail("must not log in over another account's session"),
+    )
+
+    with pytest.raises(SystemExit) as info:
+        module.make_client(config)
+
+    assert "other" in str(info.value)
+
+
+def test_late_relogin_is_persisted(monkeypatch):
+    module = _module()
+    session = Path("state/session.json")
+    session.parent.mkdir()
+    session.write_text(
+        json.dumps(
+            {
+                "base_url": "https://example.test/",
+                "username": "user",
+                "cookies": [{"name": "2Moons", "value": "old"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=str(session),
+        session_target=str(session),
+        relogin=False,
+    )
+    monkeypatch.setattr(module.NewStarClient, "load_session", lambda *a, **k: True)
+    client = module.make_client(config)
+    assert client.persist_session is True
+
+    _fake_login(monkeypatch, module, value="after-expiry")
+    client.login(force=True)
+    client.close()
+
+    payload = json.loads(session.read_text(encoding="utf-8"))
+    assert [item["value"] for item in payload["cookies"]] == ["after-expiry"]
 
 
 def _env_file(tmp_path, body: str) -> str:

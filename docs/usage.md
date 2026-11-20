@@ -68,7 +68,7 @@ client.ensure_login()   # 已登录则直接返回，否则尝试使用现有 Co
 - 会话失效时，如果客户端有账号密码且 `auto_relogin=True`，会重登并重试当前请求。**舰队三步发送过程中的 PHP session token 不能跨会话恢复**，因此长时间任务应确保会话有效，或重新从头发送。
 - `logout()` 会请求退出并清空 Cookie。
 - `set_credentials(username, password)` 可在运行中替换凭证；它会清空旧 Cookie 并令下一次 `login()`/`ensure_login()` 重新登录。
-- `save_session()` / `load_session()` 只保存 Cookie、用户名、宇宙和 base URL，不保存密码；文件权限在支持的平台上为 `0600`。`load_session()` 会验证会话，返回 `False` 表示已失效。
+- `save_session()` / `load_session()` 只保存 Cookie、用户名、宇宙和 base URL，不保存密码；文件权限在支持的平台上为 `0600`。`load_session()` 会验证会话，返回 `False` 表示已失效。脚本层（`scripts/local_config.py`）在密码登录后会自动调用 `save_session()` 写回共享文件。
 
 ### 多端共用会话（浏览器 + 脚本同时在线）
 
@@ -107,10 +107,21 @@ New-Star 的会话表主键是 `userID`（`install/mysql.sql` 里 `PRIMARY KEY (
 
 - `state/session.json` 存在时会自动使用；也可以用 `--session-file PATH` 或
   `NEWSTAR_SESSION_FILE` 指定别的路径。
+- 没有可用会话文件时，脚本用账号密码登录，并把这次登录写回会话文件。所以第一次运行
+  之后 `state/session.json` 就是脚本正在用的会话，下一次直接复用，不会重复登录。
+- `--relogin` 触发的重新登录同样会覆盖写回文件；运行中途因 `auto_relogin` 重登的
+  会话也会写回，不会只留在进程内存里。
+- `--no-save-session`：临时账号或一次性运行用，登录结果不写共享文件，仅在本次进程
+  有效（进程退出后只剩服务器端那份会话，下次运行会再登录一次）。
+- 要覆盖的会话文件属于别的账号/别的 base_url 时，脚本会拒绝写入并提示改用
+  `--session-file` 或 `--no-save-session`，避免误把共享文件换成另一个账号。
+- 每次建客户端都会在 stderr 打印一行会话来源：`会话：复用 ...` 或
+  `会话：账号密码登录 ...`，排查时先看这一行。
 - 共享会话**失效时不会自动重登**（重登会踢掉浏览器），而是打印重新 `import` 的提示。
   确实要用账号密码重新登录时加 `--relogin`。
-- SDK 自带的 `newstar` 命令行同样遵守这条规则：`--session-file` 失效时默认报错，
-  要重新登录必须显式加 `--relogin`。
+- SDK 自带的 `newstar` 命令行同样遵守“文件失效不自动重登”的规则：`--session-file`
+  失效时默认报错，要重新登录必须显式加 `--relogin`。它的登录不自动回写文件，
+  需要持久化时显式用 `save-session`（自动回写是 `scripts/local_config.py` 的策略）。
 - SDK 侧的等价写法：
 
   ```python

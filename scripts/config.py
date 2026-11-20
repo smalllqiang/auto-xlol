@@ -73,6 +73,13 @@ def _problems(values: Dict[str, str], files: List[str]) -> tuple:
     return errors, warnings
 
 
+def _session_label(values: Dict[str, str]) -> str:
+    path = values.get("NEWSTAR_SESSION_FILE") or local_config.DEFAULT_SESSION_FILE
+    if Path(path).exists():
+        return f"{path}（存在，自动复用）"
+    return f"{path}（不存在，登录后写入）"
+
+
 def _render(values: Dict[str, str], files: List[str], reveal: bool) -> str:
     lines = [
         "配置文件  " + ("、".join(files) if files else "（无）"),
@@ -92,10 +99,7 @@ def _render(values: Dict[str, str], files: List[str], reveal: bool) -> str:
             values.get("NEWSTAR_AGENT_TEMPERATURE") or "0.2",
             values.get("NEWSTAR_AGENT_TIMEOUT") or "60",
         ),
-        "会话      " + (
-            values.get("NEWSTAR_SESSION_FILE")
-            or (local_config.DEFAULT_SESSION_FILE if Path(local_config.DEFAULT_SESSION_FILE).exists() else "-")
-        ),
+        "会话      " + _session_label(values),
     ]
     return "\n".join(lines)
 

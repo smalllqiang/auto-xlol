@@ -111,6 +111,13 @@ def cmd_import(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
+        if getattr(args, "no_save_session", False):
+            overview = client.get_overview()
+            print(
+                f"会话有效（属主 {overview.username or '-'}，宇宙 "
+                f"{overview.universe or '-'}）；按 --no-save-session 未写入共享文件"
+            )
+            return 0
         path = client.save_session(target)
         overview = client.get_overview()
     finally:
@@ -171,6 +178,12 @@ def cmd_login(args: argparse.Namespace) -> int:
     config = load_config(args)
     if not config.username or not config.password:
         print("login 需要账号密码（--config / passwd.txt / --username --password）", file=sys.stderr)
+        return 2
+    if getattr(args, "no_save_session", False):
+        print(
+            "login 的目的就是保存会话，不能和 --no-save-session 一起用",
+            file=sys.stderr,
+        )
         return 2
     target = _target(args)
     print(

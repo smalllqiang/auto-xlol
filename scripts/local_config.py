@@ -9,9 +9,11 @@ account (see ``docs/usage.md``), so when a session file exists the scripts reuse
 it instead of logging in again; a fresh login would log the browser out.
 
 The file is the single cache of the session: a password login (first run with
-no file, or ``--relogin``) is written back to it, so the next run reuses the
-same cookie instead of logging in a second time.  ``--no-save-session`` opts
-out for one-off runs that must not touch the shared file.
+no file, expired file, or ``--relogin``) is written back to it, so the next run
+reuses the same cookie instead of logging in a second time.  Scripts are
+"script first" by default: a stale session is rebuilt without any flag.
+``--no-relogin`` (or ``NEWSTAR_RELOGIN=0``) protects the browser instead, and
+``--no-save-session`` opts out of writing the file.
 """
 
 from __future__ import annotations
@@ -29,14 +31,38 @@ from newstar_sdk import NewStarClient
 
 DEFAULT_SESSION_FILE = "state/session.json"
 
+#: Exit code used when the session is gone and the policy forbids rebuilding it.
+EXIT_SESSION_EXPIRED = 4
+
+#: Values accepted as "off" for boolean environment flags.
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
 SESSION_EXPIRED_HINT = """\
-共享会话已失效（{path} 里的 Cookie 已不被服务器接受）。
+共享会话已失效（{path} 里的 Cookie 已不被服务器接受），当前策略不允许自动重登。
 常见原因：浏览器端重新登录、点了退出，或会话超过 12 小时未活动。
 请从浏览器 DevTools 复制 Cookie: 2Moons=... 后重新导入：
 
   .venv/bin/python scripts/session.py import '2Moons=<值>'
 
-如果你确实要用账号密码重新登录（会踢掉浏览器里的会话），加 --relogin。\
+或者去掉 --no-relogin / 把 NEWSTAR_RELOGIN 设为 1，让脚本用账号密码自动重登
+（会踢掉浏览器里的会话）。\
+"""
+
+SESSION_ABSENT_HINT = """\
+没有共享会话文件 {path}，且当前策略不允许自动重登（--no-relogin / NEWSTAR_RELOGIN=0）。
+先导入浏览器会话：
+
+  .venv/bin/python scripts/session.py import '2Moons=<值>'
+
+或允许脚本用账号密码登录（默认行为）。\
+"""
+
+SESSION_LOST_HINT = """\
+会话已失效，脚本没有成功自动重登。可能账号/密码/宇宙有误，
+或当前用了 --no-relogin / NEWSTAR_RELOGIN=0。
+先检查凭据，或从浏览器重新导入：
+
+  .venv/bin/python scripts/session.py import '2Moons=<值>'\
 """
 
 
@@ -94,6 +120,7 @@ ENV_KEYS = (
     "NEWSTAR_VERIFY_SSL",
     "NEWSTAR_TIMEOUT",
     "NEWSTAR_SESSION_FILE",
+    "NEWSTAR_RELOGIN",
     "NEWSTAR_AGENT_BASE_URL",
     "NEWSTAR_AGENT_MODEL",
     "NEWSTAR_AGENT_API_KEY",
@@ -211,6 +238,29 @@ def load_values(args: argparse.Namespace) -> Dict[str, str]:
     return values
 
 
+def relogin_allowed(
+    values: Dict[str, str],
+    *,
+    no_relogin: bool = False,
+    relogin: bool = False,
+) -> bool:
+    """Whether a script may rebuild the session with username/password.
+
+    Default is "script first": allowed.  ``--no-relogin`` or
+    ``NEWSTAR_RELOGIN=0`` turns it off; an explicit ``--relogin`` (kept for
+    compatibility) wins over the environment, matching CLI-over-env precedence.
+    """
+
+    if no_relogin:
+        return False
+    if relogin:
+        return True
+    raw = values.get("NEWSTAR_RELOGIN")
+    if raw is None or not str(raw).strip():
+        return True
+    return str(raw).strip().lower() not in _FALSE_VALUES
+
+
 def _float_value(values: Dict[str, str], key: str, default: float) -> float:
     raw = values.get(key)
     if raw is None or not str(raw).strip():
@@ -228,7 +278,11 @@ def load_config(args: argparse.Namespace) -> Config:
     if not session_file and Path(DEFAULT_SESSION_FILE).exists():
         session_file = DEFAULT_SESSION_FILE
     session_ready = bool(session_file) and Path(session_file).exists()
-    relogin = bool(getattr(args, "relogin", False)) or not session_ready
+    relogin = relogin_allowed(
+        values,
+        no_relogin=bool(getattr(args, "no_relogin", False)),
+        relogin=bool(getattr(args, "relogin", False)),
+    )
     # Where a new session is written: the configured path, or the shared
     # default.  Kept separate from ``session_file`` because that one only
     # points at a file that is already usable.
@@ -277,10 +331,19 @@ def add_session_args(parser: argparse.ArgumentParser) -> None:
             "由 scripts/session.py 生成/查看"
         ),
     )
-    parser.add_argument(
+    relogin_group = parser.add_mutually_exclusive_group()
+    relogin_group.add_argument(
         "--relogin",
         action="store_true",
-        help="会话失效时用账号密码重新登录（会踢掉浏览器里的会话）",
+        help="兼容保留：现在默认就允许会话失效时用账号密码重建",
+    )
+    relogin_group.add_argument(
+        "--no-relogin",
+        action="store_true",
+        help=(
+            "浏览器优先：会话失效时不自动登录，打印提示并以退出码 4 结束。"
+            "也可用 NEWSTAR_RELOGIN=0"
+        ),
     )
     parser.add_argument(
         "--no-save-session",
@@ -358,10 +421,11 @@ class _SharedSessionClient(NewStarClient):
         return self
 
 
-def _report_reused_session(path: Path) -> None:
+def _report_reused_session(path: Path, *, relogin: bool) -> None:
     saved_at = str(_session_meta(path).get("saved_at") or "")
     suffix = f"（保存于 {saved_at}）" if saved_at else ""
-    print(f"会话：复用 {path}{suffix}", file=sys.stderr)
+    policy = "" if relogin else "（浏览器优先：失效时不自动登录）"
+    print(f"会话：复用 {path}{suffix}{policy}", file=sys.stderr)
 
 
 def _report_new_session(persisted: bool, target: Optional[Path]) -> None:
@@ -418,6 +482,9 @@ def make_client(
         timeout=config.timeout if timeout is None else timeout,
         request_interval=config.interval if interval is None else interval,
         auto_relogin=allow_relogin,
+        # The server refreshes lastActivity on every request and does not
+        # resend Set-Cookie; a local expires would drop a live shared session.
+        ignore_cookie_expiry=True,
     )
     client.session_target = target
     # The initial acquisition below saves explicitly (so it can report once);
@@ -431,13 +498,14 @@ def make_client(
     session_file = Path(config.session_file) if config.session_file else None
     if session_file is not None and session_file.exists():
         if client.load_session(session_file):
-            _report_reused_session(session_file)
+            _report_reused_session(session_file, relogin=allow_relogin)
             return hand_over()
         if not allow_relogin:
             client.close()
-            raise SystemExit(SESSION_EXPIRED_HINT.format(path=session_file))
+            print(SESSION_EXPIRED_HINT.format(path=session_file), file=sys.stderr)
+            raise SystemExit(EXIT_SESSION_EXPIRED)
         print(
-            f"共享会话 {session_file} 已失效，按 --relogin 用账号密码重新登录"
+            f"共享会话 {session_file} 已失效，用账号密码重新登录"
             "（浏览器里的会话会被替换）",
             file=sys.stderr,
         )
@@ -446,6 +514,13 @@ def make_client(
         client.login(force=True)
         _report_new_session(persist and _persist_session(client, target), target)
         return hand_over()
+    if not allow_relogin:
+        client.close()
+        print(
+            SESSION_ABSENT_HINT.format(path=target or DEFAULT_SESSION_FILE),
+            file=sys.stderr,
+        )
+        raise SystemExit(EXIT_SESSION_EXPIRED)
     if not client.username or not client.has_password():
         client.close()
         raise SystemExit(

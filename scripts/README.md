@@ -23,8 +23,9 @@
 | `--base-url` / `--username` / `--password` / `--universe` | 临时覆盖对应配置项，不用改文件 |
 | `--no-verify-ssl` | 跳过 TLS 校验。本实例证书过期，**通常必须加** |
 | `--interval SEC` | 两次**请求**之间的最小间隔（秒），默认 0.3–0.5 |
-| `--session-file PATH` | 共享会话文件，默认 `state/session.json`（存在就自动复用） |
-| `--relogin` | 会话失效时用账号密码重登。**会踢掉浏览器里的会话**，默认不做 |
+| `--session-file PATH` | 共享会话文件，默认 `state/session.json`（存在就复用；不存在时按策略登录并写入） |
+| `--relogin` | 兼容保留：现在默认就允许会话失效时用账号密码重建（等于默认行为） |
+| `--no-relogin` | 浏览器优先：会话失效时不自动登录，打印提示并以退出码 4 结束 |
 | `--no-save-session` | 密码登录后不写共享会话文件（仅本次进程有效）。临时账号/一次性运行用 |
 | `--json` | 输出机器可读 JSON，便于管道和脚本消费 |
 
@@ -32,11 +33,12 @@
 
 - `--interval` 在 `run_forever.py` 里是**两轮之间**的间隔（默认 300 秒），不是请求间隔；
   要跑一轮就用 `--once`。
-- `--relogin` 不是「强制重登」，只是**允许**在会话失效时重登。一个账号只有一份会话，
-  想和浏览器同时在线就走 `session.py import`（见下）。
-- 没有会话文件时脚本会用账号密码登录，并**把结果写回** `state/session.json`；下次运行
-  直接复用。`--no-save-session` 可关闭回写。启动时 stderr 会打印一行「会话：复用 …」
-  或「会话：账号密码登录 …」。
+- 默认是**脚本优先**：文件有效就复用；失效/不存在就自动用账号密码重建，并**把结果
+  写回** `state/session.json`。一个账号只有一份会话，所以这会踢掉浏览器；想保浏览器
+  就加 `--no-relogin`（或 `NEWSTAR_RELOGIN=0`）。
+- `--relogin` 只是兼容保留，不再需要。`--no-relogin` 下会话失效会以退出码 4 结束。
+- 启动时 stderr 会打印一行「会话：复用 …」或「会话：账号密码登录 …」；
+  `--no-save-session` 可关闭回写。
 
 ## 2. 安全闸：什么时候才会真的写游戏
 
@@ -52,7 +54,8 @@
 
 退出码方便脚本判断：`0` 正常（`run_forever` 遇到 `state/STOP` 也按正常退出）；`2` 参数
 被安全闸拒绝（如 `--execute` 缺 `--allow`、`--balance-power` 缺 `--balance-allow`）；
-`3` 拒绝启动（`run_once` 遇到急停文件，或 `agent` 发现已有写者在跑）。
+`3` 拒绝启动（`run_once` 遇到急停文件，或 `agent` 发现已有写者在跑）；
+`4` 会话失效且不允许自动重登（`--no-relogin` / `NEWSTAR_RELOGIN=0`）。
 
 | 脚本 | 默认行为 | 真实写入需要 |
 | --- | --- | --- |
@@ -220,7 +223,7 @@
 | `state/daemon.json`、`state/agent.json` | 心跳与状态，看板存活判断的权威依据 | `run_forever`、`agent` |
 | `state/statistics.json`、`messages.json`、`battles.json`、`records.json`、`empire.json` | 看板读的各类快照 | `run_forever` |
 | `state/directive.json` | 战略目标（阶段/约束/风险姿态） | `directive.py` |
-| `state/session.json` | 共享会话 Cookie（**含凭证，不要提交**） | `session.py`、任意脚本首次密码登录/`--relogin` 后自动回写 |
+| `state/session.json` | 共享会话 Cookie（**含凭证，不要提交**） | `session.py`、任意脚本密码登录后自动回写 |
 | `state/STOP` | 急停开关：存在即拒绝执行 | 手动创建/删除 |
 | `state/*.lock` | 单实例锁 | `run_forever`、`agent` |
 | `live_pages/` | `page_census` 抓的原始页面样本 | `page_census` |
@@ -232,9 +235,9 @@
 - **别用 `--interval 0` 加速**：它只改请求/轮询间隔，不会减少一轮要做的事；单轮用 `--once`。
 - **一个账号只能有一个写者**：`run_forever.py` 和 `agent.py` 都抢 `state/daemon.lock`，
   不要同时跑；脚本和浏览器共享会话时也不要两端同时发舰队。
-- **`--relogin` 会踢掉浏览器**：和浏览器共用时用 `session.py import` 导入 Cookie，
-  默认复用 `state/session.json` 不重登。没有文件时的首次密码登录也会新建会话并
-  写回文件，同样会踢掉浏览器；临时账号加 `--no-save-session`。
+- **默认会踢掉浏览器**：脚本优先，会话失效会自动用账号密码重建。和浏览器共用时
+  加 `--no-relogin`（或 `NEWSTAR_RELOGIN=0`）并走 `session.py import`；临时账号加
+  `--no-save-session`。判据看 stderr 的「会话：…」那一行。
 - **签到页 GET 即领取**：判断签到状态用 `daily_bonus.py`，不要用
   `page_census.py --only bonus` 去「看一眼」，那会消耗当天唯一的机会。
 - **`--target-score` 只影响报告**：真正派出去的还是游戏里现有的舰队。

@@ -93,6 +93,9 @@ def _make_client(config, *, relogin: bool = False) -> NewStarClient:
         timeout=config.timeout,
         request_interval=config.interval,
         auto_relogin=relogin,
+        # The shared file should not carry a client-side expiry: the server
+        # refreshes lastActivity on every request and is the only authority.
+        ignore_cookie_expiry=True,
     )
 
 

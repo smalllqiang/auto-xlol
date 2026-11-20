@@ -54,13 +54,18 @@ def _problems(values: Dict[str, str], files: List[str]) -> tuple:
         errors.append("没有找到配置文件（.env / passwd.txt）")
     if not values.get("NEWSTAR_BASE_URL"):
         errors.append("缺少 NEWSTAR_BASE_URL")
-    has_session = bool(values.get("NEWSTAR_SESSION_FILE")) or Path(
-        local_config.DEFAULT_SESSION_FILE
-    ).exists()
+    session_path = (
+        values.get("NEWSTAR_SESSION_FILE") or local_config.DEFAULT_SESSION_FILE
+    )
+    has_session = Path(session_path).exists()
     if not values.get("NEWSTAR_USERNAME"):
         errors.append("缺少 NEWSTAR_USERNAME")
     if not values.get("NEWSTAR_PASSWORD") and not has_session:
         errors.append("缺少 NEWSTAR_PASSWORD（也没有共享会话文件）")
+    if not has_session and not local_config.relogin_allowed(values):
+        errors.append(
+            "NEWSTAR_RELOGIN=0 且没有共享会话文件：脚本无法登录（退出码 4）"
+        )
 
     agent_url = values.get("NEWSTAR_AGENT_BASE_URL", "")
     agent_model = values.get("NEWSTAR_AGENT_MODEL", "")
@@ -78,6 +83,12 @@ def _session_label(values: Dict[str, str]) -> str:
     if Path(path).exists():
         return f"{path}（存在，自动复用）"
     return f"{path}（不存在，登录后写入）"
+
+
+def _session_policy(values: Dict[str, str]) -> str:
+    if local_config.relogin_allowed(values):
+        return "脚本优先（失效自动登录，踢浏览器）"
+    return "浏览器优先（--no-relogin / NEWSTAR_RELOGIN=0）"
 
 
 def _render(values: Dict[str, str], files: List[str], reveal: bool) -> str:
@@ -100,6 +111,7 @@ def _render(values: Dict[str, str], files: List[str], reveal: bool) -> str:
             values.get("NEWSTAR_AGENT_TIMEOUT") or "60",
         ),
         "会话      " + _session_label(values),
+        "会话策略  " + _session_policy(values),
     ]
     return "\n".join(lines)
 

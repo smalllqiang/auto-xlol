@@ -36,6 +36,7 @@ def _args(**overrides):
         "interval": 0.1,
         "session_file": None,
         "relogin": False,
+        "no_relogin": False,
         "no_save_session": False,
     }
     values.update(overrides)
@@ -62,7 +63,7 @@ def _clean_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
 
-def test_load_config_uses_existing_session_file_without_relogin():
+def test_load_config_defaults_to_script_first():
     module = _module()
     session = Path("shared.json")
     session.write_text("{}", encoding="utf-8")
@@ -70,7 +71,7 @@ def test_load_config_uses_existing_session_file_without_relogin():
     config = module.load_config(_args(session_file=str(session)))
 
     assert config.session_file == str(session)
-    assert config.relogin is False
+    assert config.relogin is True
 
 
 def test_load_config_relogin_flag_forces_password_login():
@@ -93,7 +94,7 @@ def test_load_config_auto_uses_default_session_file():
 
     assert config.session_file == "state/session.json"
     assert config.session_target == "state/session.json"
-    assert config.relogin is False
+    assert config.relogin is True
     assert config.persist_session is True
 
 
@@ -142,7 +143,43 @@ def test_add_session_args_parses_flags():
 
     assert args.session_file == "x.json"
     assert args.relogin is True
+    assert args.no_relogin is False
     assert args.no_save_session is True
+
+
+def test_relogin_flags_are_mutually_exclusive():
+    module = _module()
+    parser = argparse.ArgumentParser()
+    module.add_session_args(parser)
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--relogin", "--no-relogin"])
+
+
+def test_newstar_relogin_env_can_disable_relogin(monkeypatch):
+    module = _module()
+    monkeypatch.setenv("NEWSTAR_RELOGIN", "0")
+
+    config = module.load_config(_args())
+
+    assert config.relogin is False
+
+
+def test_no_relogin_flag_wins_over_explicit_allow(monkeypatch):
+    module = _module()
+
+    config = module.load_config(_args(no_relogin=True, relogin=True))
+
+    assert config.relogin is False
+
+
+def test_explicit_relogin_wins_over_environment(monkeypatch):
+    module = _module()
+    monkeypatch.setenv("NEWSTAR_RELOGIN", "0")
+
+    config = module.load_config(_args(relogin=True))
+
+    assert config.relogin is True
 
 
 def test_make_client_reuses_valid_session(monkeypatch):
@@ -174,7 +211,7 @@ def test_make_client_reuses_valid_session(monkeypatch):
     assert calls == {"load": 1, "login": 0}
 
 
-def test_make_client_refuses_to_relogin_over_a_shared_session(monkeypatch):
+def test_make_client_refuses_to_relogin_over_a_shared_session(monkeypatch, capsys):
     module = _module()
     session = Path("shared.json")
     session.write_text("{}", encoding="utf-8")
@@ -194,7 +231,30 @@ def test_make_client_refuses_to_relogin_over_a_shared_session(monkeypatch):
 
     with pytest.raises(SystemExit) as info:
         module.make_client(config)
-    assert "session.py import" in str(info.value)
+    assert info.value.code == module.EXIT_SESSION_EXPIRED
+    assert "session.py import" in capsys.readouterr().err
+
+
+def test_make_client_refuses_to_login_without_a_file_when_disabled(monkeypatch, capsys):
+    module = _module()
+    config = module.Config(
+        base_url="https://example.test/",
+        username="user",
+        password="secret",
+        session_file=None,
+        relogin=False,
+    )
+    monkeypatch.setattr(
+        module.NewStarClient,
+        "login",
+        lambda *a, **k: pytest.fail("login must stay off with --no-relogin"),
+    )
+
+    with pytest.raises(SystemExit) as info:
+        module.make_client(config)
+
+    assert info.value.code == module.EXIT_SESSION_EXPIRED
+    assert "session.py import" in capsys.readouterr().err
 
 
 def test_make_client_relogins_when_explicitly_allowed(monkeypatch):
@@ -222,11 +282,13 @@ def test_make_client_relogins_when_explicitly_allowed(monkeypatch):
     assert calls["login"] == 1
 
 
-def _fake_login(monkeypatch, module, value="fresh"):
+def _fake_login(monkeypatch, module, value="fresh", expires=4102444800):
     """Make ``login`` succeed by dropping a cookie in the jar."""
 
     def login(self, force=False):
-        self._session.cookies.set("2Moons", value, domain="example.test", path="/")
+        self._session.cookies.set(
+            "2Moons", value, domain="example.test", path="/", expires=expires
+        )
         self._logged_in = True
 
     monkeypatch.setattr(module.NewStarClient, "login", login)
@@ -244,6 +306,7 @@ def test_password_login_is_written_to_the_shared_file(monkeypatch, capsys):
     _fake_login(monkeypatch, module)
 
     client = module.make_client(config)
+    assert client.ignore_cookie_expiry is True
     client.close()
 
     payload = json.loads(Path("state/session.json").read_text(encoding="utf-8"))
@@ -251,6 +314,8 @@ def test_password_login_is_written_to_the_shared_file(monkeypatch, capsys):
     assert payload["username"] == "user"
     assert [item["name"] for item in payload["cookies"]] == ["2Moons"]
     assert [item["value"] for item in payload["cookies"]] == ["fresh"]
+    # The login response carries Max-Age=43200; the shared file must not.
+    assert [item["expires"] for item in payload["cookies"]] == [None]
     assert "已写入" in capsys.readouterr().err
 
 

@@ -235,7 +235,7 @@ AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、
 
 | 项 | 说明 | 处理方式 |
 | --- | --- | --- |
-| ✅ 会话缓存统一 | 密码登录只留在进程内存，`state/session.json` 不更新；`--relogin` 后文件仍是旧 Cookie，于是每次运行都重登、每次都踢浏览器 | 2026-11-20 修复（ADR-032）：首次登录/`--relogin`/运行中 `auto_relogin` 都回写共享文件；新增 `--no-save-session` 与属主/base_url 覆盖校验；启动打印会话来源。测试 `tests/test_local_config.py` |
+| ✅ 会话缓存与策略 | 密码登录只留在进程内存，`state/session.json` 不更新；文件有效时又不允许重登，`expedition_farm` 遇到会话失效会无限退避 | 2026-11-20 完成（ADR-032 / ADR-033）：登录结果回写共享文件；默认脚本优先、`--no-relogin` 切浏览器优先（退出码 4）；共享会话忽略本地 Cookie `expires`（SDK `ignore_cookie_expiry`）；长跑脚本对会话错误 fail-fast。测试 `tests/test_local_config.py`、`tests/test_client.py`、`tests/test_expedition_farm_args.py` |
 | ✅ 仓容语义 | 资源远超仓容是朋友赠送所致；爆仓时产量停摆、资源不涨属正常，capacity 可信 | 2026-11-18 确认，不再当异常 |
 | ✅ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 2026-11-18 修复：用产量表容量与概览资源量判断爆仓，回本置 `null` 并排到末尾（`autoplay/planner.py` 的 `_storage_usage`，`tests/test_planner.py`） |
 | ✅ 幽能语义 | 产量表 911 的 `total` 是净产；概览 `capacity` 是毛产（= 净产 + 三厂消耗），页面显示 `净产/毛产`（实测 `392 K/600 K`、65%）；概览 `amounts[911]` 是「毛产 + 净产」的合成值，两天不变而净产 +392,000/h，证明它不是库存。引力子这类科技的幽能需求是门槛、不消耗，游戏用毛产比（实测 765,000 对 600,017） | 2026-11-18 核实：不把概览容量传给规划器做爆仓判断；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |

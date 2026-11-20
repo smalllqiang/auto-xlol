@@ -24,7 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from local_config import add_session_args, load_config, make_client
+from local_config import (
+    EXIT_SESSION_EXPIRED,
+    SESSION_LOST_HINT,
+    add_session_args,
+    load_config,
+    make_client,
+)
 
 from autoplay.expedition import EXPEDITION_TARGET_POSITION
 from autoplay.expedition_scheduler import (
@@ -48,7 +54,7 @@ from autoplay.expedition_scheduler import (
 )
 from autoplay.journal import append_jsonl
 from autoplay.runtime import EXIT_BUSY, acquire_lock, release_lock, write_status
-from newstar_sdk.exceptions import NewStarError
+from newstar_sdk.exceptions import AuthenticationError, NewStarError, SessionExpired
 from newstar_sdk.models import Coordinates
 
 
@@ -839,6 +845,43 @@ def run_loop(
                 )
 
             sleep_until(next_wake, stop, stop_file, heartbeat=heartbeat)
+        except (SessionExpired, AuthenticationError) as exc:
+            # Human action is required: retrying with the same cookie can
+            # never recover, so say so once instead of backing off forever.
+            print(
+                f"[{_stamp()}] 会话不可用：{type(exc).__name__}: {exc}",
+                file=sys.stderr if args.json else sys.stdout,
+                flush=True,
+            )
+            print(SESSION_LOST_HINT, file=sys.stderr, flush=True)
+            try:
+                append_jsonl(
+                    Path(args.journal),
+                    {
+                        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        "kind": "session_error",
+                        "source": "expedition_farm",
+                        "planet": planet_id,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                    max_bytes=10 * 1024 * 1024,
+                )
+            except OSError:
+                pass
+            publish_status(
+                args.status_file,
+                mode="execute",
+                planet_id=planet_id,
+                planet_name=planet_name,
+                plan=plan,
+                tech=int(timetable.tech_level),
+                max_slots=int(timetable.max_slots),
+                slots=timetable.slots,
+                fill=None,
+                next_wake=None,
+                state="error",
+            )
+            return EXIT_SESSION_EXPIRED
         except NewStarError as exc:
             failures += 1
             delay = min(900.0, max(5.0, float(args.retry_delay) * (2 ** min(failures, 6))))

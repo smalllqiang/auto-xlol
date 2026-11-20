@@ -124,11 +124,11 @@ HTML 片段。`parse_messages()` 解析该片段，`parse_message_counters()` �
 而 `Session::save()` 在每个请求结束时都会 `REPLACE INTO` 当前会话行
 （`includes/classes/Session.class.php`）。因此第二次登录会替换第一条会话，
 浏览器和脚本无法各自持有一份独立会话。要两端同时在线，只能共享同一个 `2Moons`
-Cookie：`set_session_cookie()` 负责导入，脚本用 `state/session.json` 自动复用，并在
-共享模式下关闭 `auto_relogin`（重登会踢掉浏览器）。脚本自己用账号密码新建的会话会
-回写这个文件（`scripts/local_config.py`，`--no-save-session` 关闭），因此文件始终是
-脚本当前使用的会话。细节见
-[使用说明](usage.md#多端共用会话浏览器--脚本同时在线)。
+Cookie：`set_session_cookie()` 负责导入，脚本用 `state/session.json` 自动复用。默认
+脚本优先：失效时用账号密码重建并回写（`--no-relogin` / `NEWSTAR_RELOGIN=0` 改为
+浏览器优先，退出码 4）。共享会话用 `ignore_cookie_expiry=True` 创建客户端，因为服务端
+按 `lastActivity` 续期且普通请求不重发 `Set-Cookie`，本地 `expires` 会把仍有效的会话
+提前掐掉。细节见 [使用说明](usage.md#多端共用会话浏览器--脚本同时在线)。
 
 
 ## 5. 元素识别与本地化

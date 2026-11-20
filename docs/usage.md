@@ -37,6 +37,7 @@ cp .env.example .env
 | `NEWSTAR_BASE_URL` / `_UNIVERSE` / `_USERNAME` / `_PASSWORD` | 游戏实例与凭证 |
 | `NEWSTAR_VERIFY_SSL` | `0` 跳过 TLS 校验（证书过期的私服） |
 | `NEWSTAR_SESSION_FILE` | 共享会话；默认 `state/session.json` |
+| `NEWSTAR_RELOGIN` | `1` 脚本优先（默认，失效自动登录）；`0` 浏览器优先（失效退出码 4） |
 | `NEWSTAR_TIMEOUT` | 游戏请求超时（秒） |
 | `NEWSTAR_AGENT_BASE_URL` / `_MODEL` / `_API_KEY` | 模型端点（`scripts/agent.py`） |
 | `NEWSTAR_AGENT_TEMPERATURE` / `_TIMEOUT` | 采样温度、模型超时 |
@@ -69,6 +70,7 @@ client.ensure_login()   # 已登录则直接返回，否则尝试使用现有 Co
 - `logout()` 会请求退出并清空 Cookie。
 - `set_credentials(username, password)` 可在运行中替换凭证；它会清空旧 Cookie 并令下一次 `login()`/`ensure_login()` 重新登录。
 - `save_session()` / `load_session()` 只保存 Cookie、用户名、宇宙和 base URL，不保存密码；文件权限在支持的平台上为 `0600`。`load_session()` 会验证会话，返回 `False` 表示已失效。脚本层（`scripts/local_config.py`）在密码登录后会自动调用 `save_session()` 写回共享文件。
+- `NewStarClient(..., ignore_cookie_expiry=True)` 用于共享会话：加载时丢弃 Cookie 的 `expires`，每个响应后清空 jar 里的过期时间，保存时写 `null`。服务端按 `lastActivity` 续期、普通请求不重发 `Set-Cookie`，本地过期时间会误杀仍然有效的会话。默认 `False`，普通 SDK 用法不变。
 
 ### 多端共用会话（浏览器 + 脚本同时在线）
 
@@ -105,27 +107,29 @@ New-Star 的会话表主键是 `userID`（`install/mysql.sql` 里 `PRIMARY KEY (
 
 脚本侧的行为：
 
-- `state/session.json` 存在时会自动使用；也可以用 `--session-file PATH` 或
-  `NEWSTAR_SESSION_FILE` 指定别的路径。
-- 没有可用会话文件时，脚本用账号密码登录，并把这次登录写回会话文件。所以第一次运行
-  之后 `state/session.json` 就是脚本正在用的会话，下一次直接复用，不会重复登录。
-- `--relogin` 触发的重新登录同样会覆盖写回文件；运行中途因 `auto_relogin` 重登的
-  会话也会写回，不会只留在进程内存里。
+- 默认是**脚本优先**：`state/session.json` 存在且有效就复用；失效或不存在时用账号
+  密码登录，并把结果写回文件。运行中途失效由 `auto_relogin` 重登并重试当前请求，
+  结果同样回写。第一次运行之后 `state/session.json` 就是脚本正在用的会话。
+- `--no-relogin`（或 `NEWSTAR_RELOGIN=0`）切到**浏览器优先**：文件失效/不存在时不
+  登录，打印重新 `import` 的提示并以**退出码 4** 结束。`--relogin` 仅为兼容保留
+  （现在等于默认行为），与 `--no-relogin` 互斥。
+- 共享会话文件可以用 `--session-file PATH` 或 `NEWSTAR_SESSION_FILE` 指定。
 - `--no-save-session`：临时账号或一次性运行用，登录结果不写共享文件，仅在本次进程
   有效（进程退出后只剩服务器端那份会话，下次运行会再登录一次）。
 - 要覆盖的会话文件属于别的账号/别的 base_url 时，脚本会拒绝写入并提示改用
   `--session-file` 或 `--no-save-session`，避免误把共享文件换成另一个账号。
 - 每次建客户端都会在 stderr 打印一行会话来源：`会话：复用 ...` 或
-  `会话：账号密码登录 ...`，排查时先看这一行。
-- 共享会话**失效时不会自动重登**（重登会踢掉浏览器），而是打印重新 `import` 的提示。
-  确实要用账号密码重新登录时加 `--relogin`。
-- SDK 自带的 `newstar` 命令行同样遵守“文件失效不自动重登”的规则：`--session-file`
-  失效时默认报错，要重新登录必须显式加 `--relogin`。它的登录不自动回写文件，
-  需要持久化时显式用 `save-session`（自动回写是 `scripts/local_config.py` 的策略）。
+  `会话：账号密码登录 ...`，排查时先看这一行；浏览器优先时复用行会带
+  `（浏览器优先：失效时不自动登录）`。
+- SDK 自带的 `newstar` 命令行保持通用语义：`--session-file` 失效时默认报错，要重新
+  登录必须显式加 `--relogin`；它的登录不自动回写文件，需要持久化时显式用
+  `save-session`（脚本层的自动回写与默认策略在 `scripts/local_config.py`）。
 - SDK 侧的等价写法：
 
   ```python
-  client = NewStarClient(base_url, verify_ssl=False, auto_relogin=False)
+  client = NewStarClient(
+      base_url, verify_ssl=False, auto_relogin=False, ignore_cookie_expiry=True
+  )
   client.set_session_cookie("2Moons=vg03jr0o...")   # 也接受裸值或整行 Cookie 头
   client.save_session("state/session.json")
   client.get_overview()
@@ -133,8 +137,13 @@ New-Star 的会话表主键是 `userID`（`install/mysql.sql` 里 `PRIMARY KEY (
 
 限制与注意：
 
-- 会话最长 12 小时（`SESSION_LIFETIME = 43200`，按最后一次活动续期）；浏览器 Cookie
-  本身也在 12 小时后过期，过期后重新登录并再 `import` 一次即可。
+- 服务端会话按**最后一次活动**续期（`SESSION_LIFETIME = 43200`）：每个请求都会刷新
+  `lastActivity`，所以脚本持续活动（间隔 < 12h）时可以一直用。共享会话在客户端
+  **忽略 Cookie 的 `expires`**（SDK 的 `ignore_cookie_expiry`），因为服务器不会在普通
+  请求里重发 `Set-Cookie`；否则脚本自建的会话会在 12h 后被本地 Cookie jar 掐掉。
+- 浏览器侧的 Cookie 仍是登录时下发的固定 12h（服务器不刷新）。浏览器重新登录会替换
+  服务端那一行：脚本优先时脚本会自动重登并把浏览器踢掉，浏览器优先时脚本以退出码 4
+  停下等人工处理。两端都活跃就会互相踢。
 - 浏览器点“退出”会删除这条会话，脚本随之失效。
 - 舰队三步发送的 token 存在 PHP session 里，两端共用同一份。不要一边在浏览器里发
   舰队、一边让脚本发舰队；脚本自身的舰队流程是一次性走完三步的。
@@ -859,7 +868,8 @@ allow-list 写法：重复参数（`--allow 1 --allow 2`）或逗号（`--allow 
   改动会在下一轮生效（打印一次来源、写入距今时间与阶段列表）。
 
 退出码：`0` 正常结束（含急停）；`1` 连续失败过多；`2` 参数错误（`--execute` 缺
-`--allow`）。
+`--allow`）；`4` 会话失效且不允许自动重登（`--no-relogin` / `NEWSTAR_RELOGIN=0`，
+人工 `session.py import` 后重跑）。
 
 **事件反应**：每个循环额外读一次消息计数（1 个请求），把新增未读变成事件：
 

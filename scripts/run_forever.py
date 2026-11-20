@@ -26,7 +26,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from local_config import add_session_args, load_config, make_client
+from local_config import (
+    EXIT_SESSION_EXPIRED,
+    SESSION_LOST_HINT,
+    add_session_args,
+    load_config,
+    make_client,
+)
 
 from autoplay.battles import collect_battles, write_battles
 from autoplay.daemon import DaemonConfig, backoff_delay, run_cycle
@@ -44,7 +50,12 @@ from autoplay.statistics import collect_statistics, write_statistics
 from autoplay.threat import assess_client
 from newstar_sdk.constants import BUILDINGS, TECHNOLOGIES
 from newstar_sdk.events import diff_snapshots
-from newstar_sdk.exceptions import ActionRejected, NewStarError
+from newstar_sdk.exceptions import (
+    ActionRejected,
+    AuthenticationError,
+    NewStarError,
+    SessionExpired,
+)
 from newstar_sdk.snapshot import build_snapshot
 
 _NAME_INDEX: Dict[str, int] = {}
@@ -852,6 +863,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             file=sys.stderr,
                             flush=True,
                         )
+            except (SessionExpired, AuthenticationError) as exc:
+                # The shared session is gone and cannot be rebuilt (bad
+                # credentials or --no-relogin).  Retrying only wastes cycles.
+                append_jsonl(
+                    journal_path,
+                    {
+                        "at": now,
+                        "kind": "session_error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                    max_bytes=rotate_bytes,
+                )
+                print(f"[{now}] session error: {exc}", file=sys.stderr, flush=True)
+                print(SESSION_LOST_HINT, file=sys.stderr, flush=True)
+                update_status(
+                    failures=failures,
+                    last_cycle_at=now,
+                    cycle_started_at=None,
+                    last_status="session_error",
+                    last_reason=f"{type(exc).__name__}: {exc}",
+                )
+                return EXIT_SESSION_EXPIRED
             except NewStarError as exc:
                 failures += 1
                 append_jsonl(

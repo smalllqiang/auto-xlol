@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
+from autoplay.expedition_scheduler import ExpeditionPlan, ExpeditionTimetable, GameClock
+from newstar_sdk.exceptions import SessionExpired
 from newstar_sdk.models import (
     Coordinates,
     FleetShips,
@@ -182,3 +186,38 @@ def test_run_tick_fills_every_lane_and_records_expected_returns(tmp_path):
     assert fill.status == "skipped"
     assert len(client.sent) == 4
     assert len(timetable.slots) == 4
+
+
+def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
+    module = _module()
+    plan = ExpeditionPlan(target="3:505:16", ships={207: 8621})
+    timetable = ExpeditionTimetable(tech_level=1, max_slots=1)
+    args = argparse.Namespace(
+        stop_file=str(tmp_path / "STOP"),
+        json=False,
+        retry_delay=60.0,
+        journal=str(tmp_path / "journal.jsonl"),
+        status_file=str(tmp_path / "status.json"),
+    )
+
+    def fail_tick(*_args, **_kwargs):
+        raise SessionExpired("the game session is no longer valid")
+
+    monkeypatch.setattr(module, "run_tick", fail_tick)
+
+    code = module.run_loop(
+        object(),
+        plan=plan,
+        timetable=timetable,
+        clock=GameClock(),
+        planet_id=None,
+        planet_name="test",
+        planet_coordinates=None,
+        args=args,
+    )
+
+    assert code == module.EXIT_SESSION_EXPIRED
+    journal = [json.loads(line) for line in Path(args.journal).read_text().splitlines()]
+    assert journal[-1]["kind"] == "session_error"
+    assert "session.py import" in capsys.readouterr().err
+    assert json.loads(Path(args.status_file).read_text())["state"] == "error"

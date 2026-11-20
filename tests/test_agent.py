@@ -29,6 +29,7 @@ class FakeClient:
     def __init__(self):
         self.writes = []
         self.ship_queue = []
+        self.ship_queue = []
 
     def get_overview(self):
         return parse_overview(_html("overview.html"))
@@ -52,7 +53,7 @@ class FakeClient:
         return []
 
     def get_ship_queue(self, mode="fleet"):
-        return []
+        return list(self.ship_queue)
 
     def get_fleets(self):
         return parse_fleets(_html("fleet_table_empty.html"))
@@ -67,6 +68,10 @@ class FakeClient:
     def research(self, element, levels=1, **kwargs):
         self.writes.append(("research", element, levels))
         return [{"element_id": element, "target_level": 1}]
+
+    def build_ships(self, ships, **kwargs):
+        self.writes.append(("build_ships", dict(ships)))
+        return []
 
 
 def _brief():
@@ -405,3 +410,24 @@ def test_provider_failure_keeps_the_partial_trace():
     assert len(payload["prompt_hash"]) == 64
     assert [event["tool"] for event in payload["tool_events"]] == ["plan"]
     assert payload["decision"]["transcript"][0]["tool_calls"][0]["name"] == "plan"
+
+
+def test_full_shipyard_queue_blocks_the_cycle_instead_of_failing_it():
+    provider = FakeProvider(
+        [_submit([{"tool": "build_ships", "args": {"ships": {"203": 1}}}])]
+    )
+    client = FakeClient()
+    client.ship_queue = [{"element_id": 202, "amount": 1}] * 5
+
+    result = run_agent_cycle(
+        client,
+        provider,
+        config=AgentConfig(dry_run=False, stop_file="state/does-not-exist-STOP"),
+    )
+
+    # No queue slot left: the order never reaches the game, and "come back
+    # later" is not a broken plan.
+    assert client.writes == []
+    assert result.report["status"] == "blocked"
+    assert "船坞槽位不足" in result.report["reason"]
+    assert result.status == "ok"

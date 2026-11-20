@@ -142,3 +142,29 @@ def test_render_brief_is_readable_and_budgeted():
     tight = render_brief(brief, max_chars=600)
     assert len(tight) < len(text)
     assert "未展示" in tight or "省略" in tight
+
+
+def test_brief_reports_shipyard_slots():
+    brief = _brief()
+
+    shipyard = brief["queues"]["shipyard"]
+    assert shipyard["limit"] == 5
+    assert shipyard["free"] == 5 - shipyard["count"]
+
+
+def test_shipyard_slots_can_be_overridden_and_render():
+    snapshot = _snapshot()
+    snapshot["queues"]["shipyard"] = [
+        {"element_id": 202, "amount": 5},
+        {"element_id": 203, "amount": 1},
+    ]
+
+    brief = build_brief(snapshot, _plan(), shipyard_slots=3)
+
+    assert brief["queues"]["shipyard"]["limit"] == 3
+    assert brief["queues"]["shipyard"]["free"] == 1
+    assert "剩余槽位 1/3" in render_brief(brief)
+
+    full = build_brief(snapshot, _plan(), shipyard_slots=2)
+    assert full["queues"]["shipyard"]["free"] == 0
+    assert "已满" in render_brief(full)

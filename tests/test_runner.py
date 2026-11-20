@@ -193,3 +193,23 @@ def test_full_queue_blocks_instead_of_failing():
 
     assert report.status == "blocked"
     assert "满队列" in report.reason
+
+
+def test_shipyard_slot_limit_blocks_instead_of_failing():
+    registry = FakeRegistry(
+        [
+            ToolResult(
+                ok=False,
+                status="partial",
+                code="QUEUE_SLOTS_LIMIT",
+                retryable=True,
+                message="船坞只剩 1 个槽位",
+            )
+        ]
+    )
+    steps = parse_steps([{"tool": "step", "args": {}}])
+
+    report = run_steps(registry, steps, client=FactsClient())
+
+    assert report.status == "blocked"
+    assert "船坞槽位不足" in report.reason

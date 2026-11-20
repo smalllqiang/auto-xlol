@@ -38,6 +38,7 @@ from newstar_sdk.exceptions import (
     TransportError,
 )
 
+from .limits import SHIPYARD_QUEUE_SLOTS
 from .planner import Plan, compute_plan
 
 #: Tools that never change the account.  Everything else is a write.
@@ -233,9 +234,17 @@ class ToolRegistry:
     ``state/STOP``, which the caller checks before running anything.
     """
 
-    def __init__(self, client: Any, *, dry_run: bool = True) -> None:
+    def __init__(
+        self,
+        client: Any,
+        *,
+        dry_run: bool = True,
+        shipyard_slots: int = SHIPYARD_QUEUE_SLOTS,
+    ) -> None:
         self.client = client
         self.dry_run = dry_run
+        #: Shipyard queue capacity (not on any page, see :mod:`autoplay.limits`).
+        self.shipyard_slots = max(0, int(shipyard_slots))
 
     # -- read tools ---------------------------------------------------------
 
@@ -376,7 +385,11 @@ class ToolRegistry:
             ),
             "build_ships": ToolSpec(
                 name="build_ships",
-                description="在船坞建造舰船或防御。游戏会按资源上限截断，结果里会报告实际数量。",
+                description=(
+                    "在船坞建造舰船或防御。一次最多提交简报里船坞剩余槽位数量的舰种；"
+                    "超出的舰种不会入队，结果里的 skipped 会列出它们。游戏会按资源上限"
+                    "截断，实际数量在结果里。"
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -748,6 +761,23 @@ class ToolRegistry:
             actual={"target_levels": targets},
         )
 
+    def _shipyard_slots(self, mode: str) -> Optional[Dict[str, int]]:
+        """Free shipyard slots, or ``None`` when the queue cannot be read.
+
+        A page that cannot be read must not become "no slots free": the game is
+        still the judge, so an unknown queue just skips the local split.
+        """
+
+        get_queue = getattr(self.client, "get_ship_queue", None)
+        if get_queue is None:
+            return None
+        try:
+            used = len(list(get_queue(mode) or []))
+        except NewStarError:
+            return None
+        limit = int(self.shipyard_slots)
+        return {"used": used, "limit": limit, "free": max(0, limit - used)}
+
     def _tool_build_ships(self, args: Mapping[str, Any]) -> ToolResult:
         ships = args["ships"]
         mode = str(args.get("mode", "fleet"))
@@ -757,11 +787,36 @@ class ToolRegistry:
             element_id = int(resolve_element(key, category))
             resolved[element_id] = resolved.get(element_id, 0) + int(value)
 
+        original = dict(resolved)
+        requested = {"ships": original, "mode": mode}
+        slots = self._shipyard_slots(mode)
+        skipped: Dict[str, int] = {}
+        if slots is not None and slots["free"] < len(resolved):
+            # More ship types than free queue slots: the game would reject the
+            # whole order.  Submit the first N types in the order the model
+            # asked for and report the rest, so the next round can continue.
+            if slots["free"] <= 0:
+                return ToolResult(
+                    ok=False,
+                    status="rejected",
+                    code="QUEUE_SLOTS_LIMIT",
+                    retryable=True,
+                    message=(
+                        f"船坞队列已满（{slots['used']}/{slots['limit']}），"
+                        "本次没有提交任何舰船，等下一轮"
+                    ),
+                    requested=requested,
+                    actual={"slots": slots},
+                )
+            ordered = list(resolved.items())
+            skipped = {str(key): value for key, value in ordered[slots["free"]:]}
+            resolved = dict(ordered[: slots["free"]])
+
         try:
             queue = self.client.build_ships(resolved, mode=mode, precheck=False, verify=False)
         except NewStarError as exc:
             result = translate(exc)
-            result.requested = {"ships": resolved, "mode": mode}
+            result.requested = requested
             return result
 
         actual: Dict[str, int] = {}
@@ -772,6 +827,24 @@ class ToolRegistry:
                 continue
             actual[str(int(element_id))] = actual.get(str(int(element_id)), 0) + int(amount)
 
+        report: Dict[str, Any] = {"queued": actual}
+        if slots is not None:
+            report["slots"] = slots
+        if skipped:
+            report["skipped"] = skipped
+            return ToolResult(
+                ok=False,
+                status="partial",
+                code="QUEUE_SLOTS_LIMIT",
+                retryable=True,
+                message=(
+                    f"船坞只剩 {slots['free']} 个槽位，只提交了前 {len(resolved)} 种舰；"
+                    f"其余 {len(skipped)} 种未提交，等槽位空出后下一轮再提"
+                ),
+                requested=requested,
+                actual=report,
+            )
+
         missing = {str(key): value for key, value in resolved.items() if actual.get(str(key), 0) < value}
         status = "ok" if not missing else "partial"
         return ToolResult(
@@ -780,8 +853,8 @@ class ToolRegistry:
             code="" if not missing else "PARTIAL_SHIPYARD",
             retryable=bool(missing),
             message="船坞请求已提交" if not missing else "船坞只排入了部分数量",
-            requested={"ships": resolved, "mode": mode},
-            actual={"queued": actual},
+            requested=requested,
+            actual=report,
         )
 
     def _tool_send_fleet(self, args: Mapping[str, Any]) -> ToolResult:

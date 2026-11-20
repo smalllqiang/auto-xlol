@@ -32,6 +32,7 @@ from local_config import add_session_args, load_config, make_client
 from autoplay import AgentConfig, load_directive, run_agent_cycle
 from autoplay.daemon import backoff_delay
 from autoplay.journal import append_jsonl
+from autoplay.limits import SHIPYARD_QUEUE_SLOTS
 from autoplay.llm import OpenAICompatibleProvider
 from autoplay.memory import decision_history, last_brief, next_cycle, read_agent_entries
 from autoplay.runtime import acquire_lock, alive, read_lock, release_lock, write_status
@@ -59,6 +60,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--max-chars", type=int, default=6000, help="brief character budget")
     parser.add_argument(
         "--history", type=int, default=8, help="recent agent cycles to include in the brief"
+    )
+    parser.add_argument(
+        "--shipyard-slots",
+        type=int,
+        default=SHIPYARD_QUEUE_SLOTS,
+        help=(
+            "船坞队列容量（页面不显示，默认按本实例实测值 %(default)s）；"
+            "简报据此给出剩余槽位，build_ships 超过时只提交前 N 种"
+        ),
     )
     parser.add_argument(
         "--every",
@@ -156,6 +166,7 @@ def run_cycle(args, provider, directive, config) -> Tuple[dict, object]:
                 max_steps=args.max_steps,
                 max_chars=args.max_chars,
                 stop_file=args.stop_file,
+                shipyard_slots=args.shipyard_slots,
             ),
             history=decision_history(entries),
             previous=last_brief(entries),

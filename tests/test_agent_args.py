@@ -25,6 +25,13 @@ def test_defaults_are_one_dry_cycle():
     assert args.stop_file == "state/STOP"
     assert args.status_file == "state/agent.json"
     assert args.lock_file == "state/agent.lock"
+    assert args.shipyard_slots == 5
+
+
+def test_shipyard_slots_can_be_overridden():
+    args = _module().parse_args(["--shipyard-slots", "3"])
+
+    assert args.shipyard_slots == 3
 
 
 def test_loop_flags_are_parsed():

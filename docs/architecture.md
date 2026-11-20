@@ -246,6 +246,9 @@ runner 停下并把事实交回模型重新规划，这比写一个永远正确�
   入库），`decision.transcript` 还保留每轮工具调用的原始参数，因此**输入侧**可以复原
   "它当时看到了什么"（roadmap P4-2）；把记录喂回模型是否得到同一决策，仍取决于温度
   和模型版本。
+- 船坞队列上限（本实例 5 槽）不在任何页面上，是 `autoplay/limits.py` 里的实例常量；
+  简报的剩余槽位与 `build_ships` 的拆单共用它，换实例或购买队列升级时用
+  `--shipyard-slots` 覆盖（roadmap P4-6）。
 - 工具的参数枚举目前是通用类型，没有按当前页面动态生成；模型报出不存在的元素时，
   `resolve_element` 会把它变成 `INVALID_ARGS`，而不是被猜成另一个元素。
 - 旧的确定性脚本（`run_forever --execute --allow`、探险/生产脚本）仍保留 allow-list，

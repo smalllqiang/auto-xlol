@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from .brief import collect_brief, render_brief
 from .directive import Directive
+from .limits import SHIPYARD_QUEUE_SLOTS
 from .llm import ChatReply, Provider, ProviderError
 from .prompt import build_system_prompt
 from .runner import RunReport, Step, parse_steps, run_steps
@@ -84,6 +85,7 @@ class AgentConfig:
     max_history: int = 8
     max_chars: int = 6000
     stop_file: str = "state/STOP"
+    shipyard_slots: int = SHIPYARD_QUEUE_SLOTS
 
 
 @dataclass
@@ -470,9 +472,12 @@ def run_agent_cycle(
         previous=previous,
         max_candidates=cfg.max_candidates,
         max_history=cfg.max_history,
+        shipyard_slots=cfg.shipyard_slots,
     )
     account = brief.get("account") or {}
-    registry = ToolRegistry(client, dry_run=cfg.dry_run)
+    registry = ToolRegistry(
+        client, dry_run=cfg.dry_run, shipyard_slots=cfg.shipyard_slots
+    )
     # Render once: the hash recorded in the journal must fingerprint the exact
     # user message the model read.
     brief_text = render_brief(brief, max_chars=cfg.max_chars)

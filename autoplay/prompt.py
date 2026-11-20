@@ -42,6 +42,8 @@ TOOL_RULES = """## 工具
 - `observe(sections?)`：全量快照。`messages(category?, page?)`：消息。
 - 写工具：建造 / 研究 / 造船 / 发船 / 召回 / 改生产比例 / 签到 / 取消队列 / 拆除。
   调用它们只是把动作登记进本轮计划。
+- `build_ships`：先看简报的「船坞剩余槽位」。一次提交的舰种数不要超过它；超出的
+  舰种不会入队，结果会标 `partial` 并在 `skipped` 里列出。
 - `submit_plan(goal, steps, reason)`：一次性提交完整计划。`steps` 每项形如
   `{"tool": "...", "args": {...}, "when": {...}, "until": {...}, "why": "..."}`。
 

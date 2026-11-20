@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from newstar_sdk.constants import RESOURCE_NAMES_ZH
 
+from .limits import SHIPYARD_QUEUE_SLOTS
 from .planner import Action, Plan
 
 SCHEMA_VERSION = 1
@@ -207,6 +208,7 @@ def build_brief(
     previous: Optional[Mapping[str, Any]] = None,
     max_candidates: int = DEFAULT_MAX_CANDIDATES,
     max_history: int = DEFAULT_MAX_HISTORY,
+    shipyard_slots: int = SHIPYARD_QUEUE_SLOTS,
 ) -> Dict[str, Any]:
     """Project a snapshot + plan into a decision brief (pure, JSON-able)."""
 
@@ -215,10 +217,18 @@ def build_brief(
     building = _queue(snapshot, "building")
     research = _queue(snapshot, "research")
     shipyard = _queue(snapshot, "shipyard")
+    shipyard_limit = max(0, int(shipyard_slots))
     queues = {
         "building": {"count": len(building), "eta_seconds": _queue_eta(building)},
         "research": {"count": len(research), "eta_seconds": _queue_eta(research)},
-        "shipyard": {"count": len(shipyard), "eta_seconds": _queue_eta(shipyard)},
+        "shipyard": {
+            "count": len(shipyard),
+            # The queue limit is not on any page; the model still has to know
+            # it, because one order with more types than free slots is rejected.
+            "limit": shipyard_limit,
+            "free": max(0, shipyard_limit - len(shipyard)),
+            "eta_seconds": _queue_eta(shipyard),
+        },
     }
 
     planet = snapshot.get("planet") or {}
@@ -294,7 +304,15 @@ def _queue_lines(brief: Mapping[str, Any]) -> List[str]:
         entry = queues.get(kind) or {}
         eta = entry.get("eta_seconds")
         eta_text = f"，剩余约 {_fmt(eta)} 秒" if eta is not None else ""
-        lines.append(f"- {label}: {int(entry.get('count', 0))} 项{eta_text}")
+        slots_text = ""
+        if kind == "shipyard":
+            limit = int(entry.get("limit") or 0)
+            free = entry.get("free")
+            if limit > 0 and free is not None:
+                slots_text = f"，剩余槽位 {int(free)}/{limit}"
+                if int(free) <= 0:
+                    slots_text += "（已满，新订单要等下一轮）"
+        lines.append(f"- {label}: {int(entry.get('count', 0))} 项{eta_text}{slots_text}")
     return lines
 
 
@@ -424,6 +442,7 @@ def collect_brief(
     previous: Optional[Mapping[str, Any]] = None,
     max_candidates: int = DEFAULT_MAX_CANDIDATES,
     max_history: int = DEFAULT_MAX_HISTORY,
+    shipyard_slots: int = SHIPYARD_QUEUE_SLOTS,
 ) -> Dict[str, Any]:
     """Read the game once and return a brief (this is the only I/O path here)."""
 
@@ -440,6 +459,7 @@ def collect_brief(
         previous=previous,
         max_candidates=max_candidates,
         max_history=max_history,
+        shipyard_slots=shipyard_slots,
     )
 
 

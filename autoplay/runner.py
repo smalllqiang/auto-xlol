@@ -30,6 +30,9 @@ from .tools import ToolRegistry, ToolResult
 #: of being ignored -- a typo must not turn into a skipped guard.
 CONDITION_KINDS = ("always", "queue_empty", "level_at_least", "resources_at_least", "phase")
 
+#: Result codes that mean "come back later", not "the plan is broken".
+BLOCKING_CODES = frozenset({"QUEUE_FULL", "QUEUE_SLOTS_LIMIT"})
+
 
 @dataclass
 class Step:
@@ -263,13 +266,15 @@ def run_steps(
             continue
         # A rejection is data: stop and let the caller re-plan.  "skipped" is a
         # normal no-op (e.g. sign-in already claimed), not a failure.
-        if result.code == "QUEUE_FULL":
-            # A full queue is a "come back later", not a broken plan.
+        if result.code in BLOCKING_CODES:
+            # A full queue (or too few shipyard slots) is a "come back later",
+            # not a broken plan.
+            label = "满队列" if result.code == "QUEUE_FULL" else "船坞槽位不足"
             return RunReport(
                 status="blocked",
                 steps=results,
                 stopped_at=index,
-                reason=f"第 {index + 1} 步遇到满队列，等下一轮：{result.message}",
+                reason=f"第 {index + 1} 步遇到{label}，等下一轮：{result.message}",
             )
         if not result.ok and result.status != "skipped":
             return RunReport(
@@ -303,6 +308,7 @@ def run_steps(
 
 
 __all__ = [
+    "BLOCKING_CODES",
     "CONDITION_KINDS",
     "Facts",
     "RunReport",

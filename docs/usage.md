@@ -1267,7 +1267,8 @@ client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionReje
 
 | 模块 | 作用 |
 | --- | --- |
-| `autoplay/brief.py` | 快照 + 计划 → 决策简报（纯函数）。派生量、爆仓标记、队列 ETA、相对上次的 delta、读不到的页面 |
+| `autoplay/brief.py` | 快照 + 计划 → 决策简报（纯函数）。派生量、爆仓标记、队列 ETA、船坞剩余槽位、相对上次的 delta、读不到的页面 |
+| `autoplay/limits.py` | 页面不暴露的实例上限（船坞队列 5 槽）；简报和工具共用同一个值 |
 | `autoplay/tools.py` | 动词工具注册表：`upgrade_building` / `upgrade_building_to` / `research` / `research_to` / `build_ships` / `send_fleet` / `recall_fleet` / `set_production_ratios` / `claim_daily_bonus` / `cancel_queue` / `destroy_building`；读工具含 `expedition_report`；结果区分 `requested` / `actual` |
 | `autoplay/runner.py` | 顺序执行 steps：`when` 前置检查、`until` 事后检查、写后刷新事实、遇阻即停并交还控制权 |
 | `autoplay/agent.py` | 决策循环：读工具直接执行，写工具先登记，`submit_plan` 或纯 JSON 都可作为计划；读工具结果、提示词/工具哈希与每轮工具参数都进 journal；模型失败回退确定性规划器 |
@@ -1287,7 +1288,8 @@ export NEWSTAR_AGENT_API_KEY=...
 ```
 
 CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
-`--agent-temperature`；另有 `--max-rounds` / `--max-steps` / `--max-chars`。
+`--agent-temperature`；另有 `--max-rounds` / `--max-steps` / `--max-chars` /
+`--shipyard-slots`。
 
 计划格式：
 
@@ -1328,6 +1330,12 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
   `degraded`，daemon 不受影响；模型失败前已经发生的读调用仍留在 `tool_events` 里。
 - **满队列不是失败**：游戏返回「最多只能添加 N 个队列」时工具译成 `QUEUE_FULL`
   （`retryable=true`），runner 记为 `blocked`，等下一轮而不是把计划判死。
+- **船坞槽位（P4-6）**：本实例船坞队列上限 5（一次提交 6 种舰会撞上限，页面不显示这个
+  数字）。简报的 `queues.shipyard` 带 `limit` / `free`，渲染成「剩余槽位 N/5」；
+  `build_ships` 在提交前读一次船坞队列：槽位不足时按模型给的顺序只提交前 N 种，
+  其余列进 `actual.skipped` 并返回 `QUEUE_SLOTS_LIMIT`（runner 记为 `blocked`）；
+  槽位为 0 时整单不 POST。队列读不到时不本地拦，仍交给游戏裁决。上限用
+  `--shipyard-slots` 覆盖（例如以后买了队列升级）。
 - **探险的 `stay_time` 默认 1**：省略或写 0 会被游戏以「无效返回时间」拒绝，工具现在
   自己补 1。
 - **cycle.status 有四种**：`ok` / `failed`（有步骤被拒）/ `degraded`（模型不可用、

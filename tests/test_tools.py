@@ -5,14 +5,21 @@ from newstar_sdk.exceptions import ActionRejected, GameError, TransportError
 
 
 class FakeClient:
-    def __init__(self, queue=None, reject=None):
+    def __init__(self, queue=None, reject=None, pre_queue=None, queue_error=None):
         self.queue = list(queue or [])
         self.reject = reject
+        self.pre_queue = list(pre_queue or [])
+        self.queue_error = queue_error
         self.calls = []
 
     def _maybe_reject(self):
         if self.reject is not None:
             raise self.reject
+
+    def get_ship_queue(self, mode="fleet"):
+        if self.queue_error is not None:
+            raise self.queue_error
+        return list(self.pre_queue)
 
     def upgrade_building(self, element, levels=1, *, target_level=None, precheck=True, verify=True):
         self.calls.append(
@@ -303,3 +310,51 @@ def test_full_queue_is_retryable_not_a_game_error():
 
     assert result.code == "QUEUE_FULL"
     assert result.retryable is True
+
+
+def test_build_ships_splits_by_free_shipyard_slots():
+    client = FakeClient(pre_queue=[{"element_id": 202, "amount": 1}])
+    registry = ToolRegistry(client, dry_run=False, shipyard_slots=3)
+
+    result = registry.call("build_ships", {"ships": {"203": 5, "204": 2, "205": 1}})
+
+    # free = 2: the first two types go out, the third is reported, not hidden.
+    submitted = [call for call in client.calls if call["tool"] == "build_ships"]
+    assert submitted[0]["ships"] == {203: 5, 204: 2}
+    assert result.ok is False
+    assert result.status == "partial"
+    assert result.code == "QUEUE_SLOTS_LIMIT"
+    assert result.retryable is True
+    assert result.requested["ships"] == {203: 5, 204: 2, 205: 1}
+    assert result.actual["skipped"] == {"205": 1}
+    assert result.actual["slots"] == {"used": 1, "limit": 3, "free": 2}
+
+
+def test_build_ships_rejects_before_posting_when_no_slot_is_free():
+    client = FakeClient(pre_queue=[{"element_id": 202, "amount": 1}] * 5)
+    registry = ToolRegistry(client, dry_run=False, shipyard_slots=5)
+
+    result = registry.call("build_ships", {"ships": {"203": 1}})
+
+    assert client.calls == []
+    assert result.ok is False
+    assert result.status == "rejected"
+    assert result.code == "QUEUE_SLOTS_LIMIT"
+    assert result.retryable is True
+    assert result.actual["slots"]["free"] == 0
+
+
+def test_unreadable_shipyard_queue_lets_the_game_decide():
+    client = FakeClient(
+        queue=[{"element_id": 203, "amount": 1}],
+        queue_error=TransportError("boom"),
+    )
+    registry = ToolRegistry(client, dry_run=False, shipyard_slots=1)
+
+    result = registry.call("build_ships", {"ships": {"203": 1}})
+
+    # An unreadable queue is not "zero slots": the order still goes out and the
+    # game is the judge.
+    assert result.ok is True
+    assert result.actual["queued"] == {"203": 1}
+    assert "slots" not in result.actual

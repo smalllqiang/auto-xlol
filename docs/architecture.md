@@ -35,6 +35,10 @@ NewStarClient (client.py)
 - `models.py` 是公开契约；解析器返回这些类型，而不是裸字典。
 - 静态 `constants.py` 只用于名称解析和兜底显示；页面上的实时名称优先。
 
+脚本层的依赖方向是 `scripts/` → `utils/` → 标准库/第三方库：`utils/` 放脚本共享的
+基础设施（`.env` 读取、飞书消息上报），不导入 `autoplay` 或 `newstar_sdk`，因此任何
+脚本都能在不引入游戏逻辑的前提下复用它。策略仍只进 `autoplay/`，不进 `utils/`。
+
 ## 3. 数据来源
 
 ### 3.1 服务端渲染 HTML

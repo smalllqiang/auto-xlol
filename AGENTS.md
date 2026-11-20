@@ -29,6 +29,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 `autoplay/memory.py`（跨轮记忆）、`autoplay/runtime.py`（pid 锁/心跳）、
 `autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、`autoplay/expedition_scheduler.py`（常驻探险调度）、
 `autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
+脚本共享基础设施：`utils/env.py`（`.env` 读取）、`utils/notify.py`（飞书消息上报）。
 
 ## 环境与命令
 
@@ -62,6 +63,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/daily_bonus.py                   # 签到状态（--claim 才领取）
 .venv/bin/python scripts/session.py import '2Moons=...'    # 浏览器+脚本共用会话（详见已知坑）
 .venv/bin/python scripts/config.py --validate            # 检查 .env（游戏 + 模型端点）
+.venv/bin/python scripts/notify.py --test                # 发一条飞书消息（需 NEWSTAR_FEISHU_WEBHOOK）
 .venv/bin/python scripts/run_once.py                      # 影子模式（不执行）
 .venv/bin/python scripts/agent.py --no-verify-ssl         # AI 规划一轮（默认 dry-run，--execute 才写）
 .venv/bin/python scripts/tui.py                           # 只读看板（--once 打印一帧）
@@ -77,6 +79,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 | `newstar_sdk/` | 稳定客户端：HTTP、解析、数据模型、异常、CLI。不写策略。 |
 | `autoplay/` | 易变策略：阶段、经济计算、计划、执行。可以频繁改。 |
 | `scripts/` | 面向人的命令行入口，薄封装，不放核心逻辑。 |
+| `utils/` | 脚本共享基础设施（`.env` 读取、消息上报）；不依赖 `autoplay`/`newstar_sdk`。 |
 | `tests/` | 离线样本测试；`fixtures/` 是脱敏后的真实页面。 |
 | `docs/` | 结构、用法、决策、路线图。 |
 | `state/` `live_pages/` `newstar/` | 本地数据/上游源码，已忽略，**不要提交**。 |

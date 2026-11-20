@@ -284,6 +284,9 @@ newstar_sdk/      # 客户端组件（稳定契约）
   exceptions.py   # 异常类型
   utils.py        # 数值、JS 对象、坐标等工具
   cli.py          # newstar 命令行
+utils/            # 脚本共享基础设施（位于 scripts 之下，不依赖游戏层）
+  env.py          # .env 解析与进程环境合并
+  notify.py       # 飞书自定义机器人消息上报
 docs/
   usage.md        # API 与脚本用法
   architecture.md # 结构、数据来源、取舍与排错

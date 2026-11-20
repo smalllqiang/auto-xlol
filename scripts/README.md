@@ -72,6 +72,7 @@
 | `daily_bonus.py` | 只读签到状态 | `--claim`（访问即领取，没有白名单） |
 | `collect_state.py` / `page_census.py` / `empire.py` / `expedition.py` / `state_report.py` / `tui.py` | 只读 | 无（不写游戏） |
 | `session.py login` | （登录子命令） | 显式执行即登录并保存会话（会踢浏览器） |
+| `notify.py` | 发一条飞书通知 | 无（不写游戏；需 `NEWSTAR_FEISHU_WEBHOOK`） |
 | `live_smoke.py` | 只读冒烟 | `--mutate`（排队后立刻取消） |
 
 ## 3. 按任务选脚本
@@ -98,9 +99,26 @@
 | 调生产比例、缺电 | `scripts/production.py` | §22 |
 | 让模型规划一轮 | `scripts/agent.py` | §23 |
 | 每日签到 | `scripts/daily_bonus.py --claim` | §2 每日签到 |
+| 测试飞书消息渠道 | `scripts/notify.py --test` | §1 消息上报 |
 | SDK 冒烟 / 演示 | `scripts/live_smoke.py` | — |
 
-`local_config.py` 不是入口，是上面这些脚本共用的配置/会话/建客户端辅助模块。
+`local_config.py` 不是入口，是上面这些脚本共用的配置/会话/建客户端辅助模块；
+`utils/` 是更下层的基础设施（`.env` 解析、飞书消息上报），不依赖游戏层。
+
+### 消息上报（飞书）
+
+`notify.py` 不连游戏，只把一条消息发到 `.env` 配好的飞书群：
+
+```bash
+.venv/bin/python scripts/notify.py --test
+echo "cycle failed" | .venv/bin/python scripts/notify.py --title 告警
+.venv/bin/python scripts/notify.py --test --json
+```
+
+配置 `NEWSTAR_FEISHU_WEBHOOK`（可选 `NEWSTAR_FEISHU_SECRET`）见
+[`docs/usage.md` §1「消息上报」](../docs/usage.md)。退出码：`0` 成功，`1` 发送失败，
+`2` 未配置或缺少正文。Python 侧调用 `utils.notify.notify()`，未配置时返回
+`skipped=True` 而不是抛异常。
 
 ## 4. 常用参数按主题
 

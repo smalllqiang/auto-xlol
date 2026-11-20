@@ -58,6 +58,9 @@ def _clean_env(monkeypatch, tmp_path):
         "NEWSTAR_AGENT_API_KEY",
         "NEWSTAR_AGENT_TEMPERATURE",
         "NEWSTAR_AGENT_TIMEOUT",
+        "NEWSTAR_FEISHU_WEBHOOK",
+        "NEWSTAR_FEISHU_SECRET",
+        "NEWSTAR_FEISHU_TIMEOUT",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.chdir(tmp_path)

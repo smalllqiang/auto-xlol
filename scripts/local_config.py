@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from newstar_sdk import NewStarClient
+from utils.env import parse_dotenv
 
 DEFAULT_SESSION_FILE = "state/session.json"
 
@@ -126,6 +127,9 @@ ENV_KEYS = (
     "NEWSTAR_AGENT_API_KEY",
     "NEWSTAR_AGENT_TEMPERATURE",
     "NEWSTAR_AGENT_TIMEOUT",
+    "NEWSTAR_FEISHU_WEBHOOK",
+    "NEWSTAR_FEISHU_SECRET",
+    "NEWSTAR_FEISHU_TIMEOUT",
 )
 
 #: CLI flag -> config key.  Every destination is read with ``getattr`` so a
@@ -149,17 +153,6 @@ CLI_KEYS = (
 # ---------------------------------------------------------------------------
 # Configuration loading
 # ---------------------------------------------------------------------------
-
-
-def _parse_dotenv(path: Path) -> Dict[str, str]:
-    values: Dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("'\"")
-    return values
 
 
 def _parse_passwd_txt(path: Path) -> Dict[str, str]:
@@ -221,7 +214,7 @@ def load_values(args: argparse.Namespace) -> Dict[str, str]:
         if not path.exists():
             raise SystemExit(f"config file not found: {name}")
         if path.suffix == ".env" or name.endswith(".env"):
-            values.update(_parse_dotenv(path))
+            values.update(parse_dotenv(path))
         else:
             values.update(_parse_passwd_txt(path))
 

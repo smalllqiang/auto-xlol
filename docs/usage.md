@@ -41,10 +41,61 @@ cp .env.example .env
 | `NEWSTAR_TIMEOUT` | 游戏请求超时（秒） |
 | `NEWSTAR_AGENT_BASE_URL` / `_MODEL` / `_API_KEY` | 模型端点（`scripts/agent.py`） |
 | `NEWSTAR_AGENT_TEMPERATURE` / `_TIMEOUT` | 采样温度、模型超时 |
+| `NEWSTAR_FEISHU_WEBHOOK` | 飞书自定义机器人 webhook；不填则不启用消息上报 |
+| `NEWSTAR_FEISHU_SECRET` | 可选；机器人开启「签名校验」时填写 |
+| `NEWSTAR_FEISHU_TIMEOUT` | 消息上报 HTTP 超时（秒），默认 10 |
 
-`scripts/config.py` 默认打码显示密码与 API key，`--reveal` 才显示明文；
+`scripts/config.py` 默认打码显示密码、API key 与飞书 webhook，`--reveal` 才显示明文；
 `--validate` 只在**缺少必填项**（实例地址、用户名、密码/会话）或找不到配置文件时返回 1。
-模型没配只算提示：其余脚本照常运行，只有 `scripts/agent.py` 会拒绝启动。
+模型与消息上报没配只算提示：其余脚本照常运行，只有 `scripts/agent.py` 会拒绝启动。
+
+### 消息上报（飞书自定义机器人）
+
+`utils/notify.py` 是脚本层之下共享的消息上报渠道，对接飞书的「自定义机器人」。
+在目标群聊里添加机器人，复制它的 webhook 地址（形如
+`https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`），填进 `.env`：
+
+```bash
+NEWSTAR_FEISHU_WEBHOOK=https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx
+# 机器人的安全设置启用了「签名校验」时再填
+NEWSTAR_FEISHU_SECRET=xxxxxxxx
+```
+
+在任何脚本或 Python 代码里：
+
+```python
+from utils.notify import FeishuNotifier, notify
+
+result = notify("cycle failed: timeout")   # 读环境变量 / .env
+if not result.ok and not result.skipped:
+    print(result.error)
+
+# 需要多次上报时复用连接
+with FeishuNotifier(webhook, secret) as bot:
+    bot.send_text("...")
+    bot.send_post("日报", ["第一行", "第二行"])
+```
+
+命令行测试（不写游戏）：
+
+```bash
+.venv/bin/python scripts/notify.py --test
+echo "cycle failed" | .venv/bin/python scripts/notify.py --title 告警
+.venv/bin/python scripts/notify.py --test --json   # 机器可读结果
+```
+
+行为与限制：
+
+- 未配置 `NEWSTAR_FEISHU_WEBHOOK` 时返回 `SendResult(skipped=True)`，不报错、不发请求；
+  调用方通常直接忽略。
+- 网络错误、HTTP 非 2xx、飞书业务 `code != 0` 都返回 `ok=False`，**不抛异常**，
+  适合在常驻脚本里「上报但不打断主流程」。
+- 飞书即使拒绝请求也会返回 HTTP 200，所以必须看响应体 `code`；只有 `code == 0`
+  才算送达（旧的 `StatusCode` 字段也兼容）。
+- 请求体上限 20 KB；单个机器人限流 100 次/分钟、5 次/秒（对应 `code=11232`）。
+- 签名算法为 `Base64(HmacSHA256(timestamp + "\n" + secret, ""))`，`timestamp` 为
+  秒级且有效期 1 小时；`FeishuNotifier` 会在发送时自动生成 `timestamp` / `sign`。
+- webhook 是凭证：错误信息会把它替换成 `<feishu-webhook>`，不要把真实地址提交到仓库。
 
 ### 宇宙解析
 

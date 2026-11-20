@@ -32,6 +32,14 @@ from .expedition import (
 )
 from .expedition_cycle import ExpeditionCycleResult, run_expedition_cycle
 from .expedition_executor import ExpeditionDispatchResult, dispatch_expedition
+from .expedition_scheduler import (
+    ExpeditionFillResult,
+    ExpeditionPlan,
+    ExpeditionTimetable,
+    fill_expedition_slots,
+    read_live_slots,
+    read_max_slots,
+)
 from .llm import (
     ChatReply,
     FakeProvider,
@@ -62,7 +70,10 @@ __all__ = [
     "ExecutionResult",
     "ExpeditionCycleResult",
     "ExpeditionDispatchResult",
+    "ExpeditionFillResult",
     "ExpeditionGroup",
+    "ExpeditionPlan",
+    "ExpeditionTimetable",
     "ExpeditionReport",
     "FakeProvider",
     "OpenAICompatibleProvider",
@@ -91,6 +102,7 @@ __all__ = [
     "default_directive",
     "detect_phase",
     "dispatch_expedition",
+    "fill_expedition_slots",
     "parse_steps",
     "provider_from_env",
     "render_brief",
@@ -105,6 +117,8 @@ __all__ = [
     "parse_directive",
     "payback_hours",
     "production_delta",
+    "read_live_slots",
+    "read_max_slots",
     "recall_candidates",
     "recall_fleets",
     "save_directive",

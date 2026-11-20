@@ -122,8 +122,37 @@ def fleet_score(cost: Mapping[int, float]) -> float:
     return (float(cost.get(901, 0.0)) + float(cost.get(902, 0.0))) / 1000.0
 
 
-def _is_expedition(fleet: FleetInfo) -> bool:
-    if fleet.mission_id is not None and int(fleet.mission_id) == int(Mission.EXPEDITION):
+def expedition_tech_level(research: Iterable[ResearchInfo]) -> int:
+    """Return the expedition technology level (element 124), or 0."""
+
+    return next(
+        (int(item.level) for item in research if int(item.id) == EXPEDITION_TECH_ID),
+        0,
+    )
+
+
+def expedition_slot_count(tech: int) -> int:
+    """Maximum expedition lanes for a technology level (``floor(sqrt(tech))``).
+
+    This counts the *maximum* lanes, not the free ones; every fleet on mission
+    15 (expedition) or 18 (nebula expedition) occupies one until it is home.
+    """
+
+    tech = int(tech)
+    return math.isqrt(tech) if tech > 0 else 0
+
+
+def is_expedition_fleet(fleet: FleetInfo) -> bool:
+    """Whether a fleet occupies an expedition lane.
+
+    The game shares the lane limit between mission 15 (探险/expedition) and
+    mission 18 (星云远征/nebula expedition), so both count.
+    """
+
+    if fleet.mission_id is not None and int(fleet.mission_id) in {
+        int(Mission.EXPEDITION),
+        int(Mission.NEBULA_EXPEDITION),
+    }:
         return True
     mission = (fleet.mission or "").casefold()
     return "探险" in mission or "远征" in mission or "expedition" in mission
@@ -297,12 +326,9 @@ def compute_expedition_report(
     shipyard_list = list(shipyard)
     fleet_list = list(fleets)
 
-    tech = next(
-        (int(item.level) for item in research_list if int(item.id) == EXPEDITION_TECH_ID),
-        0,
-    )
-    slots = math.isqrt(tech) if tech > 0 else 0
-    active = [fleet for fleet in fleet_list if _is_expedition(fleet)]
+    tech = expedition_tech_level(research_list)
+    slots = expedition_slot_count(tech)
+    active = [fleet for fleet in fleet_list if is_expedition_fleet(fleet)]
     free_slots = max(0, slots - len(active))
 
     costs = {

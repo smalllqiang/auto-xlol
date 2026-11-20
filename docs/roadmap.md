@@ -183,20 +183,33 @@ expires_when,phases,errors}`，TUI 健康栏显示「默认策略 / 策略 N 分
 **边界与后续（P4）**
 
 AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、由游戏裁决（ADR-030），
-执行层保留 dry-run 默认、页面证据与 `state/STOP`。下列按优先级排列；P4-2 与 P4-6 是
-下一轮长跑前值得先做的。
+执行层保留 dry-run 默认、页面证据与 `state/STOP`。P4-2 已完成（见下方记录）；
+下列按优先级排列，下一轮长跑前优先 P4-6（船坞槽位）与 P4-7。
 
-| # | 要做什么 | 触发它的问题 | 验收 |
-| --- | --- | --- | --- |
-| P4-1 | 去掉旧确定性脚本的 allow-list | `run_forever`、探险、生产、召回仍需人预先授权 | `--execute` 不再要求 `--allow`；脚本与测试同步，行为无其它变化 |
-| P4-2 | agent journal 可回放 | 读工具结果（`expedition_report` 等）未入库；无提示词/工具版本哈希，事后无法复原模型看到了什么 | 每条含 `prompt_hash`/`tools_hash` 与 `tool_events`；同一 brief 能复现决策 |
-| P4-6 | 船坞剩余槽位进简报 | 本实例只有 5 个队列槽，模型一次提交 6 种舰必然撞上限 | 简报给出剩余槽位；`build_ships` 按槽位拆单或在提交前拒绝 |
-| P4-7 | 新增 `ships_at_least` 条件 | 模型拿 `queue_empty: shipyard` 代理"船造好了没"，多次空等 | `load_facts` 读可用舰数；舰队就绪才放行 `send_fleet` |
-| P4-3 | 工具参数枚举随页面生成 | 模型可能报出本服不存在的元素/舰种 | schema 每次由当前页面生成；非法值在 dry-run 即 `INVALID_ARGS` |
-| P4-4 | 离线评估脚本 `scripts/eval_agent.py` | 只有实跑，没有回归基线 | 固定快照集上输出 JSON 合法率、与 planner 意图一致率、拒绝率 |
-| P4-5 | `run_forever` 的模型路由 | 每轮都叫模型，多数轮次无事可做 | 常规轮走 planner，告警/阶段切换才调模型，并记录路由原因 |
-| P4-8 | 探险编队只用可派遣舰种 | 编队里出现过殖民舰、探测器与未知 mod 舰 | 编队模板排除非战斗/运输舰，或提示词明确禁止 |
-| P4-9 | 看板显示 agent 状态 | TUI 只读 `daemon.json`，看不到 agent 心跳与 failed 比例 | TUI 增加 agent 块：cycles / status / failed 率 |
+| # | 要做什么 | 状态 | 触发它的问题 | 验收 |
+| --- | --- | --- | --- | --- |
+| P4-1 | 去掉旧确定性脚本的 allow-list | ⬜ | `run_forever`、探险、生产、召回仍需人预先授权 | `--execute` 不再要求 `--allow`；脚本与测试同步，行为无其它变化 |
+| P4-2 | agent journal 可回放 | ✅ | 读工具结果（`expedition_report` 等）未入库；无提示词/工具版本哈希，事后无法复原模型看到了什么 | 每条含 `prompt_hash`/`tools_hash` 与 `tool_events`；同一 brief 能复现决策 |
+| P4-6 | 船坞剩余槽位进简报 | ⬜ | 本实例只有 5 个队列槽，模型一次提交 6 种舰必然撞上限 | 简报给出剩余槽位；`build_ships` 按槽位拆单或在提交前拒绝 |
+| P4-7 | 新增 `ships_at_least` 条件 | ⬜ | 模型拿 `queue_empty: shipyard` 代理"船造好了没"，多次空等 | `load_facts` 读可用舰数；舰队就绪才放行 `send_fleet` |
+| P4-3 | 工具参数枚举随页面生成 | ⬜ | 模型可能报出本服不存在的元素/舰种 | schema 每次由当前页面生成；非法值在 dry-run 即 `INVALID_ARGS` |
+| P4-4 | 离线评估脚本 `scripts/eval_agent.py` | ⬜ | 只有实跑，没有回归基线 | 固定快照集上输出 JSON 合法率、与 planner 意图一致率、拒绝率 |
+| P4-5 | `run_forever` 的模型路由 | ⬜ | 每轮都叫模型，多数轮次无事可做 | 常规轮走 planner，告警/阶段切换才调模型，并记录路由原因 |
+| P4-8 | 探险编队只用可派遣舰种 | ⬜ | 编队里出现过殖民舰、探测器与未知 mod 舰 | 编队模板排除非战斗/运输舰，或提示词明确禁止 |
+| P4-9 | 看板显示 agent 状态 | ⬜ | TUI 只读 `daemon.json`，看不到 agent 心跳与 failed 比例 | TUI 增加 agent 块：cycles / status / failed 率 |
+
+**P4-2 记录（2026-11-20）**：`autoplay/agent.py` 的 `Decision` 记录
+`prompt_hash` / `tools_hash` / `brief_hash`（系统提示词、工具 schema、渲染后 user
+消息的 sha256）与 `max_chars`，以及按顺序的 `tool_events`（`round` / `id` / `tool` /
+`kind` / `args` / `result`）：读工具（`observe` / `plan` / `expedition_report` /
+`messages`）的完整结果直接入库，写工具的 staged 回复也留档；`decision.transcript`
+从「工具名摘要」升级为每轮 `content` + `tool_calls`（含 `arguments`）。模型在回合中途
+失败时，已发生的读调用和哈希仍保留（`_carry_trace` 把 trace 带到回退决策）。
+验收测试 `tests/test_agent.py::test_journal_entry_is_enough_to_replay_the_decision`：
+从一条 journal 记录重建系统提示词/工具 schema/简报并校验三个哈希，再把 `transcript`
+转成 provider 回复喂回 `decide()`，计划与 `tool_events` 逐字段相同；
+`test_read_tool_results_land_in_the_journal_trace` 覆盖读结果入库，
+`test_provider_failure_keeps_the_partial_trace` 覆盖失败时的 trace 保留。
 
 ## 核实与技术债
 

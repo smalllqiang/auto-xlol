@@ -1261,7 +1261,8 @@ client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionReje
               → steps[]（类型化，带 when/until）
      → runner（逐条执行，前提不成立即停）
      → tools（13 个动词） → 游戏裁决
-     → journal（kind=agent：brief / decision / report / usage）
+     → journal（kind=agent：prompt_hash / tools_hash / brief_hash、brief、
+       decision（transcript 含工具参数）、tool_events（读工具结果）、report / usage）
 ```
 
 | 模块 | 作用 |
@@ -1269,7 +1270,7 @@ client.set_production_ratios({1: 90})   # 写回并校验，失败抛 ActionReje
 | `autoplay/brief.py` | 快照 + 计划 → 决策简报（纯函数）。派生量、爆仓标记、队列 ETA、相对上次的 delta、读不到的页面 |
 | `autoplay/tools.py` | 动词工具注册表：`upgrade_building` / `upgrade_building_to` / `research` / `research_to` / `build_ships` / `send_fleet` / `recall_fleet` / `set_production_ratios` / `claim_daily_bonus` / `cancel_queue` / `destroy_building`；读工具含 `expedition_report`；结果区分 `requested` / `actual` |
 | `autoplay/runner.py` | 顺序执行 steps：`when` 前置检查、`until` 事后检查、写后刷新事实、遇阻即停并交还控制权 |
-| `autoplay/agent.py` | 决策循环：读工具直接执行，写工具先登记，`submit_plan` 或纯 JSON 都可作为计划；模型失败回退确定性规划器 |
+| `autoplay/agent.py` | 决策循环：读工具直接执行，写工具先登记，`submit_plan` 或纯 JSON 都可作为计划；读工具结果、提示词/工具哈希与每轮工具参数都进 journal；模型失败回退确定性规划器 |
 | `autoplay/prompt.py` | 提示词语料：角色、边界、工具速查、doctrine 原则、directive 目标 |
 | `autoplay/llm.py` | Provider 协议 + OpenAI 兼容实现 + `FakeProvider` |
 | `autoplay/memory.py` | 从 journal 读回最近 N 轮（`{cycle, chose, result}`），并给下一轮简报提供 delta 基线 |
@@ -1311,8 +1312,20 @@ CLI 覆盖：`--agent-base-url` / `--agent-model` / `--agent-api-key` /
   `INVALID_ARGS`，不会给出"看起来能跑"的假预览。
 - **跨轮记忆**：`scripts/agent.py` 读回最近 `--history` 条 `kind=agent` 记录，简报里带
   `history` 与 `delta`；进程本身无状态。
+- **可回放（P4-2）**：每条 `kind=agent` 顶层带三个哈希与 `tool_events`：
+  `prompt_hash`（系统提示词 sha256）、`tools_hash`（工具 schema 规范化 JSON 的 sha256）、
+  `brief_hash`（渲染后 user 消息的 sha256）、`max_chars`；`tool_events` 按顺序记录模型
+  的每次工具调用（`round` / `id` / `tool` / `kind` / `args` / `result`），读工具
+  （`observe` / `plan` / `expedition_report` / `messages`）的完整结果就在 `result` 里，
+  不再重读游戏就能复原"它当时看到了什么"。`decision.transcript` 记录每轮 assistant 的
+  `content` 与 `tool_calls`（含 `arguments`），所以能按原顺序重建对话：
+  用同一份代码重建系统提示词与工具 schema（后者含 `submit_plan`）并核对哈希，
+  再用 `brief` + `max_chars` 渲染 user 消息，把 `tool_events` 的 `result` 当作工具回复。
+  同一份记录喂回模型不保证同一决策（温度/模型版本仍会变），但输入侧是可复现的。
+  读工具结果完整入库会让条目变大（`observe` 约 +7KB），长跑请设置
+  `--journal-max-bytes`。
 - **模型不可用**（超时、非法 JSON、没有步骤）→ 回退确定性规划器首条候选，cycle 标
-  `degraded`，daemon 不受影响。
+  `degraded`，daemon 不受影响；模型失败前已经发生的读调用仍留在 `tool_events` 里。
 - **满队列不是失败**：游戏返回「最多只能添加 N 个队列」时工具译成 `QUEUE_FULL`
   （`retryable=true`），runner 记为 `blocked`，等下一轮而不是把计划判死。
 - **探险的 `stay_time` 默认 1**：省略或写 0 会被游戏以「无效返回时间」拒绝，工具现在

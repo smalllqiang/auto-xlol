@@ -15,6 +15,7 @@ is down (ADR-031).
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +62,19 @@ SUBMIT_PLAN = ToolSpec(
 )
 
 
+def _hash_text(text: str) -> str:
+    """Stable fingerprint of a prompt (what the model read, not the path)."""
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _hash_json(value: Any) -> str:
+    """Fingerprint a JSON payload independent of key/dict ordering."""
+
+    canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return _hash_text(canonical)
+
+
 @dataclass
 class AgentConfig:
     dry_run: bool = True
@@ -82,8 +96,16 @@ class Decision:
     usage: Dict[str, int] = field(default_factory=dict)
     error: str = ""
     fallback: bool = False
+    #: Replay metadata: what the model read, and every tool call it made.
+    prompt_hash: str = ""
+    tools_hash: str = ""
+    brief_hash: str = ""
+    max_chars: int = 0
+    tool_events: List[Dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
+        # ``tool_events`` / the hashes are published at the cycle level
+        # (``AgentCycleResult``); the plan itself stays a plan.
         return {
             "goal": self.goal,
             "reason": self.reason,
@@ -106,6 +128,11 @@ class AgentCycleResult:
     decision: Dict[str, Any] = field(default_factory=dict)
     report: Dict[str, Any] = field(default_factory=dict)
     usage: Dict[str, int] = field(default_factory=dict)
+    prompt_hash: str = ""
+    tools_hash: str = ""
+    brief_hash: str = ""
+    max_chars: int = 0
+    tool_events: List[Dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -117,6 +144,11 @@ class AgentCycleResult:
             "decision": dict(self.decision),
             "report": dict(self.report),
             "usage": dict(self.usage),
+            "prompt_hash": self.prompt_hash,
+            "tools_hash": self.tools_hash,
+            "brief_hash": self.brief_hash,
+            "max_chars": self.max_chars,
+            "tool_events": list(self.tool_events),
         }
 
 
@@ -155,6 +187,40 @@ def _tool_message(call_id: str, payload: Mapping[str, Any]) -> Dict[str, Any]:
         "tool_call_id": call_id,
         "content": json.dumps(payload, ensure_ascii=False),
     }
+
+
+def _tool_event(
+    round_index: int,
+    call_id: str,
+    name: str,
+    kind: str,
+    args: Optional[Mapping[str, Any]],
+    result: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """One journal-readable row per model tool call (result included)."""
+
+    return {
+        "round": int(round_index),
+        "id": str(call_id),
+        "tool": str(name),
+        "kind": kind,
+        "args": dict(args) if isinstance(args, Mapping) else None,
+        "result": dict(result),
+    }
+
+
+def _carry_trace(target: Decision, source: Decision) -> Decision:
+    """Keep what the model already saw when its plan is replaced by a fallback."""
+
+    target.transcript = list(source.transcript)
+    target.tool_events = list(source.tool_events)
+    target.prompt_hash = source.prompt_hash
+    target.tools_hash = source.tools_hash
+    target.brief_hash = source.brief_hash
+    target.max_chars = source.max_chars
+    for key, value in source.usage.items():
+        target.usage[key] = target.usage.get(key, 0) + value
+    return target
 
 
 def _spec(registry: ToolRegistry, name: str) -> Optional[ToolSpec]:
@@ -229,31 +295,57 @@ def decide(
     *,
     directive: Any = None,
     system_prompt: str = "",
+    brief_text: Optional[str] = None,
     max_rounds: int = DEFAULT_MAX_ROUNDS,
     max_chars: int = 6000,
 ) -> Decision:
-    """Run the model/tool loop and return a typed plan."""
+    """Run the model/tool loop and return a typed plan.
 
+    Every tool call and its result is recorded in ``Decision.tool_events``, and
+    the three hashes fingerprint what the model read, so a journal entry can be
+    replayed later (docs/usage.md §23).  A provider failure is returned as
+    ``Decision.error`` instead of raised, so the trace recorded up to that point
+    survives the caller's fallback to the deterministic planner.
+    """
+
+    system_content = system_prompt or build_system_prompt(registry, directive)
+    user_content = (
+        brief_text if brief_text is not None else render_brief(brief, max_chars=max_chars)
+    )
     messages: List[Dict[str, Any]] = [
-        {
-            "role": "system",
-            "content": system_prompt or build_system_prompt(registry, directive),
-        },
-        {"role": "user", "content": render_brief(brief, max_chars=max_chars)},
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": user_content},
     ]
     tools = registry.schema() + [SUBMIT_PLAN.as_openai()]
 
-    decision = Decision()
+    decision = Decision(
+        prompt_hash=_hash_text(system_content),
+        tools_hash=_hash_json(tools),
+        brief_hash=_hash_text(user_content),
+        max_chars=int(max_chars),
+    )
     staged: List[Step] = []
 
-    for _ in range(max(1, int(max_rounds))):
-        reply = provider.complete(messages, tools)
+    for round_index in range(max(1, int(max_rounds))):
+        try:
+            reply = provider.complete(messages, tools)
+        except ProviderError as exc:
+            decision.error = str(exc)
+            return decision
+        except Exception as exc:  # noqa: BLE001 - provider I/O is not trusted
+            decision.error = f"{type(exc).__name__}: {exc}"
+            return decision
+
         _merge_usage(decision.usage, reply.usage)
         decision.transcript.append(
             {
                 "role": "assistant",
+                "round": round_index,
                 "content": reply.content,
-                "tool_calls": [call.name for call in reply.tool_calls],
+                "tool_calls": [
+                    {"id": call.id, "name": call.name, "arguments": call.arguments}
+                    for call in reply.tool_calls
+                ],
             }
         )
 
@@ -272,43 +364,45 @@ def decide(
             try:
                 payload = call.parsed_args()
             except ProviderError as exc:
-                messages.append(
-                    _tool_message(call.id, {"ok": False, "code": "BAD_ARGS", "message": str(exc)})
+                outcome = {"ok": False, "code": "BAD_ARGS", "message": str(exc)}
+                decision.tool_events.append(
+                    _tool_event(round_index, call.id, call.name, "unknown", None, outcome)
                 )
+                messages.append(_tool_message(call.id, outcome))
                 continue
 
             if call.name == SUBMIT_PLAN.name:
                 try:
                     parsed = _plan_from_payload(payload) or Decision()
                 except ValueError as exc:
-                    messages.append(
-                        _tool_message(call.id, {"ok": False, "code": "BAD_PLAN", "message": str(exc)})
+                    outcome = {"ok": False, "code": "BAD_PLAN", "message": str(exc)}
+                    decision.tool_events.append(
+                        _tool_event(round_index, call.id, call.name, "control", payload, outcome)
                     )
+                    messages.append(_tool_message(call.id, outcome))
                     continue
                 decision.goal = parsed.goal
                 decision.reason = parsed.reason
                 decision.steps = parsed.steps
                 decision.submitted = True
-                messages.append(
-                    _tool_message(
-                        call.id,
-                        {"ok": True, "status": "accepted", "steps": len(parsed.steps)},
-                    )
+                outcome = {"ok": True, "status": "accepted", "steps": len(parsed.steps)}
+                decision.tool_events.append(
+                    _tool_event(round_index, call.id, call.name, "control", payload, outcome)
                 )
+                messages.append(_tool_message(call.id, outcome))
                 continue
 
             spec = _spec(registry, call.name)
             if spec is None:
-                messages.append(
-                    _tool_message(
-                        call.id,
-                        {
-                            "ok": False,
-                            "code": "UNKNOWN_TOOL",
-                            "message": f"没有这个工具：{call.name}",
-                        },
-                    )
+                outcome = {
+                    "ok": False,
+                    "code": "UNKNOWN_TOOL",
+                    "message": f"没有这个工具：{call.name}",
+                }
+                decision.tool_events.append(
+                    _tool_event(round_index, call.id, call.name, "unknown", payload, outcome)
                 )
+                messages.append(_tool_message(call.id, outcome))
                 continue
 
             if spec.kind == "write":
@@ -321,19 +415,23 @@ def decide(
                         why="模型直接调用的写工具，已登记进本轮计划",
                     )
                 )
-                messages.append(
-                    _tool_message(
-                        call.id,
-                        {
-                            "ok": True,
-                            "status": "staged",
-                            "message": "已登记进本轮计划，规划结束后按顺序执行",
-                        },
-                    )
+                outcome = {
+                    "ok": True,
+                    "status": "staged",
+                    "message": "已登记进本轮计划，规划结束后按顺序执行",
+                }
+                decision.tool_events.append(
+                    _tool_event(round_index, call.id, call.name, "write", payload, outcome)
                 )
+                messages.append(_tool_message(call.id, outcome))
                 continue
 
-            messages.append(_tool_message(call.id, registry.call(call.name, payload).as_dict()))
+            result = registry.call(call.name, payload)
+            outcome = result.as_dict()
+            decision.tool_events.append(
+                _tool_event(round_index, call.id, call.name, spec.kind, payload, outcome)
+            )
+            messages.append(_tool_message(call.id, outcome))
 
         if decision.submitted:
             break
@@ -375,8 +473,12 @@ def run_agent_cycle(
     )
     account = brief.get("account") or {}
     registry = ToolRegistry(client, dry_run=cfg.dry_run)
+    # Render once: the hash recorded in the journal must fingerprint the exact
+    # user message the model read.
+    brief_text = render_brief(brief, max_chars=cfg.max_chars)
 
     error = ""
+    decision = Decision()
     try:
         decision = decide(
             provider,
@@ -384,19 +486,26 @@ def run_agent_cycle(
             registry,
             directive=directive,
             system_prompt=system_prompt,
+            brief_text=brief_text,
             max_rounds=cfg.max_rounds,
             max_chars=cfg.max_chars,
         )
+        if decision.error:
+            # The provider failed mid-loop: fall back for the plan, but keep the
+            # trace so the journal still shows what the model saw before that.
+            error = decision.error
+            traced = decision
+            decision = _carry_trace(fallback_decision(brief, error), traced)
         # ``submitted`` with zero steps is a deliberate "wait this round"; only a
         # reply with no plan at all falls back to the planner.
-        if not decision.submitted:
-            decision = fallback_decision(brief, "模型没有给出可执行步骤")
-    except ProviderError as exc:
-        error = str(exc)
-        decision = fallback_decision(brief, error)
+        elif not decision.submitted:
+            traced = decision
+            decision = _carry_trace(
+                fallback_decision(brief, "模型没有给出可执行步骤"), traced
+            )
     except Exception as exc:  # noqa: BLE001 - a bad reply must not kill the loop
         error = f"{type(exc).__name__}: {exc}"
-        decision = fallback_decision(brief, error)
+        decision = _carry_trace(fallback_decision(brief, error), decision)
 
     report: RunReport = run_steps(
         registry,
@@ -421,6 +530,11 @@ def run_agent_cycle(
         decision=decision.as_dict(),
         report=report.as_dict(),
         usage=dict(decision.usage),
+        prompt_hash=decision.prompt_hash,
+        tools_hash=decision.tools_hash,
+        brief_hash=decision.brief_hash,
+        max_chars=decision.max_chars,
+        tool_events=list(decision.tool_events),
     )
 
 

@@ -1,8 +1,11 @@
+import hashlib
 import json
 from pathlib import Path
 
-from autoplay.agent import AgentConfig, decide, run_agent_cycle
+from autoplay.agent import SUBMIT_PLAN, AgentConfig, decide, run_agent_cycle
+from autoplay.brief import render_brief
 from autoplay.llm import ChatReply, FakeProvider, ToolCall
+from autoplay.prompt import build_system_prompt
 from autoplay.tools import ToolRegistry
 from newstar_sdk.parsers import (
     parse_bonuses,
@@ -25,6 +28,7 @@ def _html(name: str) -> str:
 class FakeClient:
     def __init__(self):
         self.writes = []
+        self.ship_queue = []
 
     def get_overview(self):
         return parse_overview(_html("overview.html"))
@@ -279,3 +283,125 @@ def test_failed_step_marks_the_cycle_failed():
     assert result.status == "failed"
     assert result.report["status"] == "failed"
     assert "UNKNOWN_TOOL" in result.report["reason"]
+
+
+def _submit(steps):
+    payload = {"goal": "g", "reason": "r", "steps": steps}
+    return _reply([ToolCall(id="submit", name="submit_plan", arguments=json.dumps(payload))])
+
+
+def _replies_from_transcript(transcript):
+    """Rebuild provider replies from a journaled ``decision.transcript``."""
+
+    replies = []
+    for turn in transcript:
+        calls = [
+            ToolCall(id=item["id"], name=item["name"], arguments=item["arguments"])
+            for item in turn.get("tool_calls") or []
+        ]
+        replies.append(ChatReply(content=turn.get("content") or "", tool_calls=calls))
+    return replies
+
+
+def test_read_tool_results_land_in_the_journal_trace():
+    provider = FakeProvider(
+        [
+            _reply([ToolCall(id="r1", name="observe", arguments="{}")]),
+            _submit([]),
+        ]
+    )
+
+    result = run_agent_cycle(
+        FakeClient(),
+        provider,
+        config=AgentConfig(dry_run=True, stop_file="state/does-not-exist-STOP"),
+    )
+    payload = result.as_dict()
+
+    events = payload["tool_events"]
+    assert [event["tool"] for event in events] == ["observe", "submit_plan"]
+    assert events[0]["kind"] == "read"
+    assert events[0]["result"]["status"] == "ok"
+    # The whole read result is journaled, not just a summary.
+    assert events[0]["result"]["evidence"]["resources"]["amounts"]["901"] > 0
+    assert events[1]["kind"] == "control"
+    assert events[1]["result"]["status"] == "accepted"
+    # Arguments survive too, so the assistant turn can be replayed verbatim.
+    transcript = payload["decision"]["transcript"]
+    assert transcript[0]["tool_calls"] == [{"id": "r1", "name": "observe", "arguments": "{}"}]
+
+
+def test_prompt_tools_and_brief_hashes_match_the_request():
+    brief = _brief()
+    registry = ToolRegistry(FakeClient(), dry_run=True)
+    provider = FakeProvider([_submit([])])
+
+    decision = decide(provider, brief, registry)
+
+    expected_prompt = build_system_prompt(registry, None)
+    expected_tools = registry.schema() + [SUBMIT_PLAN.as_openai()]
+    canonical = json.dumps(
+        expected_tools, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    assert decision.prompt_hash == hashlib.sha256(expected_prompt.encode("utf-8")).hexdigest()
+    assert decision.tools_hash == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    assert decision.brief_hash == hashlib.sha256(
+        render_brief(brief).encode("utf-8")
+    ).hexdigest()
+    assert decision.max_chars == 6000
+
+
+def test_journal_entry_is_enough_to_replay_the_decision():
+    provider = FakeProvider(
+        [
+            _reply([ToolCall(id="p1", name="plan", arguments="{}")]),
+            _submit([{"tool": "upgrade_building", "args": {"element": 1}}]),
+        ]
+    )
+    config = AgentConfig(dry_run=True, stop_file="state/does-not-exist-STOP")
+    first = run_agent_cycle(FakeClient(), provider, config=config)
+    entry = first.as_dict()
+
+    # 1. The hashes let an offline reader prove it has the same request.
+    registry = ToolRegistry(FakeClient(), dry_run=True)
+    assert entry["prompt_hash"] == hashlib.sha256(
+        build_system_prompt(registry, None).encode("utf-8")
+    ).hexdigest()
+    tools = registry.schema() + [SUBMIT_PLAN.as_openai()]
+    canonical = json.dumps(tools, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    assert entry["tools_hash"] == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    brief_text = render_brief(entry["brief"], max_chars=entry["max_chars"])
+    assert entry["brief_hash"] == hashlib.sha256(brief_text.encode("utf-8")).hexdigest()
+
+    # 2. Feeding the recorded turns back reproduces the plan and the trace.
+    replay_provider = FakeProvider(
+        _replies_from_transcript(entry["decision"]["transcript"])
+    )
+    replay = decide(
+        replay_provider,
+        entry["brief"],
+        registry,
+        brief_text=brief_text,
+        max_chars=entry["max_chars"],
+    )
+
+    assert replay.as_dict() == entry["decision"]
+    assert replay.tool_events == entry["tool_events"]
+
+
+def test_provider_failure_keeps_the_partial_trace():
+    provider = FakeProvider([_reply([ToolCall(id="p1", name="plan", arguments="{}")])])
+    # The second round raises ProviderError: the cycle must still journal what
+    # the model already read, not just the fallback plan.
+    result = run_agent_cycle(
+        FakeClient(),
+        provider,
+        config=AgentConfig(dry_run=True, stop_file="state/does-not-exist-STOP"),
+    )
+    payload = result.as_dict()
+
+    assert payload["status"] == "degraded"
+    assert payload["decision"]["fallback"] is True
+    assert len(payload["prompt_hash"]) == 64
+    assert [event["tool"] for event in payload["tool_events"]] == ["plan"]
+    assert payload["decision"]["transcript"][0]["tool_calls"][0]["name"] == "plan"

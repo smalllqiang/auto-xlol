@@ -1205,6 +1205,14 @@ allow-list、dry-run 和燃料校验。
 # 常驻：填满后睡到最早返航时间 +5s，再补下一波
 .venv/bin/python scripts/expedition_farm.py --no-verify-ssl \
   --execute --allow 207
+
+# 换成 1000 艘战列巡洋舰（215），不用改默认值
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl \
+  --ships "战列巡洋舰=1000" --allow 战列巡洋舰 --execute --once
+
+# 多种舰船混编：每种都写进 --allow
+.venv/bin/python scripts/expedition_farm.py --no-verify-ssl \
+  --ships "207=1000,203=100" --allow 207 --allow 203 --execute --once
 ```
 
 默认值：
@@ -1212,7 +1220,7 @@ allow-list、dry-run 和燃料校验。
 | 参数 | 默认 | 含义 |
 | --- | --- | --- |
 | `--planet` | 第一颗星球 | 星球 id、坐标 `3:505:8` 或 1 基序号；也接受时间表里保存的星球 |
-| `--ships` | `207=8621` | 编队组成；战列舰 207×8621 ≈ 500,018 fleetPoints |
+| `--ships` | `207=8621` | 编队组成，支持 id/中文名/英文名/别名；`207=8621` 只是默认，不按积分校验 |
 | `--target` | 本星系第 16 位 | 探险目标坐标 |
 | `--speed` / `--stay-time` | 10 / 1 | 舰队速度 / 停留选项（`0` 会被游戏拒绝） |
 | `--check-hours` | 10 | 每 10 小时重读研究页，刷新「最大航道数」 |
@@ -1220,10 +1228,16 @@ allow-list、dry-run 和燃料校验。
 | `--retry-delay` | 60 | 航道仍占用/舰船不足/发送失败后的重试间隔 |
 | `--max-sleep` | 900 | 两次舰队表刷新的最长间隔；到点重新核对航道与返航时间 |
 | `--max-sends` | 0 | 单次 tick 最多发几队；0 = 把所有空闲航道一次填满 |
+| `--no-ship-check` | 关 | 跳过本星舰船数预检，按指定数量直接让游戏裁决 |
 | `--notify` | 关 | 把每次状态/错误上报到飞书；需 `.env` 的 `NEWSTAR_FEISHU_WEBHOOK` |
 
 运行规则：
 
+- **编队按 `--ships` 原样发送**：支持单种或多种舰船，例如 `215=1000`、
+  `战列巡洋舰=1000`、`207=1000,203=100`；`--allow` 也接受同样的 id/名称/别名。
+  脚本**不计算 fleetPoints**，也不会因为低于 50 万积分而拒绝；默认只检查本星可用
+  舰船数是否够指定的每种数量，加 `--no-ship-check` 可跳过该预检、直接把编队交给
+  游戏裁决。所有波次使用同一编队。
 - **最大航道数**是 `floor(sqrt(探险技术等级))`，不是空闲航道数；在途和返航中的
   探险队（任务 15/18）都占用航道。脚本每 10 小时重读一次研究页，航道增加后自动多填。
 - 每次发送后把确认页的返航时间（模板里的 `fleetEndTime`）写进时间表；下一次唤醒取
@@ -1237,8 +1251,8 @@ allow-list、dry-run 和燃料校验。
 - 发送前检查本星可用舰船；不足时**不会减配**，只记录「舰船不足」并按
   `--retry-delay` 重试。脚本不自动造船、不自动召回；缺船先用
   `scripts/build_expedition_ships.py` 或游戏内船坞补齐。
-- 写操作默认 dry-run；真实发送必须 `--execute` + `--allow`，且编队里的每个舰船 id
-  都必须在 allow-list 里。`state/STOP` 在每次 tick 和睡眠期间（每 5 秒）检查。
+- 写操作默认 dry-run；真实发送必须 `--execute` + `--allow`，且编队里的每个舰船
+  id/名称都必须在 allow-list 里。`state/STOP` 在每次 tick 和睡眠期间（每 5 秒）检查。
 - 默认与 `run_forever.py` 共用 `state/daemon.lock`：同一账号只能有一个写者，
   所以常驻探险时先停掉守护循环（或反之）。心跳写到 `state/expedition_farm.json`；
   每个 tick 追加一条 `state/journal.jsonl`（`kind=expedition`、`source=expedition_farm`），

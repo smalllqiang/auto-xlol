@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
-from newstar_sdk.constants import SHIPS, Mission
+from newstar_sdk.constants import CATEGORY_SHIP, SHIPS, Mission, resolve_element
 from newstar_sdk.exceptions import NewStarError
 from newstar_sdk.models import Coordinates, FleetDispatch, FleetInfo, FleetShips
 
@@ -73,25 +73,59 @@ _DURATION_UNITS = {
 
 
 def parse_composition(raw: str) -> Dict[int, int]:
-    """Parse ``207=8621`` / ``207:8621 203=10`` into a ship-id -> count map."""
+    """Parse a fleet composition into a ship-id -> count map.
+
+    Accepted forms: ``207=8621``, ``215:1000``, ``215x1000``,
+    ``战列巡洋舰=1000``, ``battlecruiser=1000``.  Several types are separated
+    by commas or semicolons, e.g. ``207=1000,203=100``.  Numeric pairs may also
+    be space separated (``207=1000 203=100``) for compatibility.
+
+    The composition is used verbatim; this function never scores fleets or
+    enforces a fleet-points target.
+    """
 
     ships: Dict[int, int] = {}
-    text = (raw or "").replace("，", ",").strip()
-    for token in re.split(r"[,;\s]+", text):
-        if not token:
-            continue
-        match = re.fullmatch(r"(\d+)\s*[=:xX*]\s*(\d+)", token)
-        if not match:
-            raise ValueError(f"无法解析舰船组成：{token!r}（示例 207=8621）")
-        ship_id = int(match.group(1))
+    text = (
+        (raw or "")
+        .replace("，", ",")
+        .replace("：", ":")
+        .replace("＝", "=")
+        .strip()
+    )
+    if not text:
+        raise ValueError("舰船组成为空（示例 207=8621 或 战列舰=8621）")
+
+    tokens = [item.strip() for item in re.split(r"[,;\n]+", text) if item.strip()]
+    # Compatibility: old CLI used spaces between numeric pairs.
+    if len(tokens) == 1 and re.fullmatch(
+        r"(?:\d+\s*[=:xX*]\s*\d+\s*)+", tokens[0]
+    ):
+        tokens = re.findall(r"\d+\s*[=:xX*]\s*\d+", tokens[0])
+
+    for token in tokens:
+        if token.count("=") + token.count(":") > 1:
+            raise ValueError(
+                f"无法解析舰船组成：{token!r}（多种舰船请用逗号分隔）"
+            )
+        match = re.fullmatch(r"(.+?)\s*[=:]\s*(\d+)", token)
+        if match is None:
+            match = re.fullmatch(r"(\d+)\s*[xX*]\s*(\d+)", token)
+        if match is None:
+            raise ValueError(
+                f"无法解析舰船组成：{token!r}"
+                "（示例 207=8621 或 战列舰=8621；多种舰船用逗号分隔）"
+            )
+        key = match.group(1).strip()
         count = int(match.group(2))
-        if ship_id not in SHIPS:
-            raise ValueError(f"未知舰船 id：{ship_id}")
         if count <= 0:
             raise ValueError(f"舰船数量必须为正：{token!r}")
+        try:
+            ship_id = resolve_element(key, CATEGORY_SHIP)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"未知舰船：{key!r}") from exc
         ships[ship_id] = ships.get(ship_id, 0) + count
     if not ships:
-        raise ValueError("舰船组成为空（示例 207=8621）")
+        raise ValueError("舰船组成为空（示例 207=8621 或 战列舰=8621）")
     return ships
 
 
@@ -625,9 +659,16 @@ def fill_expedition_slots(
     dry_run: bool = False,
     max_sends: Optional[int] = None,
     available_ships: Optional[Mapping[int, int]] = None,
+    check_ships: bool = True,
     stop_check: Optional[Callable[[], bool]] = None,
 ) -> ExpeditionFillResult:
-    """Preview or send the composition until no free lane remains."""
+    """Preview or send the composition until no free lane remains.
+
+    With ``check_ships=False`` the local available-ship count is skipped and
+    the game decides whether the composition can be sent.  This is useful when
+    the caller wants to send exactly the configured counts and does not trust a
+    cached/partial fleet-table count.
+    """
 
     max_slots = max(0, int(max_slots))
     active = max(0, int(active))
@@ -673,29 +714,33 @@ def fill_expedition_slots(
         result.preview = preview
         return result
 
-    if available_ships is None:
-        try:
-            available = _available_counts(client)
-        except NewStarError as exc:
-            result.status = "error"
-            result.reason = f"{type(exc).__name__}: {exc}"
-            return result
-    else:
-        available = {int(key): int(value) for key, value in available_ships.items()}
+    available: Optional[Dict[int, int]] = None
+    if check_ships:
+        if available_ships is None:
+            try:
+                available = _available_counts(client)
+            except NewStarError as exc:
+                result.status = "error"
+                result.reason = f"{type(exc).__name__}: {exc}"
+                return result
+        else:
+            available = {
+                int(key): int(value) for key, value in available_ships.items()
+            }
 
-    missing = {
-        ship_id: int(count) - int(available.get(int(ship_id), 0))
-        for ship_id, count in plan.ships.items()
-        if int(available.get(int(ship_id), 0)) < int(count)
-    }
-    if missing:
-        detail = "、".join(
-            f"{ship_label(ship_id)}({ship_id}) 需要 {plan.ships[ship_id]}，"
-            f"当前 {available.get(int(ship_id), 0)}"
-            for ship_id in sorted(missing)
-        )
-        result.reason = f"舰船不足：{detail}"
-        return result
+        missing = {
+            ship_id: int(count) - int(available.get(int(ship_id), 0))
+            for ship_id, count in plan.ships.items()
+            if int(available.get(int(ship_id), 0)) < int(count)
+        }
+        if missing:
+            detail = "、".join(
+                f"{ship_label(ship_id)}({ship_id}) 需要 {plan.ships[ship_id]}，"
+                f"当前 {available.get(int(ship_id), 0)}"
+                for ship_id in sorted(missing)
+            )
+            result.reason = f"舰船不足：{detail}"
+            return result
 
     limit = free if max_sends is None or int(max_sends) <= 0 else min(free, int(max_sends))
     failed = ""
@@ -704,18 +749,19 @@ def fill_expedition_slots(
         if stop_check is not None and stop_check():
             stopped = True
             break
-        shortage = {
-            ship_id: int(count) - int(available.get(int(ship_id), 0))
-            for ship_id, count in plan.ships.items()
-            if int(available.get(int(ship_id), 0)) < int(count)
-        }
-        if shortage:
-            failed = "舰船不足：" + "、".join(
-                f"{ship_label(ship_id)}({ship_id}) 需要 {plan.ships[ship_id]}，"
-                f"当前 {available.get(int(ship_id), 0)}"
-                for ship_id in sorted(shortage)
-            )
-            break
+        if available is not None:
+            shortage = {
+                ship_id: int(count) - int(available.get(int(ship_id), 0))
+                for ship_id, count in plan.ships.items()
+                if int(available.get(int(ship_id), 0)) < int(count)
+            }
+            if shortage:
+                failed = "舰船不足：" + "、".join(
+                    f"{ship_label(ship_id)}({ship_id}) 需要 {plan.ships[ship_id]}，"
+                    f"当前 {available.get(int(ship_id), 0)}"
+                    for ship_id in sorted(shortage)
+                )
+                break
         try:
             dispatch = client.send_fleet(
                 plan.target,
@@ -728,8 +774,11 @@ def fill_expedition_slots(
             failed = f"{type(exc).__name__}: {exc}"
             break
         result.sent.append(ScheduledSlot.from_dispatch(dispatch, plan, clock))
-        for ship_id, count in plan.ships.items():
-            available[int(ship_id)] = int(available.get(int(ship_id), 0)) - int(count)
+        if available is not None:
+            for ship_id, count in plan.ships.items():
+                available[int(ship_id)] = int(available.get(int(ship_id), 0)) - int(
+                    count
+                )
 
     result.free = max(0, free - len(result.sent))
     if stopped and not result.sent:

@@ -7,8 +7,12 @@ unattended loop: every tick it reads the fleet table, fills free lanes and then
 sleeps until the earliest expected return plus ``--return-delay`` (5 s by
 default) or the next lane check (``--check-hours``, 10 h by default).
 
-The default composition is 8621 battleships (element 207, 500,018 fleet
-points), which matches the guide's 500,000-point target for one expedition.
+The composition is sent verbatim: the script only checks that the chosen
+planet has enough of each ship type.  It does not calculate fleet points or
+enforce the guide's 500,000-point target.  ``--ships`` accepts ids, Chinese or
+English names and common aliases, e.g. ``--ships 战列巡洋舰=1000`` or
+``--ships 207=1000,203=100``.  The default is 8621 battleships (207), which
+happens to be the 500,000-point composition.
 """
 
 from __future__ import annotations
@@ -55,6 +59,7 @@ from autoplay.expedition_scheduler import (
 )
 from autoplay.journal import append_jsonl
 from autoplay.runtime import EXIT_BUSY, acquire_lock, release_lock, write_status
+from newstar_sdk.constants import CATEGORY_SHIP, resolve_element
 from newstar_sdk.exceptions import AuthenticationError, NewStarError, SessionExpired
 from newstar_sdk.models import Coordinates
 from utils.notify import (
@@ -93,8 +98,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--ships",
         default=f"{DEFAULT_SHIP_ID}={DEFAULT_SHIP_COUNT}",
         help=(
-            "fleet composition as id=count pairs "
-            f"(default: {DEFAULT_SHIP_ID}={DEFAULT_SHIP_COUNT}, battleships)"
+            "fleet composition as type=count pairs, e.g. 215=1000, "
+            "战列巡洋舰=1000 or 207=1000,203=100; ids, Chinese/English names "
+            "and aliases are accepted (default: "
+            f"{DEFAULT_SHIP_ID}={DEFAULT_SHIP_COUNT}, battleships)"
         ),
     )
     parser.add_argument("--speed", type=int, default=10, help="fleet speed 1..10")
@@ -128,6 +135,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=0,
         help="maximum fleets to send per tick (0 = fill every free lane)",
+    )
+    parser.add_argument(
+        "--no-ship-check",
+        action="store_true",
+        help=(
+            "skip the local available-ship count and send exactly the configured "
+            "counts; the game decides whether the fleet is valid"
+        ),
     )
     parser.add_argument(
         "--timetable",
@@ -165,7 +180,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="append",
         default=[],
         metavar="ID",
-        help="repeatable ship id allow-list; required with --execute",
+        help="repeatable ship id/name allow-list; required with --execute",
     )
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
     add_session_args(parser)
@@ -276,10 +291,14 @@ def resolve_target(coordinates: Optional[Coordinates], override: Optional[str]) 
 def _ship_ids(values: Sequence[str]) -> List[int]:
     ids: List[int] = []
     for value in values:
-        text = str(value).strip()
-        if not text.isdigit():
-            raise ValueError(f"--allow 只接受舰船 id：{value!r}")
-        ids.append(int(text))
+        for part in str(value).replace("，", ",").split(","):
+            text = part.strip()
+            if not text:
+                continue
+            try:
+                ids.append(resolve_element(text, CATEGORY_SHIP))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"--allow 只接受舰船 id/名称：{text!r}") from exc
     return ids
 
 
@@ -520,6 +539,7 @@ def run_tick(
         max_slots=max_slots,
         active=len(slots),
         max_sends=int(args.max_sends),
+        check_ships=not args.no_ship_check,
         stop_check=stop_check,
     )
     for slot in fill.sent:

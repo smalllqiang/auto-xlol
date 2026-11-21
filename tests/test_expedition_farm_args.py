@@ -46,6 +46,7 @@ def test_defaults_match_the_requested_behavior():
     assert args.execute is False
     assert args.once is False
     assert args.notify is False
+    assert args.no_ship_check is False
     assert args.lock_file == "state/daemon.lock"
 
 
@@ -62,6 +63,30 @@ def test_execute_requires_allow_list_covering_the_composition():
     assert (
         module._check_args(
             module.parse_args(["--execute", "--allow", "207"]), {207: 8621}
+        )
+        is None
+    )
+    assert (
+        module._check_args(
+            module.parse_args(
+                ["--execute", "--ships", "战列巡洋舰=1000", "--allow", "战列巡洋舰"]
+            ),
+            {215: 1000},
+        )
+        is None
+    )
+    assert (
+        module._check_args(
+            module.parse_args(
+                [
+                    "--execute",
+                    "--ships",
+                    "207=10,203=5",
+                    "--allow",
+                    "207,203",
+                ]
+            ),
+            {207: 10, 203: 5},
         )
         is None
     )

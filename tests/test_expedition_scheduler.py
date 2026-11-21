@@ -110,11 +110,23 @@ def _plan() -> ExpeditionPlan:
 def test_parse_composition_default_and_multiple():
     assert parse_composition("207=8621") == {207: 8621}
     assert parse_composition("207:10, 203=5") == {207: 10, 203: 5}
-    assert parse_composition("207x2 203*3") == {207: 2, 203: 3}
+    assert parse_composition("207x2, 203*3") == {207: 2, 203: 3}
+    assert parse_composition("207=1000 203=100") == {207: 1000, 203: 100}
     with pytest.raises(ValueError):
         parse_composition("999=1")
     with pytest.raises(ValueError):
         parse_composition("")
+
+
+def test_parse_composition_accepts_names_aliases_and_multiple_types():
+    assert parse_composition("战列巡洋舰=1000") == {215: 1000}
+    assert parse_composition("战列巡洋舰：1000") == {215: 1000}
+    assert parse_composition("battlecruiser=1000") == {215: 1000}
+    assert parse_composition("Large Cargo=100") == {203: 100}
+    assert parse_composition("bb=10, lc=5") == {207: 10, 203: 5}
+    assert parse_composition("战列舰=1000, 重型运输舰=100") == {207: 1000, 203: 100}
+    with pytest.raises(ValueError):
+        parse_composition("战列舰=1000 重型运输舰=100")
 
 
 def test_parse_game_time_accepts_game_formats():
@@ -335,4 +347,19 @@ def test_fill_honors_stop_check_between_sends():
     assert fill.status == "partial"
     assert len(fill.sent) == 1
     assert "急停" in fill.reason
+    assert len(client.sent) == 1
+
+
+def test_fill_can_skip_local_ship_check_and_let_the_game_decide():
+    client = FakeClient(tech=16, available=0)
+    fill = fill_expedition_slots(
+        client,
+        plan=_plan(),
+        clock=GameClock(),
+        max_slots=1,
+        active=0,
+        check_ships=False,
+    )
+    assert fill.status == "dispatched"
+    assert len(fill.sent) == 1
     assert len(client.sent) == 1

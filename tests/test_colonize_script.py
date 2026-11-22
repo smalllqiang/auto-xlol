@@ -714,10 +714,23 @@ def test_accept_false_colonizes_and_abandons_everything(tmp_path):
 
 def test_accept_false_cannot_be_combined_with_no_abandon(tmp_path):
     module = _module()
-    args = module.parse_args(
-        ["--range", "1:2:1 1:2:15", "--no-accept", "--no-abandon"]
+    for extra in (["--no-accept"], ["--accept", "false"], ["--accept", "0"]):
+        args = module.parse_args(["--range", "1:2:1 1:2:15", *extra, "--no-abandon"])
+        assert module._check_args(args, 208) == 2
+
+
+def test_accept_flag_parses_true_and_false(tmp_path):
+    module = _module()
+    assert module._accept_value(module.parse_args(["--range", "1:2:1 1:2:15"]))
+    assert module._accept_value(
+        module.parse_args(["--range", "1:2:1 1:2:15", "--accept", "true"])
     )
-    assert module._check_args(args, 208) == 2
+    assert not module._accept_value(
+        module.parse_args(["--range", "1:2:1 1:2:15", "--accept", "false"])
+    )
+    assert not module._accept_value(
+        module.parse_args(["--range", "1:2:1 1:2:15", "--no-accept"])
+    )
 
 
 def test_the_old_accept_false_early_exit_is_gone(tmp_path):

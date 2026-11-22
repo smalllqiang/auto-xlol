@@ -11,9 +11,10 @@
 
     --where '面积>260' --where '最高温度<60' --where '最低温度>-50'
 
-``--no-accept`` 是“接受 = false”：范围内每个空位都会被殖民，然后**全部抛弃**
-（留下「被遗弃的殖民地」）。这时没有球会被保留，所以不会因数量上限提前停止，
-脚本一直干到范围扫完、没殖民船或没重氢为止；不能与 ``--no-abandon`` 同用。
+``--accept false``（等价的 ``--no-accept``）是“接受 = false”：范围内每个空位都会被
+殖民，然后**全部抛弃**（留下「被遗弃的殖民地」）。这时没有球会被保留，所以不会因
+数量上限提前停止，脚本一直干到范围扫完、没殖民船或没重氢为止；不能与
+``--no-abandon`` 同用。
 
 数量上限取**较小值**：``min(--max-accept, 游戏还能新增的殖民位)``，
 其中后者已经扣掉当前占用、再加回本脚本已保留的球；``--max-accept 0`` 表示只受
@@ -154,7 +155,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "逗号分隔多个也可以。未指定的字段不检查"
         ),
     )
-    parser.add_argument(
+    accept_group = parser.add_mutually_exclusive_group()
+    accept_group.add_argument(
+        "--accept",
+        choices=("true", "false", "1", "0", "yes", "no"),
+        default=None,
+        help="接受值：true（默认）正常筛选；false = 全部殖民后抛弃，等同 --no-accept",
+    )
+    accept_group.add_argument(
         "--no-accept",
         action="store_true",
         help=(
@@ -295,6 +303,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+_TRUE_VALUES = frozenset({"true", "1", "yes", "y", "on"})
+
+
+def _accept_value(args: argparse.Namespace) -> bool:
+    """The ``接受`` switch: explicit ``--accept`` wins, else ``--no-accept``."""
+
+    raw = getattr(args, "accept", None)
+    if raw is not None:
+        return str(raw).strip().casefold() in _TRUE_VALUES
+    return not bool(getattr(args, "no_accept", False))
+
+
 def _ship_ids(values: Sequence[str]) -> List[int]:
     ids: List[int] = []
     for value in values:
@@ -319,7 +339,7 @@ def _check_args(args: argparse.Namespace, ship_id: int) -> Optional[int]:
     if args.max_accept < 0:
         print("--max-accept 不能为负", file=sys.stderr)
         return 2
-    if args.no_accept and args.no_abandon:
+    if not _accept_value(args) and args.no_abandon:
         print(
             "--no-accept 表示全部殖民后抛弃，不能再加 --no-abandon"
             "（那会变成殖民后全部保留，与接受值 false 矛盾）",
@@ -1548,7 +1568,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return problem
     try:
         box = ColonizeRange.parse(args.range_spec)
-        filters = PlanetFilter.parse(args.where, accept=not args.no_accept)
+        filters = PlanetFilter.parse(args.where, accept=_accept_value(args))
     except ValueError as exc:
         print(f"参数错误：{exc}", file=sys.stderr)
         return 2

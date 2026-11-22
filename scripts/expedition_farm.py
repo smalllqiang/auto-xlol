@@ -171,7 +171,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--notify",
         action="store_true",
         help=(
-            "把每次状态和错误上报到飞书（默认关闭）。"
+            "把开始、报错和停止上报到飞书（默认关闭）；每个 tick 的正常结果不上报。"
             f"需要 .env 里的 {ENV_WEBHOOK}；没配置时本次不上报"
         ),
     )
@@ -388,6 +388,98 @@ def _report(notifier: Optional[FeishuNotifier], text: str) -> None:
         return
     if not result.ok and not result.skipped:
         print(f"警告：飞书上报失败：{result.error}", file=sys.stderr, flush=True)
+
+
+# Only these three events are pushed to the group; the normal result of each
+# tick stays in the journal and the status file so a healthy farm is silent.
+REPORT_START = "开始"
+REPORT_ERROR = "报错"
+REPORT_STOP = "停止"
+
+#: Fill statuses that mean "something went wrong" and deserve an error report.
+_FILL_ERROR_STATUSES = frozenset({"error", "partial"})
+
+
+def _fill_failed(fill: ExpeditionFillResult) -> bool:
+    return fill.status in _FILL_ERROR_STATUSES
+
+
+def _blocker_reason(fill: ExpeditionFillResult) -> str:
+    """Return the error text for a tick that could not do its job, else ``""``.
+
+    A full fleet table (``free == 0``) and a deliberate stop are normal, so a
+    healthy farm reports nothing; free lanes that stayed empty (ship shortage)
+    and a missing lane count are problems worth one error report.
+    """
+
+    if _fill_failed(fill):
+        return f"{fill.status}  {fill.reason}"
+    if fill.status != "skipped":
+        return ""
+    if not fill.reason or fill.reason.startswith("急停"):
+        return ""
+    if fill.free > 0:
+        return f"空闲航道未派出：{fill.reason}"
+    if fill.max_slots <= 0:
+        return f"没有可用航道：{fill.reason}"
+    return ""
+
+
+def _planet_line(
+    planet_id: Optional[int],
+    planet_name: str,
+    planet_coordinates: Optional[Coordinates],
+) -> str:
+    coordinates = str(planet_coordinates) if planet_coordinates is not None else "-"
+    return (
+        f"星球      {planet_name or '-'} {coordinates}"
+        f"（id {planet_id if planet_id is not None else '-'}）"
+    )
+
+
+def report_start(
+    notifier: Optional[FeishuNotifier],
+    *,
+    mode: str,
+    planet_id: Optional[int],
+    planet_name: str,
+    planet_coordinates: Optional[Coordinates],
+    plan: ExpeditionPlan,
+) -> None:
+    _report(
+        notifier,
+        "\n".join(
+            [
+                f"{REPORT_START}（{mode}）",
+                _planet_line(planet_id, planet_name, planet_coordinates),
+                f"目标      {plan.target}",
+                f"编队      {format_ships(plan.ships)}  速度 {plan.speed}  "
+                f"停留 {plan.stay_time}",
+            ]
+        ),
+    )
+
+
+def report_stop(
+    notifier: Optional[FeishuNotifier],
+    *,
+    mode: str,
+    reason: str,
+    timetable_path: str,
+) -> None:
+    _report(
+        notifier,
+        f"{REPORT_STOP}（{mode}）：{reason}；时间表已保存到 {timetable_path}",
+    )
+
+
+def report_error(
+    notifier: Optional[FeishuNotifier],
+    *,
+    scope: str,
+    reason: str,
+) -> None:
+    _report(notifier, f"{REPORT_ERROR}（{scope}）：{reason}")
 
 
 # ---------------------------------------------------------------------------
@@ -740,8 +832,11 @@ def run_preview(
             "提示      真实执行加 --execute --allow "
             + ",".join(str(ship_id) for ship_id in sorted(plan.ships))
         )
-    _report(notifier, "预览（不会发送舰队）\n" + status_text)
-    return 1 if fill.status == "error" else 0
+    # A successful preview is a manual read-only action: it is printed to the
+    # operator, not pushed to the group.  Only a preview error is reported.
+    if _fill_failed(fill):
+        report_error(notifier, scope="预览", reason=f"{fill.status}  {fill.reason}")
+    return 1 if _fill_failed(fill) else 0
 
 
 def run_once(
@@ -756,6 +851,14 @@ def run_once(
     args: argparse.Namespace,
     notifier: Optional[FeishuNotifier] = None,
 ) -> int:
+    report_start(
+        notifier,
+        mode="单轮",
+        planet_id=planet_id,
+        planet_name=planet_name,
+        planet_coordinates=planet_coordinates,
+        plan=plan,
+    )
     tech, max_slots, slots, fill, next_wake, clock = run_tick(
         client,
         plan=plan,
@@ -816,8 +919,16 @@ def run_once(
         )
     else:
         print(status_text)
-    _report(notifier, "执行（单轮）\n" + status_text)
-    return 1 if fill.status == "error" else 0
+    if _fill_failed(fill):
+        report_error(notifier, scope="单轮", reason=f"{fill.status}  {fill.reason}")
+    else:
+        report_stop(
+            notifier,
+            mode="单轮",
+            reason=f"{fill.status}  {fill.reason}",
+            timetable_path=timetable.path,
+        )
+    return 1 if _fill_failed(fill) else 0
 
 
 def run_loop(
@@ -841,7 +952,18 @@ def run_loop(
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
+    report_start(
+        notifier,
+        mode="常驻",
+        planet_id=planet_id,
+        planet_name=planet_name,
+        planet_coordinates=planet_coordinates,
+        plan=plan,
+    )
+
     failures = 0
+    stop_reason = ""
+    last_blocker = ""
     while not stop.get("requested"):
         if stop_file.exists():
             print(
@@ -849,7 +971,7 @@ def run_loop(
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
             )
-            _report(notifier, f"发现急停文件 {stop_file}，退出")
+            stop_reason = f"发现急停文件 {stop_file}"
             break
         try:
             tech, max_slots, slots, fill, next_wake, clock = run_tick(
@@ -914,7 +1036,12 @@ def run_loop(
             if not args.json:
                 for line in tick_lines:
                     print(line, flush=True)
-            _report(notifier, "\n".join(tick_lines))
+            # One error per distinct blocker; a persistent ship shortage must
+            # not repeat the same message every retry.
+            blocker = _blocker_reason(fill)
+            if blocker and blocker != last_blocker:
+                report_error(notifier, scope="常驻", reason=blocker)
+            last_blocker = blocker
             def heartbeat(
                 _tech=tech,
                 _max_slots=max_slots,
@@ -945,7 +1072,11 @@ def run_loop(
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
             )
-            _report(notifier, f"会话不可用：{type(exc).__name__}: {exc}")
+            report_error(
+                notifier,
+                scope="常驻",
+                reason=f"会话不可用：{type(exc).__name__}: {exc}",
+            )
             print(SESSION_LOST_HINT, file=sys.stderr, flush=True)
             try:
                 append_jsonl(
@@ -984,10 +1115,13 @@ def run_loop(
                 file=sys.stderr if args.json else sys.stdout,
                 flush=True,
             )
-            _report(
+            report_error(
                 notifier,
-                f"请求失败（第 {failures} 次）：{type(exc).__name__}: {exc}；"
-                f"{delay:.0f}s 后重试",
+                scope="常驻",
+                reason=(
+                    f"请求失败（第 {failures} 次）：{type(exc).__name__}: {exc}；"
+                    f"{delay:.0f}s 后重试"
+                ),
             )
             try:
                 append_jsonl(
@@ -1019,6 +1153,7 @@ def run_loop(
             )
             sleep_until(time.time() + delay, stop, stop_file)
         except KeyboardInterrupt:
+            stop_reason = "收到键盘中断"
             break
         finally:
             timetable.save()
@@ -1036,12 +1171,24 @@ def run_loop(
         next_wake=None,
         state="stopped",
     )
+    if not stop_reason:
+        if stop_file.exists():
+            stop_reason = f"发现急停文件 {stop_file}"
+        elif stop.get("requested"):
+            stop_reason = "收到停止信号"
+        else:
+            stop_reason = "已停止"
     print(
-        f"[{_stamp()}] 已停止；时间表已保存到 {timetable.path}",
+        f"[{_stamp()}] 已停止（{stop_reason}）；时间表已保存到 {timetable.path}",
         file=sys.stderr if args.json else sys.stdout,
         flush=True,
     )
-    _report(notifier, f"已停止；时间表已保存到 {timetable.path}")
+    report_stop(
+        notifier,
+        mode="常驻",
+        reason=stop_reason,
+        timetable_path=timetable.path,
+    )
     return 0
 
 
@@ -1180,6 +1327,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args=args,
             notifier=notifier,
         )
+    except NewStarError as exc:
+        # Startup or a mode that does not handle its own errors (preview,
+        # once): report before the traceback so the group still learns why
+        # the farm is not running.
+        report_error(
+            notifier,
+            scope="运行",
+            reason=f"{type(exc).__name__}: {exc}",
+        )
+        raise
     finally:
         if notifier is not None:
             notifier.close()

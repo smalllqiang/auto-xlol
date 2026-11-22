@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import json
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -260,7 +261,7 @@ def test_run_tick_fills_every_lane_and_records_expected_returns(tmp_path):
     assert len(timetable.slots) == 4
 
 
-def test_run_once_reports_the_status_with_a_topic_prefix(tmp_path, capsys):
+def test_run_once_reports_start_then_stop(tmp_path, capsys):
     module = _module()
     client = _OverviewClient()
     args = module.parse_args(
@@ -295,9 +296,124 @@ def test_run_once_reports_the_status_with_a_topic_prefix(tmp_path, capsys):
     )
 
     assert code == 0
-    assert len(notifier.texts) == 1
-    assert notifier.texts[0].startswith("[探险] 执行（单轮）")
+    assert len(notifier.texts) == 2
+    assert notifier.texts[0].startswith("[探险] 开始（单轮）")
     assert "星球      母星 [3:505:8]" in notifier.texts[0]
+    assert notifier.texts[1].startswith("[探险] 停止（单轮）")
+    assert "dispatched" in notifier.texts[1]
+
+
+def test_run_preview_is_silent_when_it_succeeds(tmp_path):
+    module = _module()
+    client = _OverviewClient()
+    client.preview_fleet = lambda *_args, **_kwargs: SimpleNamespace(
+        consumption=3, stay_times=[1], available_missions=[]
+    )
+    args = module.parse_args(
+        [
+            "--notify",
+            "--timetable",
+            str(tmp_path / "timetable.json"),
+        ]
+    )
+    notifier = _RecordingNotifier()
+
+    code = module.run_preview(
+        client,
+        plan=module.ExpeditionPlan(
+            target="3:505:16", ships={207: 8621}, speed=10, stay_time=1
+        ),
+        clock=module.GameClock(),
+        planet_id=22828,
+        planet_name="母星",
+        planet_coordinates=Coordinates(3, 505, 8),
+        args=args,
+        notifier=notifier,
+    )
+
+    assert code == 0
+    assert notifier.texts == []
+
+
+def test_blocker_reason_ignores_a_full_or_stopped_table():
+    module = _module()
+
+    assert (
+        module._blocker_reason(
+            module.ExpeditionFillResult(
+                status="skipped",
+                free=0,
+                max_slots=4,
+                reason="探险航道已满（4 / 4）",
+            )
+        )
+        == ""
+    )
+    assert (
+        module._blocker_reason(
+            module.ExpeditionFillResult(
+                status="skipped", free=2, max_slots=4, reason="急停：state/STOP"
+            )
+        )
+        == ""
+    )
+    assert module._blocker_reason(
+        module.ExpeditionFillResult(status="dispatched", reason="已派出 1 队")
+    ) == ""
+    shortage = module._blocker_reason(
+        module.ExpeditionFillResult(
+            status="skipped", free=2, max_slots=4, reason="舰船不足：战列舰(207)"
+        )
+    )
+    assert "空闲航道未派出" in shortage and "舰船不足" in shortage
+
+
+def test_run_loop_reports_only_start_and_stop(monkeypatch, tmp_path):
+    module = _module()
+    plan = ExpeditionPlan(target="3:505:16", ships={207: 8621})
+    timetable = ExpeditionTimetable(
+        path=tmp_path / "timetable.json", tech_level=1, max_slots=1
+    )
+    stop_file = tmp_path / "STOP"
+    args = argparse.Namespace(
+        stop_file=str(stop_file),
+        json=False,
+        retry_delay=60.0,
+        journal=str(tmp_path / "journal.jsonl"),
+        status_file=str(tmp_path / "status.json"),
+    )
+    notifier = _RecordingNotifier()
+
+    def tick_then_stop(*_args, **_kwargs):
+        stop_file.write_text("stop")
+        return (
+            1,
+            1,
+            [],
+            module.ExpeditionFillResult(status="dispatched", reason="已派出 1 队"),
+            time.time() - 1.0,
+            GameClock(),
+        )
+
+    monkeypatch.setattr(module, "run_tick", tick_then_stop)
+
+    code = module.run_loop(
+        object(),
+        plan=plan,
+        timetable=timetable,
+        clock=GameClock(),
+        planet_id=None,
+        planet_name="test",
+        planet_coordinates=None,
+        args=args,
+        notifier=notifier,
+    )
+
+    assert code == 0
+    assert len(notifier.texts) == 2
+    assert notifier.texts[0].startswith("[探险] 开始（常驻）")
+    assert notifier.texts[1].startswith("[探险] 停止（常驻）")
+    assert "发现急停文件" in notifier.texts[1]
 
 
 def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
@@ -336,5 +452,9 @@ def test_run_loop_stops_on_session_expiry(monkeypatch, tmp_path, capsys):
     assert "session.py import" in capsys.readouterr().err
     assert json.loads(Path(args.status_file).read_text())["state"] == "error"
     assert any(
-        text.startswith("[探险] 会话不可用") for text in notifier.texts
+        text.startswith("[探险] 开始（常驻）") for text in notifier.texts
+    )
+    assert any(
+        text.startswith("[探险] 报错（常驻）：会话不可用")
+        for text in notifier.texts
     )

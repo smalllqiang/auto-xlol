@@ -11,7 +11,9 @@
 
     --where '面积>260' --where '最高温度<60' --where '最低温度>-50'
 
-``--no-accept`` 是“接受 = false”：不论如何都不保留，脚本直接停止。
+``--no-accept`` 是“接受 = false”：范围内每个空位都会被殖民，然后**全部抛弃**
+（留下「被遗弃的殖民地」）。这时没有球会被保留，所以不会因数量上限提前停止，
+脚本一直干到范围扫完、没殖民船或没重氢为止；不能与 ``--no-abandon`` 同用。
 
 数量上限取**较小值**：``min(--max-accept, 游戏还能新增的殖民位)``，
 其中后者已经扣掉当前占用、再加回本脚本已保留的球；``--max-accept 0`` 表示只受
@@ -155,7 +157,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--no-accept",
         action="store_true",
-        help="接受值设为 false：不论如何都不保留任何星球（脚本随即停止）",
+        help=(
+            "接受值设为 false：范围内每个空位都会殖民后立刻抛弃（不保留任何球）；"
+            "此时不会因数量上限提前停，直到范围扫完/没船/没重氢"
+        ),
     )
     parser.add_argument(
         "--max-accept",
@@ -313,6 +318,13 @@ def _check_args(args: argparse.Namespace, ship_id: int) -> Optional[int]:
         return 2
     if args.max_accept < 0:
         print("--max-accept 不能为负", file=sys.stderr)
+        return 2
+    if args.no_accept and args.no_abandon:
+        print(
+            "--no-accept 表示全部殖民后抛弃，不能再加 --no-abandon"
+            "（那会变成殖民后全部保留，与接受值 false 矛盾）",
+            file=sys.stderr,
+        )
         return 2
     if args.systems_per_tick < 1:
         print("--systems-per-tick 必须至少为 1", file=sys.stderr)
@@ -494,6 +506,8 @@ def render_status(state: ColonizeState, args: argparse.Namespace, result: TickRe
 
 
 def _limit_text(result: TickResult, state: ColonizeState) -> str:
+    if not state.filters.accept:
+        return "不适用（accept=false：全部殖民后抛弃）"
     game = game_colony_remaining(state.colony_used, state.colony_max)
     parts = [
         f"用户 {state.user_limit or '不限'}",
@@ -530,11 +544,15 @@ def render_start(state: ColonizeState, args: argparse.Namespace) -> str:
     """The one-off start report (no requests; tick data is not known yet)."""
 
     box = state.box
+    if state.filters.accept:
+        condition = f"{state.filters.as_text()}；用户上限 {state.user_limit or '不限'}"
+    else:
+        condition = "accept=false（全部殖民后抛弃，不会因数量上限提前停）"
     return "\n".join(
         [
             f"开始：范围 {box.as_text() if box is not None else '-'}"
             f"（{box.system_count if box is not None else 0} 太阳系）",
-            f"条件：{state.filters.as_text()}；用户上限 {state.user_limit or '不限'}",
+            f"条件：{condition}",
             f"出发星球：{state.departure_name or '-'} "
             f"{state.departure_coordinates or '-'}（id {state.departure_id or '-'}）",
             f"历史：保留 {state.kept_count}；抛弃 {len(state.discarded)}；"
@@ -932,7 +950,11 @@ def run_tick(
     table: FleetTable = client.get_fleet_table()
     sync_inflight(state, table.fleets, clock, now)
     refresh_colony_slots(client, state, args, now)
-    if state.colony_max is None and int(state.user_limit) <= 0:
+    if (
+        state.colony_max is None
+        and int(state.user_limit) <= 0
+        and state.filters.accept
+    ):
         return TickResult(
             stop=True,
             code="no_limit",
@@ -984,7 +1006,10 @@ def run_tick(
             result.inflight = len(state.inflight)
         result.stop = True
         result.code = "limit"
-        result.reason = f"已保留 {result.kept} 颗，达到上限 {limit}"
+        if state.filters.accept:
+            result.reason = f"已保留 {result.kept} 颗，达到上限 {limit}"
+        else:
+            result.reason = f"没有可用的殖民位（剩余 {limit}），无法继续殖民"
         result.next_wake = now
         return result
 
@@ -1532,15 +1557,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     notifier = _make_notifier(args)
-    if not filters.accept:
-        print(
-            "--no-accept：接受值=false，任何星球都不符合条件；未启动",
-            file=sys.stderr,
-        )
-        _report(notifier, "停止：接受值=false（--no-accept），不殖民任何星球")
-        if notifier is not None:
-            notifier.close()
-        return 0
     config = load_config(args)
     if args.execute and not args.no_abandon and not config.password:
         print(

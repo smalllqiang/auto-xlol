@@ -212,6 +212,7 @@ class FakeClient:
             if error is not None:
                 raise error
         self.sent.append((str(target), dict(ships)))
+        self.ships = max(0, self.ships - int(dict(ships).get(208, 0)))
         return FleetDispatch(
             mission=7,
             mission_name="殖民",
@@ -239,6 +240,15 @@ def _state(tmp_path: Path, box="1-1:2-2:1-15", *, limit=5, where=()) -> Colonize
         box=ColonizeRange.parse(box),
         filters=PlanetFilter.parse(where),
         user_limit=limit,
+    )
+
+
+def _refuse_state(tmp_path: Path) -> ColonizeState:
+    return ColonizeState(
+        path=tmp_path / "colonize_state.json",
+        box=ColonizeRange.parse("1-1:2-2:1-15"),
+        filters=PlanetFilter.parse([], accept=False),
+        user_limit=0,
     )
 
 
@@ -649,6 +659,80 @@ def test_the_loop_reports_only_start_and_stop_and_writes_status(tmp_path):
     lines = (tmp_path / "journal.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["status"] == "no_ships"
+
+
+def test_accept_false_colonizes_and_abandons_everything(tmp_path):
+    client = FakeClient(
+        planets=[_home()],
+        ships=2,
+        galaxies={(1, 2): _free_view(1, 2, range(1, 16))},
+    )
+    state = _refuse_state(tmp_path)
+    args = _args(tmp_path)
+
+    first = _module().run_tick(client, state, args, dry_run=False)
+
+    assert first.stop is False
+    assert len(client.sent) == 2
+    assert len(state.inflight) == 2
+    assert state.kept == []
+    sent_targets = [target for target, _ in client.sent]
+
+    # Both fleets arrive and create colonies; the filter rejects both.
+    colonies = [
+        PlanetSummary(
+            id=40000 + index,
+            name="殖民地",
+            coordinates=Coordinates.parse(target),
+        )
+        for index, target in enumerate(sent_targets)
+    ]
+    client.planets = [_home(), *colonies]
+    client.infos = {
+        colony.id: PlanetInfo(
+            id=colony.id,
+            fields_max=300,
+            temp_max=50,
+            temp_min=10,
+            coordinates=colony.coordinates,
+        )
+        for colony in colonies
+    }
+    client.fleets = []
+
+    second = _module().run_tick(client, state, args, dry_run=False)
+
+    assert client.abandoned == [colony.id for colony in colonies]
+    assert state.kept == []
+    assert len(state.discarded) == 2
+    assert all("accept=false" in item.note for item in state.discarded)
+    assert state.inflight == []
+    # Out of colony ships and nothing in flight -> the run stops.
+    assert second.stop is True
+    assert second.code == "no_ships"
+
+
+def test_accept_false_cannot_be_combined_with_no_abandon(tmp_path):
+    module = _module()
+    args = module.parse_args(
+        ["--range", "1:2:1 1:2:15", "--no-accept", "--no-abandon"]
+    )
+    assert module._check_args(args, 208) == 2
+
+
+def test_the_old_accept_false_early_exit_is_gone(tmp_path):
+    client = FakeClient(
+        planets=[_home()],
+        ships=1,
+        galaxies={(1, 2): _free_view(1, 2, range(1, 16))},
+    )
+    state = _refuse_state(tmp_path)
+    args = _args(tmp_path)
+
+    result = _module().run_tick(client, state, args, dry_run=False)
+
+    assert client.sent  # it does start colonizing instead of stopping
+    assert result.code != "no_ships"
 
 
 @pytest.mark.parametrize(

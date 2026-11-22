@@ -27,7 +27,7 @@ New-Star（2Moons 系）页游的 Python 自动化：`newstar_sdk` 是只读/写
 `autoplay/brief.py`（事实 → 决策简报）、`autoplay/tools.py`（动词工具）、`autoplay/runner.py`（按前提执行计划）、
 `autoplay/agent.py`（模型决策循环）、`autoplay/prompt.py`（提示词语料）、`autoplay/llm.py`（Provider）、
 `autoplay/memory.py`（跨轮记忆）、`autoplay/runtime.py`（pid 锁/心跳）、
-`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、`autoplay/expedition_scheduler.py`（常驻探险调度）、
+`autoplay/expedition.py`（探险只读报告）、`autoplay/expedition_executor.py`（单队预览/发送）、`autoplay/ship_build.py`（推荐舰船建造）、`autoplay/expedition_cycle.py`（多航道循环）、`autoplay/expedition_scheduler.py`（常驻探险调度）、`autoplay/colonize.py`（殖民范围/条件/航道/状态机）、
 `autoplay/threat.py`（威胁评估）、`autoplay/threat_executor.py`（召回）。
 脚本共享基础设施：`utils/env.py`（`.env` 读取）、`utils/notify.py`（飞书消息上报）。
 
@@ -57,6 +57,7 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
 .venv/bin/python scripts/build_expedition_ships.py --no-verify-ssl  # 造船预览（--execute --allow 才建造）
 .venv/bin/python scripts/expedition_cycle.py --no-verify-ssl  # 多航道循环预览（--execute --allow 才发送）
 .venv/bin/python scripts/expedition_farm.py --no-verify-ssl   # 常驻探险预览（--execute --allow 207 才发送）
+.venv/bin/python scripts/colonize.py --no-verify-ssl --range '1:2:3 1:2:15' --where '面积>260'  # 自动殖民预览（--execute --allow 208 才发船/放弃）
 .venv/bin/python scripts/threat.py --no-verify-ssl        # 威胁报告（--recall --execute --allow 才召回）
 .venv/bin/python scripts/empire.py --no-verify-ssl        # 全局面板（每星资源/建筑/舰只）
 .venv/bin/python scripts/production.py --no-verify-ssl    # 生产比例（--set + --execute --allow 才写入）
@@ -176,6 +177,18 @@ NEWSTAR_UNIVERSE=... NEWSTAR_VERIFY_SSL=0 \
   研究/建筑页的 `costOverflow` 才是游戏实际检查的净缺口，判断可负担性时以它为准。
 - **探险停留时间**：确认页/舰队表的任务名是「探险」；`stay_time=0` 会被游戏以
   「无效返回时间」拒绝，必须用第二步页面的 `staytime` 选项（1..探险技术等级）。
+- **殖民舰到达即消耗**：任务 7 的舰队里只有 1 艘殖民舰时，到达后 `KillFleet`，航道
+  立刻释放；多艘时只消耗 1 艘、其余返航。殖民失败（目标已被占/位置不允许）则整队返航，
+  殖民舰还在。
+- **星图空位的面积/温度是随机预览**：`PlanetData.php` 每次 include 都 `mt_rand`，
+  空位 tooltip 的值和真正殖民出来的行星没有对应关系；判定必须用殖民后概览页的
+  `fields_max` / `temp_min` / `temp_max`。
+- **放弃殖民地要密码且延迟 24 小时**：`page=overview` 的 `mode=delete` POST 需要
+  账号明文密码，返回 JSON；行星只是被标记 `destruyed`，清理 cronjob 约 24h 后才删除，
+  这期间坐标仍被占用（第三步会报「目标已有星球」），不能原地重殖民。
+- **舰队表列语义**：第 4 列 `FleetInfo.start_time` = 抵达**目标**的时间，第 6 列
+  `target_time` = 回母星的绝对时间，第 7 列 `arrival_time` = 绿色的剩余时间字符串；
+  页面中文表头容易看错，按模板字段读。
 
 ## 扩展一个新页面
 

@@ -219,6 +219,68 @@ def test_select_planet_rejects_unknown(fixture_html, monkeypatch):
         client.select_planet(9999)
 
 
+def test_fleet_table_reads_lanes_and_ships_in_one_request(fixture_html, monkeypatch):
+    client = _make_client()
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        assert (params or {}).get("page") == "fleetTable"
+        return FakeResponse(fixture_html("fleet_table_colonize.html"))
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    table = client.get_fleet_table()
+
+    assert table.slots.max_slots == 11
+    assert table.ships_here(208) == 4
+    assert [fleet.mission_id for fleet in table.fleets] == [7, 15]
+
+
+def test_abandon_planet_posts_the_password_and_verifies(fixture_html, monkeypatch):
+    client = _make_client()
+    client._current_planet_id = 10001
+    calls = []
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        query = dict(params or {})
+        # ``cp`` is injected by ``_request``, which is replaced here.
+        calls.append((method, client._current_planet_id, dict(data or {})))
+        if query.get("page") == "overview" and method == "POST":
+            return FakeResponse('{"ok": true, "message": "行星已放弃"}')
+        if query.get("page") == "overview":
+            return FakeResponse(fixture_html("overview.html"))
+        raise AssertionError(f"unexpected page {query.get('page')}")
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    result = client.abandon_planet(10002)
+
+    assert result.ok is True
+    assert result.planet_id == 10002
+    method, planet_id, data = calls[0]
+    assert method == "POST"
+    assert planet_id == 10002
+    assert data == {"mode": "delete", "password": "pass"}
+    # The client must not stay pointed at the planet it just abandoned.
+    assert client.planet_id == 10001
+
+
+def test_abandon_planet_surfaces_the_game_message(monkeypatch):
+    client = _make_client()
+    client._current_planet_id = 10001
+
+    def fake_request(method, path, *, params=None, data=None, **kwargs):
+        return FakeResponse('{"ok": false, "message": "密码错误"}')
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    with pytest.raises(ActionRejected, match="密码错误"):
+        client.abandon_planet(10002)
+
+
+def test_abandon_planet_needs_a_password():
+    client = NewStarClient("https://example.test/", "user", None, verify_ssl=False)
+    client._logged_in = True
+    with pytest.raises(ConfigurationError, match="account password"):
+        client.abandon_planet(10002)
+
+
 def test_build_ships_flow(monkeypatch):
     client = _make_client()
     shipyard_page = """

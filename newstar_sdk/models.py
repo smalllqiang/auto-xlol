@@ -476,6 +476,94 @@ class FleetPreview:
 
 
 @dataclass
+class FleetSlots:
+    """Fleet-lane counters from the fleet table header.
+
+    The page prints ``舰队航道 <active> / <max>`` and, on the right, the
+    expedition share ``<active expeditions> / <max expeditions>``.  Both count
+    outbound *and* returning fleets, so they are the authoritative "how many
+    more fleets may I send" source.
+    """
+
+    active: int = 0
+    max_slots: int = 0
+    active_expeditions: int = 0
+    max_expeditions: int = 0
+
+    @property
+    def free(self) -> int:
+        return max(0, int(self.max_slots) - int(self.active))
+
+    @property
+    def non_expedition_active(self) -> int:
+        """Fleets that occupy a lane but are not expeditions."""
+
+        return max(0, int(self.active) - int(self.active_expeditions))
+
+    def as_dict(self) -> Dict[str, int]:
+        return {
+            "active": int(self.active),
+            "max_slots": int(self.max_slots),
+            "free": self.free,
+            "active_expeditions": int(self.active_expeditions),
+            "max_expeditions": int(self.max_expeditions),
+        }
+
+
+@dataclass
+class FleetTable:
+    """One read of ``page=fleetTable``: lanes, flying fleets and ships here."""
+
+    fleets: List[FleetInfo] = field(default_factory=list)
+    slots: FleetSlots = field(default_factory=FleetSlots)
+    #: Ships selectable on the *currently selected* planet, keyed by ship id.
+    available: Dict[int, FleetShips] = field(default_factory=dict)
+
+    def ships_here(self, ship_id: int) -> int:
+        entry = self.available.get(int(ship_id))
+        return int(entry.count) if entry is not None else 0
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "slots": self.slots.as_dict(),
+            "fleets": [
+                {
+                    "id": fleet.id,
+                    "mission": fleet.mission,
+                    "mission_id": fleet.mission_id,
+                    "returning": bool(fleet.returning),
+                    "target": (
+                        str(fleet.target_coordinates)
+                        if fleet.target_coordinates is not None
+                        else None
+                    ),
+                }
+                for fleet in self.fleets
+            ],
+            "available": {
+                str(ship_id): int(entry.count)
+                for ship_id, entry in self.available.items()
+            },
+        }
+
+
+@dataclass
+class PlanetAbandon:
+    """Result of an abandon-colony request (``page=overview&mode=delete``)."""
+
+    planet_id: int
+    ok: bool = False
+    message: str = ""
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "planet_id": int(self.planet_id),
+            "ok": bool(self.ok),
+            "message": self.message,
+        }
+
+
+@dataclass
 class ServerInfo:
     username: Optional[str] = None
     universe: Optional[str] = None

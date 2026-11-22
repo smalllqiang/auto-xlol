@@ -264,6 +264,31 @@ client.select_planet(current.id)
 
 切换会验证服务器是否真的选中了目标星球；无效 ID 会抛出 `GameError` 并恢复之前的星球。
 
+### 舰队表与航道
+
+`page=fleetTable` 一次请求同时给出三样东西：航道计数器、在飞舰队、以及**当前星球**
+可派遣的舰船数量：
+
+```python
+table = client.get_fleet_table()        # 只读，一次请求
+table.slots.active, table.slots.max_slots          # 「舰队航道 2 / 11」
+table.slots.active_expeditions                     # 「1 / 3 探险队」的在飞数
+table.slots.max_expeditions                        # 探险队上限
+table.ships_here(208)                              # 当前星球可用殖民舰数
+for fleet in table.fleets:
+    fleet.id, fleet.mission_id, fleet.returning, fleet.target_coordinates
+```
+
+航道计数把**去程和返程**都算作占用；`table.ships_here()` 只数停在本星球上的舰船，
+在飞的不算。`get_fleet_table()` 里的 `available` 属于**当前选中星球**，需要别的
+星球就先 `select_planet()`。
+
+`FleetInfo` 的列语义（与页面表头的中文标签不同，按模板字段读）：
+
+- `start_time`：抵达**目标**的时间（第 4 列）；
+- `target_time`：整支舰队**回母星**的绝对时间（第 6 列）；
+- `arrival_time`：绿色的剩余时间字符串（第 7 列），不是时间戳。
+
 ### 消息
 
 消息列表由 AJAX 渲染：`page=messages` 里只有各分类的未读/总数，正文来自
@@ -455,6 +480,23 @@ queue = client.cancel_ship_queue(0, mode="fleet")
 - `build_ships` 会检查 `max_buildable`；请求数量超过当前资源允许值时直接抛 `ValueError`，避免游戏静默截断。
 - 船坞队列位置同样是 `0` 开始；取消时发送 `action=delete&auftr[]=position`。
 - 舰船和防御的 ID 在同一个 `ShipInfo` 模型中，用 `category`/`is_defense` 区分。
+
+### 放弃殖民地
+
+```python
+result = client.abandon_planet(planet_id)          # 需要账号密码
+result.ok, result.message
+```
+
+游戏把「放弃」做成 `page=overview` 的 `mode=delete` POST，并要求提交**账号密码**
+（`client._password`，或用 `password=` 显式传入）。返回 JSON；SDK 在 `verify=True`
+时会重新读概览，确认那颗星已经从星球列表消失。
+
+两个容易踩的点：
+
+- 放弃只是把行星标记为 `destruyed`，清理 cronjob 大约 **24 小时后**才真正删除，
+  这期间坐标仍被占用，**不能**在原位置重新殖民（第三步会报「目标已有星球」）。
+- 主星不能放弃；有舰队（出发或到达）挂在这颗星上时也会被拒绝。
 
 ### 等待队列
 
@@ -1533,3 +1575,123 @@ nohup .venv/bin/python -u scripts/agent.py --no-verify-ssl --execute \
 长跑后先看三个数：`state/agent.json` 的 `cycles` / `status`、`report.status` 里
 `failed` 的比例、以及失败 code 的分布。`QUEUE_FULL` 只应出现在 `blocked`；
 若 `failed` 超过两成，先查 `agent.out` 里的 tool 报错，不要急着调策略。
+
+## 24. 自动殖民（scripts/colonize.py）
+
+在一个坐标方框里找空位、派殖民船，殖民成功后读**真实的**面积/温度，达标的留下，
+不达标的直接放弃。默认只预览（会扫描并报告计划），真实写入要 `--execute`。
+
+```bash
+# 预览：扫描 1:1 太阳系，显示候选与将发的船
+.venv/bin/python scripts/colonize.py --no-verify-ssl \
+    --planet 1:1:1 --range '1:1:1 1:1:15' --where '面积>260'
+
+# 真实执行：从 1:1:1 出发，保留面积>260 且最低温度>-50 的球，最多 5 颗
+.venv/bin/python scripts/colonize.py --no-verify-ssl \
+    --planet 1:1:1 --range '1-4:2-5:1-15' \
+    --where '面积>260' --where '最低温度>-50' \
+    --max-accept 5 --execute --allow 208 --notify
+
+# 常驻（比如 nohup），每轮最多扫 25 个太阳系
+nohup .venv/bin/python -u scripts/colonize.py --no-verify-ssl \
+    --planet 1:1:1 --range '1:1:1 4:999:15' --where '面积>260' \
+    --max-accept 10 --execute --allow 208 --notify \
+    >> state/colonize.out 2>&1 &
+```
+
+### 范围
+
+本实例是 99 个河系 × 999 个太阳系 × 15 个位置（`1:1:1` ~ `99:999:15`）。两种写法等价：
+
+| 写法 | 含义 |
+| --- | --- |
+| `--range '1:2:3 4:5:6'` | 两个角点（顺序任意）：河系 1~4、太阳系 2~5、位置 3~6 |
+| `--range '1-4:2-5:3-6'` | 三个范围，含义完全相同 |
+| `--range '3:505:8'` | 单个位置 |
+
+一个太阳系 = 一次星图请求；范围越大扫描越久。`--systems-per-tick`（默认 25）限制
+每轮最多读多少个太阳系，进度写在状态文件里，重启后接着扫。
+
+### 筛选条件
+
+每条条件形如 `字段 比较符 数值`，`--where` 可以重复，也可以用逗号塞进一个参数：
+
+```bash
+--where '面积>260'
+--where '最高温度<60' --where '最低温度>-50'
+--where '面积>=200,最高温度<=80'
+```
+
+- 字段别名：`面积`/`area`/`fields`、`最高温度`/`temp_max`/`tmax`、
+  `最低温度`/`temp_min`/`tmin`；
+- 比较符：`>` `>=` `<` `<=` `=` `==` `!=`，也接受全角 `≥ ≤ ＞ ＜`；
+- **没写的字段不检查**；一条条件都没有时全部接受；
+- `--no-accept` 是「接受值 = false」：任何球都不符合条件，脚本直接退出（不上报为报错）。
+
+**判定用的是殖民成功之后的真实值**：概览页当前行星的 `fields_max`（面积）与
+`temp_min`/`temp_max`。星图空位 tooltip 上的「面积/温度」只是服务端每次重新随机
+生成的预览（`PlanetData.php` 用 `mt_rand`），**不能**拿来预筛，所以脚本不拿它做判断。
+
+### 数量上限与航道
+
+- 生效上限 = `min(--max-accept, 游戏可新增殖民位)`，是**本次新增**的总数；
+  `--max-accept 0` 表示只受游戏限制；
+- 「游戏可新增殖民位」= `page=control` 的「行星空位(殖民): 已用 / 上限」里的
+  `上限 - 已用`，再加上**本次脚本已保留**的球（它们已经进了「已用」），并以
+  `上限` 封顶；读不到这个数字且没给 `--max-accept` 时脚本拒绝启动（`no_limit`），
+  避免无限殖民；
+- 只统计**本次运行保留**的球；范围里原本就属于自己的殖民地视为「已决定」，不计数；
+- 可用航道 = `舰队航道 - 在飞 - max(0, 最大探险队 - 在飞探险队)`，也就是先把
+  **满编探险队**的航道留出来（`--no-reserve-expeditions` 可关掉预留）。
+
+### 停止条件
+
+| code | 含义 |
+| --- | --- |
+| `limit` | 保留数到达上限；仍在路上的殖民船会先被召回（`fleetTable` 的返航指令） |
+| `range_explored` | 范围内每个位置都有结论（保留/抛弃/失败/别人的/自己的），且没有在途殖民船 |
+| `no_ships` | 出发星球没有可用殖民船（在途的先等它们有结果再停） |
+| `no_fuel` | 出发星球没有重氢（同上） |
+| `send_failed` | 发船被游戏拒绝且不是「目标已被占」（燃料/航道/舰船等），停止并在通知里带原文 |
+| `stop_file` / 信号 | `state/STOP` 或 SIGINT/SIGTERM |
+| `no_limit` | 读不到游戏殖民位上限且没有 `--max-accept` |
+
+`send_failed` 时目标会留在候选队列里，下次启动重试。目标被别人抢走
+（`目标已有星球` 一类错误）只记一条 `failed` 并继续下一个位置，不会中断。
+
+### 发船、对账与放弃
+
+- 每次派 1 艘殖民舰（`--ships-per-target` 可改）。任务 7 到达后殖民舰会被消耗；
+  殖民失败时舰队会自己返航，殖民舰回到出发星球；
+- 舰队表里存在、但不是本脚本派出的殖民舰队（人手动发的、或别的进程发的）只会被
+  记进在途清单以免重复发船，**不会**被评价、放弃或撤回——脚本只处理自己发的船；
+- 是否成功不靠猜：每轮先读舰队表，殖民舰队从表里消失后，等新行星出现在概览里；
+  出现就切过去读面积/温度（`select_planet` + 概览），`--reconcile-timeout`（默认
+  600 秒）内都没出现则记 `failed`；
+- 不达标默认**直接放弃**（`page=overview&mode=delete`）。放弃需要账号密码：用
+  `--password` / `.env` 的 `NEWSTAR_PASSWORD`，只导入会话 Cookie 时没有密码，脚本会
+  在启动时拒绝 `--execute`；只想留着不放弃就加 `--no-abandon`；
+- 放弃只是标记删除，位置约 **24 小时**后才释放。想回头再赌一次同位置，等清理后用
+  `--rescan` 从头的扫描进度重扫（保留/抛弃/失败的历史记录会保留）。
+
+### 状态、监控与通知
+
+| 路径 | 内容 |
+| --- | --- |
+| `state/colonize_state.json` | 扫描游标、候选队列、保留/抛弃/失败清单、在途时间表（`--state-file`） |
+| `state/colonize.json` | 心跳：出发星球、范围、条件、上限、航道、在飞舰队、下次唤醒（`--status-file`） |
+| `state/journal.jsonl` | 每轮一条 `kind=colonize`（`--journal`） |
+| `state/daemon.lock` | 单写者锁，默认与 `run_forever.py`/探险脚本共用 |
+| `state/STOP` | 急停文件，发船循环每次迭代都检查 |
+
+`--notify` 只在**开始、报错、停止**时发飞书消息（`[殖民]` 前缀），中间过程不报；
+`--no-accept` 也算一次停止。网络抖动会按 `--retry-delay` 指数退避重试，连续
+`--max-errors` 次（默认 5）失败才上报并退出。
+
+### 已知限制
+
+- 位置 1/2/3/13/14/15 能否殖民由游戏的 `allowPlanetPosition` + 殖民技术决定；
+  星图仍会显示殖民图标，脚本照发，被拒后记 `failed`（不浪费第二次尝试）；
+- 放弃后位置被锁 24 小时，这期间星图上看不到殖民图标，脚本不会反复尝试；
+- 每颗新殖民地要切星读取面积/温度（2 次请求）；放弃再多 1 次、切回出发星球 1 次。
+  扫描是主要开销，按需调 `--systems-per-tick` 与 `--interval`。

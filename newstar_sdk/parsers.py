@@ -43,6 +43,8 @@ from .models import (
     FleetDispatch,
     FleetInfo,
     FleetShips,
+    FleetSlots,
+    FleetTable,
     GalaxySlot,
     GalaxyView,
     Message,
@@ -924,6 +926,57 @@ def parse_fleets(html: str) -> List[FleetInfo]:
             )
         )
     return fleets
+
+
+#: ``舰队航道 0 / 1`` (fleet lanes) and ``Fleet 0 / 1`` in the English theme.
+_FLEET_SLOTS_RE = re.compile(
+    r"(?:舰队航道|Fleets?)\s*(\d+)\s*/\s*(\d+)", re.I
+)
+#: ``0 / 0 探险队`` / ``0 / 0 expedition`` next to the lane counter.
+_EXPEDITION_SLOTS_RE = re.compile(
+    r"(\d+)\s*/\s*(\d+)\s*(?:探险队|expeditions?)", re.I
+)
+
+
+def parse_fleet_slots(html: str) -> FleetSlots:
+    """Read the fleet-lane counters from the fleet table header.
+
+    The numbers live in the ``.gray_flettab`` banner above the flying-fleet
+    table: ``舰队航道 3 / 11`` and ``2 / 4 探险队``.  Only the first match of
+    each is used; the page repeats neither, but a modded theme might.
+    """
+
+    soup = _soup(html)
+    slots = FleetSlots()
+    blocks = [block.get_text(" ") for block in soup.select("div.gray_flettab")]
+    texts = [clean_text(item) for item in blocks]
+    if not texts:
+        texts = [soup.get_text(" ")]
+
+    fleet_match = None
+    expedition_match = None
+    for text in texts:
+        if fleet_match is None:
+            fleet_match = _FLEET_SLOTS_RE.search(text)
+        if expedition_match is None:
+            expedition_match = _EXPEDITION_SLOTS_RE.search(text)
+    if fleet_match is not None:
+        slots.active = int(fleet_match.group(1))
+        slots.max_slots = int(fleet_match.group(2))
+    if expedition_match is not None:
+        slots.active_expeditions = int(expedition_match.group(1))
+        slots.max_expeditions = int(expedition_match.group(2))
+    return slots
+
+
+def parse_fleet_table(html: str) -> FleetTable:
+    """Parse ``page=fleetTable`` once: lanes, flying fleets and ships here."""
+
+    return FleetTable(
+        fleets=parse_fleets(html),
+        slots=parse_fleet_slots(html),
+        available=parse_fleet_selection(html),
+    )
 
 
 def parse_fleet_selection(html: str) -> Dict[int, FleetShips]:

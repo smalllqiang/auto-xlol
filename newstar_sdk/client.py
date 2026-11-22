@@ -49,11 +49,13 @@ from .models import (
     FleetInfo,
     FleetPreview,
     FleetShips,
+    FleetTable,
     GalaxyView,
     MessageCounter,
     MessagePage,
     MissionOption,
     Overview,
+    PlanetAbandon,
     PlanetInfo,
     PlanetSummary,
     ProductionReport,
@@ -76,6 +78,7 @@ from .parsers import (
     parse_fleet_selection,
     parse_fleet_step1,
     parse_fleet_step2_details,
+    parse_fleet_table,
     parse_fleets,
     parse_galaxy,
     parse_game_error,
@@ -104,6 +107,16 @@ TargetLike = Union[Coordinates, Sequence[int], str]
 ElementLike = Union[int, str]
 ShipsLike = Mapping[ElementLike, int]
 ResourceLike = Union[Resources, Mapping[ElementLike, float], Sequence[float]]
+
+
+def _json_object(text: str) -> Optional[Dict[str, Any]]:
+    """Parse a JSON-object response body; ``None`` for anything else."""
+
+    try:
+        payload = json.loads(text or "")
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 class NewStarClient:
@@ -826,6 +839,59 @@ class NewStarClient:
             self._current_planet_id = previous
             raise
 
+    def abandon_planet(
+        self,
+        planet_id: int,
+        password: Optional[str] = None,
+        *,
+        verify: bool = True,
+    ) -> PlanetAbandon:
+        """Abandon one of your own colonies.
+
+        The game requires the account password: ``page=overview`` with
+        ``mode=delete`` answers JSON (``{"ok": true}`` on success).  Abandoning
+        only *marks* the planet destroyed; the cleanup cronjob removes it about
+        24 h later, so the coordinate stays blocked in the meantime.
+        """
+
+        self.ensure_login()
+        secret = password if password is not None else self._password
+        if not secret:
+            raise ConfigurationError(
+                "abandon_planet needs the account password "
+                "(a session-cookie-only login has none)"
+            )
+        target_id = int(planet_id)
+        previous = self._current_planet_id
+        self._current_planet_id = target_id
+        try:
+            response = self._game_page(
+                "overview",
+                method="POST",
+                data={"mode": "delete", "password": secret},
+            )
+            payload = _json_object(response.text) or {}
+        finally:
+            self._current_planet_id = (
+                previous if previous is not None and previous != target_id else None
+            )
+        result = PlanetAbandon(
+            planet_id=target_id,
+            ok=bool(payload.get("ok")),
+            message=clean_text(str(payload.get("message") or "")),
+        )
+        if not result.ok and verify:
+            raise ActionRejected(
+                result.message or "the abandon request was not accepted"
+            )
+        if result.ok and verify:
+            overview = self.get_overview()
+            if any(item.id == target_id for item in overview.planets):
+                raise ActionRejected(
+                    f"planet {target_id} is still listed after the abandon request"
+                )
+        return result
+
     @property
     def universe(self) -> Optional[str]:
         return self._universe
@@ -1297,6 +1363,17 @@ class NewStarClient:
         self.ensure_login()
         response = self._game_page("fleetTable")
         return parse_fleets(response.text)
+
+    def get_fleet_table(self) -> FleetTable:
+        """Read the fleet table once: lanes, flying fleets and ships here.
+
+        ``available`` is the selectable ship count of the *currently selected*
+        planet, so call :meth:`select_planet` first when it matters.
+        """
+
+        self.ensure_login()
+        response = self._game_page("fleetTable")
+        return parse_fleet_table(response.text)
 
     def get_available_ships(self) -> Dict[int, FleetShips]:
         """Ships that can be selected on the fleet dispatch page."""

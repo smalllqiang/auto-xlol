@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- Sanitized excerpt of page=fleetTable while one colony fleet is flying.
+     Keeps only the lane banner, the flying-fleet table and the ship selection
+     box the parsers read. -->
+<html lang="zh">
+<head><title>单位调度 - TESTUNI - game</title></head>
+<body id="fleetTable">
+<div class="gray_flettab">
+  <div class="transparent">
+    舰队航道 2 / 11
+    <div class="transparent" style="text-align:right; float:right;">
+      <span style="font-weight: bold;">1 / 3 探险队</span>
+    </div>
+  </div>
+</div>
+<table class="tablesorter ally_ranks">
+  <tr>
+    <td>ID</td>
+    <td>舰队任务</td>
+    <td>舰队数量</td>
+    <td>出发坐标</td>
+    <td>抵达时间(目标)</td>
+    <td>目的地坐标</td>
+    <td>返航时间</td>
+    <td>抵达时间(返航)</td>
+    <td>指令</td>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>殖民<br><a title="fl_onway">fl_a</a></td>
+    <td><a data-tooltip-content="&lt;table&gt;&lt;tr&gt;&lt;td class='transparent'&gt;殖民舰:&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;">1</a></td>
+    <td><a>[1:1:8]</a></td>
+    <td>2026-11-22 12:30</td>
+    <td><a>[1:2:3]</a></td>
+    <td>2026-11-22 12:40</td>
+    <td>2026-11-22 12:50</td>
+    <td><form action="game.php?page=fleetTable&amp;action=sendfleetback"><input name="fleetID" value="43"></form></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>探险<br><a title="fl_onway">fl_a</a></td>
+    <td><a data-tooltip-content="&lt;table&gt;&lt;tr&gt;&lt;td class='transparent'&gt;战列舰:&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;">100</a></td>
+    <td><a>[1:1:8]</a></td>
+    <td>2026-11-22 12:10</td>
+    <td><a>[1:1:16]</a></td>
+    <td>2026-11-22 14:10</td>
+    <td>2026-11-22 15:10</td>
+    <td><form action="game.php?page=fleetTable&amp;action=sendfleetback"><input name="fleetID" value="44"></form></td>
+  </tr>
+</table>
+<div class="build_box flethan">
+  <input type="text" name="ship208" value="">
+  <div class="hang3">殖民舰</div>
+  <div id="ship208_value">4</div>
+</div>
+</body>
+</html>

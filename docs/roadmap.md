@@ -103,6 +103,7 @@ journal 里回放。
 | P2-1d | 常驻探险调度 | ✅ | `expedition_farm` 维护返航时间表，按返航 +5s 补下一波，每 10h 重查最大航道；离线单测覆盖时间解析/时间表/填满/舰船不足，未跑 live（避免替换浏览器会话） |
 | P2-2 | 舰队与威胁响应 | ✅ | 间谍/战斗报告 + 舰队表 → `calm`/`watch`/`danger`；`--threat-every` / `--pause-on-threat`；召回支持预览 + 舰队 id allow-list + 页面验证（资源转移/多星球仍属 P2-3） |
 | P2-3 | 多星球调度 | ⬜ | 只读解析已就绪（`control` 全局面板 + `scripts/empire.py`）；跨星调度、切星、分星计划未做 |
+| P2-6 | 自动殖民与按条件留球 | ✅ | `autoplay/colonize.py` + `scripts/colonize.py`：两种范围写法、面积/最高/最低温度条件、min(用户上限, 游戏剩余殖民位)、航道预留探险队、发船/到达对账/不达标放弃、在途撤回、开始/报错/停止飞书通知 |
 | P2-4 | AI 参谋（只读建议） | ⬜ | 低频复盘、异常归因；决策边界见 ADR-006 |
 | P2-5 | 影子模式评估 | ⬜ | 记录「AI 建议 vs 实际执行」，用数据决定是否采纳 |
 
@@ -126,6 +127,19 @@ P2-3 前置记录（2026-11-18）：`page=control` 解析与 `scripts/empire.py`
 分星计划仍未做**，所以 P2-3 保持 ⬜——当前账号只有 1 颗星，多星路径只能离线构造。
 
 P2-1 当前能力：`autoplay.expedition` 提供航道、每队积分、目标坐标、建船建议、前置 blocker 链和多航道编队拆分；`scripts/expedition.py` 只读输出。`scripts/dispatch_expedition.py` 默认预览，`--execute --allow` 可发送单队；`scripts/build_expedition_ships.py` 默认预览，`--execute --allow` 可建造推荐舰船；`scripts/expedition_cycle.py` 每轮重读报告并逐队发送，支持 `--auto-build` 单轮补船，受 `--max-dispatch` 限制。测试见 `tests/test_expedition.py`、`tests/test_expedition_executor.py`、`tests/test_ship_build.py`、`tests/test_expedition_cycle.py`。本机实测：1 艘轻型运输舰 → `3:505:16`，燃料 3，任务 15/18；`stay_time=0` 被拒绝，改为 `1` 后发送成功并立即召回；强制 `--ship 202` 建造 1 艘后舰船数 1→2；2 艘小船通过循环发送并召回。自动补船分支因当前实例只有 1 条航道、无法构造“有空闲航道但无船”的 live 场景，暂由单测覆盖；守护循环接入见 P2-1b。`scripts/expedition_farm.py` 是独立的常驻调度：固定编队（默认 8621 战列舰）填满所有航道，按舰队表返航时间 +5s 补下一波，时间表写 `state/expedition_timetable.json`，默认每 10h 重查最大航道；它与 `run_forever` 共用写者锁。测试见 `tests/test_expedition_scheduler.py`、`tests/test_expedition_farm_args.py`。
+
+P2-6 记录（2026-11-22）：`autoplay/colonize.py` 放范围解析（`1:2:3 4:5:6`
+与 `1-4:2-5:3-6`）、条件（面积/最高温度/最低温度，未指定不检查，`accept=false` 全拒）、
+航道数学（`舰队航道 - 在飞 - max(0, 最大探险队 - 在飞探险队)`）、
+`min(用户上限, 殖民位上限 - 已用)`、扫描游标/候选/账本/在途时间表的持久化；
+`scripts/colonize.py` 按轮读概览 + 舰队表 + `control`，殖民成功后切星读真实面积/温度，
+不达标走 `page=overview&mode=delete` 放弃（需账号密码），到上限则撤回在途殖民船。
+SDK 新增 `parse_fleet_slots` / `parse_fleet_table` / `client.get_fleet_table()` /
+`client.abandon_planet()`。离线测试 `tests/test_fleet_table.py`、`tests/test_colonize.py`、
+`tests/test_colonize_script.py`（fake client 覆盖发船、抢位、硬失败、对账、上限撤回、
+无船/无燃料/已扫完/上限不可读等停止条件）。live：2026-11-22 预览跑过一次
+`--range '1:1:1 1:1:15'`，确认 `control` 殖民位、舰队航道计数与概览解析与真实页面一致；
+随后实例 `game.php` 持续超时，真实发船/放弃未在本机验证。
 
 ## P3 AI 战略层（仅 AI-0 / AI-1 已立项）
 
@@ -240,6 +254,9 @@ AI-2/3 已接模型：ADR-006 被 ADR-031 取代；写操作 `precheck=False`、
 | ✅ 爆仓期 ROI | 资源超过仓容时产量不累积，产出建筑的 payback 假设失效 | 2026-11-18 修复：用产量表容量与概览资源量判断爆仓，回本置 `null` 并排到末尾（`autoplay/planner.py` 的 `_storage_usage`，`tests/test_planner.py`） |
 | ✅ 幽能语义 | 产量表 911 的 `total` 是净产；概览 `capacity` 是毛产（= 净产 + 三厂消耗），页面显示 `净产/毛产`（实测 `392 K/600 K`、65%）；概览 `amounts[911]` 是「毛产 + 净产」的合成值，两天不变而净产 +392,000/h，证明它不是库存。引力子这类科技的幽能需求是门槛、不消耗，游戏用毛产比（实测 765,000 对 600,017） | 2026-11-18 核实：不把概览容量传给规划器做爆仓判断；幽能发电站改为按净产报告与排序，不再给虚假回本（`autoplay/planner.py`、`tests/test_planner.py`） |
 | ✅ `control` 全局面板 | 单请求全量状态：每星资源/点数池/每小时产能/建筑/舰只/防御 + Σ + 殖民位；按标签列与 section 顺序对齐 | 2026-11-18 完成：`parse_control` / `client.get_control()` / `scripts/empire.py`，`tests/test_control.py`（10 个用例，含脱敏 fixture）；mod 专有单位列进 `unresolved` |
+| ✅ 舰队航道与舰队表 | `page=fleetTable` 的「舰队航道 x / y」和「x / y 探险队」可直接解析；同一页还给出当前星球可派舰船 | 2026-11-22 新增 `FleetSlots` / `FleetTable` / `parse_fleet_table` / `client.get_fleet_table()`，`tests/test_fleet_table.py` |
+| ✅ 放弃殖民地 | `page=overview` 的 `mode=delete` POST + 账号密码，返回 JSON；仅标记 `destruyed`，约 24h 后清理 | 2026-11-22 新增 `client.abandon_planet()`（成功回读概览确认），写操作未 live 验证 |
+| ✅ 星图面积/温度不可预筛 | 空位 tooltip 的面积/温度来自 `PlanetData.php` 的 `mt_rand`，每次请求都变；殖民后 `createPlanet` 再随机一次 | 殖民脚本只把星图值当展示，判定用殖民后概览的 `fields_max` / `temp_min` / `temp_max` |
 | ✅ 生产比例写入 | 只读与写入都已支持：`client.set_production_ratios`（整表提交 + 页面回读验证）、`scripts/production.py`、`autoplay/power.py` 缺电降耗、守护 `--balance-power`/`--balance-allow` | 2026-11-18 实机验证 100%→90%→100% 与缺电预览，见 `docs/usage.md` 第 22 节 |
 | ⬜ `market` / `fair` | 本实例禁用 | 不投入；若换实例再评估 |
 | ⬜ SQLite | 当前 JSONL 够用 | 触发条件见 ADR-002 |

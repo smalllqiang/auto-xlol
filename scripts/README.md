@@ -67,6 +67,7 @@
 | `build_expedition_ships.py` | 预览造船计划 | `--execute --allow <舰船 id>` |
 | `expedition_cycle.py` | 预览第一队 | `--execute --allow <舰船 id>` |
 | `expedition_farm.py` | 预览当前航道与下一队 | `--execute --allow <舰船 id/名称>` |
+| `colonize.py` | 预览殖民范围与候选 | `--execute --allow 208`（放弃还需账号密码） |
 | `threat.py` | 只读威胁报告 | `--recall --execute --allow <舰队 id>` |
 | `production.py` | 只读比例 | `--set N=比例 --execute --allow <元素 id>` |
 | `daily_bonus.py` | 只读签到状态 | `--claim`（访问即领取，没有白名单） |
@@ -94,6 +95,7 @@
 | 造推荐的探险船 | `scripts/build_expedition_ships.py` | §18 |
 | 多航道循环探险 | `scripts/expedition_cycle.py` | §19 |
 | 常驻探险、自动填满所有航道 | `scripts/expedition_farm.py --execute --allow 207` | §19.1 |
+| 自动殖民、按面积/温度留球 | `scripts/colonize.py --where '面积>260' --execute --allow 208` | §24 |
 | 被侦察/被打了 | `scripts/threat.py` | §20 |
 | 一屏看所有星球 | `scripts/empire.py` | §21 |
 | 调生产比例、缺电 | `scripts/production.py` | §22 |
